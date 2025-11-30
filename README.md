@@ -1,6 +1,6 @@
 # Better-PRTS-Plus
 
-[![Version](https://img.shields.io/badge/version-1.2-blue)]()
+[![Version](https://img.shields.io/badge/version-1.3-blue)]()
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Supported-green)]()
 
 专为 [PRTS Plus (zoot.plus)](https://zoot.plus) 设计的全方位体验增强脚本。整合了深度暗黑模式适配、智能干员持有筛选功能以及界面信息优化，旨在提供更舒适的视觉体验和更高效的作业查找效率。

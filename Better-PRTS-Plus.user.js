@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    http://tampermonkey.net/
-// @version      1.2
-// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复突袭标签区分度，支持作业筛选，优化B站链接显示。
+// @version      1.3
+// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复突袭标签区分度，修复作业详情动作序列颜色条丢失问题，支持作业筛选，优化B站链接显示。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
 // @grant        GM_setValue
@@ -90,6 +90,20 @@
             box-shadow: none !important;
             color: ${c.textMain} !important;
         }
+
+        /* --- [修复作业详情动作序列颜色条] --- */
+        /* 强制恢复左侧边框宽度 */
+        html.dark .bp4-card.border-l-4 {
+            border-left-width: 4px !important;
+        }
+        /* 恢复常见动作颜色的优先级 (Tailwind 700 series) */
+        html.dark .border-sky-700 { border-left-color: #0369a1 !important; }    /* 部署 */
+        html.dark .border-pink-700 { border-left-color: #be185d !important; }   /* 倍速/撤退 */
+        html.dark .border-violet-700 { border-left-color: #6d28d9 !important; } /* 技能/挂机 */
+        html.dark .border-red-700 { border-left-color: #b91c1c !important; }    /* 警告/撤退 */
+        html.dark .border-emerald-700 { border-left-color: #047857 !important; }
+        html.dark .border-yellow-700 { border-left-color: #a16207 !important; }
+
         html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark .bp4-heading, html.dark strong { color: #fff !important; }
         html.dark .text-gray-700, html.dark .text-zinc-600, html.dark .text-slate-900, html.dark .text-gray-800 { color: ${c.textMain} !important; }
         html.dark .text-gray-500, html.dark .text-zinc-500 { color: ${c.textSub} !important; }
