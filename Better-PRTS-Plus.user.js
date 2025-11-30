@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    http://tampermonkey.net/
-// @version      1.0
-// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。
+// @version      1.2
+// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复突袭标签区分度，支持作业筛选，优化B站链接显示。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
 // @grant        GM_setValue
@@ -129,11 +129,27 @@
         }
         html.dark .bg-orange-200 { background-color: #4a3020 !important; border-color: #6d4020 !important; }
 
-        /* Markdown */
+        /* Markdown & Links */
         html.dark .markdown-body { color: ${c.textMain} !important; background: transparent !important; }
         html.dark .markdown-body pre, html.dark .markdown-body code { background-color: ${c.bgHover} !important; color: ${c.textMain} !important; }
         html.dark .markdown-body table tr:nth-child(2n) { background-color: rgba(255, 255, 255, 0.05) !important; }
         html.dark .markdown-body a { color: ${c.primary} !important; }
+
+        /* B站链接样式优化 */
+        .prts-bili-link {
+            color: #fb7299 !important;
+            font-weight: bold !important;
+            text-decoration: none !important;
+            margin-right: 4px;
+            background: rgba(251, 114, 153, 0.1);
+            padding: 2px 6px;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+        .prts-bili-link:hover {
+            background: rgba(251, 114, 153, 0.2);
+            text-decoration: none !important;
+        }
 
 
         /* --- [筛选插件样式] --- */
@@ -296,7 +312,7 @@
     }
 
     // =========================================================================
-    //                            MODULE 4: 筛选逻辑
+    //                            MODULE 4: 筛选与净化逻辑
     // =========================================================================
 
     function isFilterDisabledPage() {
@@ -415,6 +431,28 @@
         }
     }
 
+    // --- [Updated] Bilibili 链接净化 (V1.2) ---
+    function cleanBilibiliLinks(cardInner) {
+        // 根据实际DOM结构更新选择器：定位到描述文本的容器 (.grow.text-gray-700)
+        // 它的直接子级包含了 <p> 标签或其他文本节点
+        const descContainer = cardInner.querySelector('.grow.text-gray-700');
+
+        if (!descContainer || descContainer.dataset.biliProcessed) return;
+
+        let html = descContainer.innerHTML;
+
+        // 正则说明：
+        // 1. (?:【.*】\s*)?  -> 贪婪匹配标题块，能处理【【揭幕者】标题】这种嵌套情况。
+        //    由于 zoot 描述通常分段，贪婪匹配不会跨越多行（JS中 . 不匹配换行符），是安全的。
+        // 2. (https?:\/\/...) -> 捕获 URL
+        const regex = /(?:【.*】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+)/gi;
+
+        if (regex.test(html)) {
+            descContainer.innerHTML = html.replace(regex, '<a href="$1" target="_blank" class="prts-bili-link">📺 (原视频)</a>');
+            descContainer.dataset.biliProcessed = "true";
+        }
+    }
+
     function requestFilterUpdate() {
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(applyFilterLogic);
@@ -432,6 +470,10 @@
                 const cardInner = card.querySelector('.bp4-card');
                 if (!cardInner) return;
 
+                // 1. 执行 Bilibili 链接净化 (无论是否开启筛选都执行)
+                cleanBilibiliLinks(cardInner);
+
+                // 2. 筛选逻辑
                 let isUnavailable = false;
                 let statusType = null;
                 let statusValue = null;
