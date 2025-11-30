@@ -1,9 +1,9 @@
 # Better-PRTS-Plus
 
-[![Version](https://img.shields.io/badge/version-1.0-blue)]()
+[![Version](https://img.shields.io/badge/version-1.2-blue)]()
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Supported-green)]()
 
-专为 [PRTS Plus (zoot.plus)](https://zoot.plus) 设计的全方位体验增强脚本。整合了深度暗黑模式适配与智能干员持有筛选功能，旨在提供更舒适的视觉体验和更高效的作业查找效率。
+专为 [PRTS Plus (zoot.plus)](https://zoot.plus) 设计的全方位体验增强脚本。整合了深度暗黑模式适配、智能干员持有筛选功能以及界面信息优化，旨在提供更舒适的视觉体验和更高效的作业查找效率。
 
 ## ✨ 主要功能
 
@@ -19,6 +19,11 @@
 *   **允许助战**：允许缺失 1 名干员（默认借用助战）的作业。
 *   **灵活视图**：支持 **“置灰”**（视觉降级）或 **“隐藏”**（完全不显示）两种模式处理缺人作业。
 *   **直观提示**：在卡片上直接标记缺失的干员数量或具体的助战需求。
+
+### 3. 链接显示优化 (Link Purification)
+智能识别作业描述中的 Bilibili 视频链接。
+*   **自动净化**：自动检测并隐藏冗长的“【视频标题】+ 链接”格式文本。
+*   **简洁展示**：将原链接替换为简洁醒目的 **(原视频)** 按钮，保持作业列表页面的整洁与清爽。
 
 ## 🚀 安装方法
 
