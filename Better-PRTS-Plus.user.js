@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复突袭标签区分度，修复作业详情动作序列颜色条丢失问题，支持作业筛选，优化B站链接显示。
+// @version      1.4
+// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复突袭标签、作业详情动作颜色条及下拉菜单/弹窗反白问题，支持B站链接净化。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
 // @grant        GM_setValue
@@ -89,6 +89,35 @@
             border: 1px solid ${c.border} !important;
             box-shadow: none !important;
             color: ${c.textMain} !important;
+        }
+
+        /* --- [修复下拉菜单/Popover/Select 反白问题] --- */
+        html.dark .bp4-popover2-content,
+        html.dark .bp4-menu {
+            background-color: ${c.bgCard} !important;
+            color: ${c.textMain} !important;
+            border-radius: 4px;
+        }
+        /* 菜单项文字与交互 */
+        html.dark .bp4-menu-item {
+            color: ${c.textMain} !important;
+        }
+        html.dark .bp4-menu-item:hover,
+        html.dark .bp4-menu-item.bp4-active,
+        html.dark .bp4-menu-item.bp4-intent-primary.bp4-active {
+            background-color: ${c.primary} !important;
+            color: #fff !important;
+        }
+        html.dark .bp4-menu-item.bp4-disabled {
+            color: ${c.textSub} !important;
+            background-color: transparent !important;
+        }
+        /* 弹窗内的搜索框 */
+        html.dark .bp4-popover2 .bp4-input {
+            background-color: ${c.bgHover} !important;
+            color: #fff !important;
+            box-shadow: none !important;
+            border: 1px solid ${c.border} !important;
         }
 
         /* --- [修复作业详情动作序列颜色条] --- */
