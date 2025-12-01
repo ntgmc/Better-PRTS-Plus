@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    http://tampermonkey.net/
-// @version      1.4
-// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复突袭标签、作业详情动作颜色条及下拉菜单/弹窗反白问题，支持B站链接净化。
+// @version      1.5
+// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复登录框反白、突袭标签、作业详情及B站链接净化。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
 // @grant        GM_setValue
@@ -26,7 +26,7 @@
     const c = {
         bgDeep: '#18181c',      // 全局深底
         bgCard: '#232326',      // 卡片/弹窗
-        bgHover: '#2d2d30',     // 悬浮/代码块
+        bgHover: '#2d2d30',     // 悬浮/输入框背景
         border: '#38383b',      // 边框
         textMain: '#e0e0e0',    // 主字
         textSub: '#9ca3af',     // 辅字
@@ -67,20 +67,29 @@
             box-shadow: none !important;
         }
 
-        /* 抽屉与弹窗 */
-        html.dark .bp4-drawer, html.dark .bp4-drawer > section, html.dark .bp4-overlay-content {
-            background-color: ${c.bgDeep} !important;
+        /* 抽屉(Drawer) 与 弹窗(Dialog/Overlay) 核心修复 */
+        html.dark .bp4-drawer,
+        html.dark .bp4-drawer > section,
+        html.dark .bp4-overlay-content,
+        html.dark .bp4-dialog {
+            background-color: ${c.bgCard} !important;
             color: ${c.textMain} !important;
+            box-shadow: 0 0 0 1px ${c.border}, 0 4px 8px rgba(0,0,0,0.5) !important;
         }
+
+        /* 抽屉/弹窗 头部修复 */
         html.dark .bp4-drawer .bg-slate-100,
         html.dark .bp4-drawer header,
-        html.dark .bp4-drawer .text-lg.font-medium {
+        html.dark .bp4-dialog-header {
             background-color: ${c.bgCard} !important;
             border-bottom: 1px solid ${c.border} !important;
             color: ${c.textMain} !important;
         }
-        html.dark .bp4-drawer .h-full.overflow-auto {
-            background-color: ${c.bgDeep} !important;
+        html.dark .bp4-dialog-header .bp4-heading {
+            color: #fff !important;
+        }
+        html.dark .bp4-dialog-close-button .bp4-icon {
+            color: ${c.textSub} !important;
         }
 
         /* 组件通用 */
@@ -112,20 +121,11 @@
             color: ${c.textSub} !important;
             background-color: transparent !important;
         }
-        /* 弹窗内的搜索框 */
-        html.dark .bp4-popover2 .bp4-input {
-            background-color: ${c.bgHover} !important;
-            color: #fff !important;
-            box-shadow: none !important;
-            border: 1px solid ${c.border} !important;
-        }
 
         /* --- [修复作业详情动作序列颜色条] --- */
-        /* 强制恢复左侧边框宽度 */
         html.dark .bp4-card.border-l-4 {
             border-left-width: 4px !important;
         }
-        /* 恢复常见动作颜色的优先级 (Tailwind 700 series) */
         html.dark .border-sky-700 { border-left-color: #0369a1 !important; }    /* 部署 */
         html.dark .border-pink-700 { border-left-color: #be185d !important; }   /* 倍速/撤退 */
         html.dark .border-violet-700 { border-left-color: #6d28d9 !important; } /* 技能/挂机 */
@@ -133,11 +133,16 @@
         html.dark .border-emerald-700 { border-left-color: #047857 !important; }
         html.dark .border-yellow-700 { border-left-color: #a16207 !important; }
 
+        /* 文字颜色适配 */
         html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark .bp4-heading, html.dark strong { color: #fff !important; }
         html.dark .text-gray-700, html.dark .text-zinc-600, html.dark .text-slate-900, html.dark .text-gray-800 { color: ${c.textMain} !important; }
         html.dark .text-gray-500, html.dark .text-zinc-500 { color: ${c.textSub} !important; }
 
-        /* 按钮与输入框 */
+        /* 登录Tab页签适配 */
+        html.dark .bp4-tab { color: ${c.textSub} !important; }
+        html.dark .bp4-tab[aria-selected="true"] { color: ${c.primary} !important; }
+
+        /* --- [按钮与输入框修复] --- */
         html.dark .bp4-button {
             background-color: ${c.bgHover} !important;
             background-image: none !important;
@@ -151,6 +156,8 @@
             color: #fff !important;
             border: none !important;
         }
+
+        /* 输入框本体 */
         html.dark .bp4-input, html.dark textarea, html.dark select {
             background-color: ${c.bgHover} !important;
             color: #fff !important;
@@ -158,6 +165,23 @@
             box-shadow: none !important;
         }
         html.dark .bp4-input::placeholder { color: #666 !important; }
+
+        /* 弹窗内的输入框（加强权重） */
+        html.dark .bp4-dialog .bp4-input {
+            background-color: ${c.bgHover} !important;
+            color: #fff !important;
+        }
+
+        /* --- [关键：修复浏览器自动填充(Autofill)导致的白色/黄色背景] --- */
+        html.dark input:-webkit-autofill,
+        html.dark input:-webkit-autofill:hover,
+        html.dark input:-webkit-autofill:focus,
+        html.dark input:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 30px ${c.bgHover} inset !important;
+            -webkit-text-fill-color: #fff !important;
+            caret-color: #fff !important;
+            transition: background-color 5000s ease-in-out 0s;
+        }
 
         /* 标签 (Tag) 修复 */
         html.dark .bp4-tag {
@@ -491,7 +515,7 @@
         const regex = /(?:【.*】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+)/gi;
 
         if (regex.test(html)) {
-            descContainer.innerHTML = html.replace(regex, '<a href="$1" target="_blank" class="prts-bili-link">📺 (原视频)</a>');
+            descContainer.innerHTML = html.replace(regex, '<a href="$1" target="_blank" class="prts-bili-link">📺 原视频</a>');
             descContainer.dataset.biliProcessed = "true";
         }
     }
