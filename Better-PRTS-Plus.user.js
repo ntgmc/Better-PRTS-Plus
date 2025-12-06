@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    http://tampermonkey.net/
-// @version      1.5
-// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复登录框反白、突袭标签、作业详情及B站链接净化。
+// @version      1.7
+// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复登录框反白、突袭标签、作业详情、B站链接净化及弹窗底部白底问题。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
 // @grant        GM_setValue
@@ -85,6 +85,15 @@
             border-bottom: 1px solid ${c.border} !important;
             color: ${c.textMain} !important;
         }
+        
+        /* [新增修复] 弹窗底部操作栏 (Footer) */
+        html.dark .bp4-dialog-footer,
+        html.dark .bp4-dialog-footer-fixed {
+            background-color: ${c.bgCard} !important;
+            border-top: 1px solid ${c.border} !important;
+            color: ${c.textMain} !important;
+        }
+
         html.dark .bp4-dialog-header .bp4-heading {
             color: #fff !important;
         }
@@ -219,14 +228,33 @@
         }
 
 
-        /* --- [筛选插件样式] --- */
+        /* --- [筛选插件样式 (布局更新)] --- */
         #prts-filter-bar {
             margin-top: 12px !important;
             margin-bottom: 8px !important;
             display: flex;
             flex-wrap: wrap;
+            align-items: center;
             gap: 12px;
             width: 100%;
+        }
+
+        /* 按钮组样式 */
+        .prts-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* 分隔线样式 */
+        .prts-divider {
+            width: 1px;
+            height: 24px;
+            background-color: #d1d5db; /* Light gray */
+            margin: 0 4px;
+        }
+        html.dark .prts-divider {
+            background-color: #4b5563; /* Dark gray */
         }
 
         .prts-btn {
@@ -454,7 +482,7 @@
         else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
     }
 
-    // 注入筛选工具栏
+    // 注入筛选工具栏 (布局优化版)
     function injectFilterControls() {
         if (isFilterDisabledPage()) {
             const existingBar = document.getElementById('prts-filter-bar');
@@ -474,6 +502,7 @@
             controlBar = document.createElement('div');
             controlBar.id = 'prts-filter-bar';
 
+            // 辅助函数：创建按钮
             const createBtn = (text, icon, onClick, id) => {
                 const btn = document.createElement('button');
                 btn.className = 'prts-btn';
@@ -483,12 +512,29 @@
                 return btn;
             };
 
-            controlBar.append(
+            // 创建分组 1：功能/设置 (导入、模式切换)
+            const groupConfig = document.createElement('div');
+            groupConfig.className = 'prts-group';
+            groupConfig.append(
                 createBtn('导入干员', '📂', handleImport, 'btn-import'),
-                createBtn('完美阵容', '💎', () => toggleFilter('PERFECT'), 'btn-perfect'),
-                createBtn('允许助战', '🤝', () => toggleFilter('SUPPORT'), 'btn-support'),
                 createBtn(displayMode === 'GRAY' ? '置灰模式' : '隐藏模式', displayMode === 'GRAY' ? '👁️' : '🚫', toggleDisplayMode, 'btn-setting')
             );
+
+            // 分隔线
+            const divider = document.createElement('div');
+            divider.className = 'prts-divider';
+
+            // 创建分组 2：筛选操作 (完美阵容、助战)
+            const groupFilter = document.createElement('div');
+            groupFilter.className = 'prts-group';
+            groupFilter.append(
+                createBtn('完美阵容', '💎', () => toggleFilter('PERFECT'), 'btn-perfect'),
+                createBtn('允许助战', '🤝', () => toggleFilter('SUPPORT'), 'btn-support')
+            );
+
+            // 组装到控制栏
+            controlBar.append(groupConfig, divider, groupFilter);
+
             updateFilterButtonStyles();
         }
 
