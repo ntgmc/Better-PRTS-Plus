@@ -222,25 +222,100 @@
         html.dark .markdown-body table tr:nth-child(2n) { background-color: rgba(255, 255, 255, 0.05) !important; }
         html.dark .markdown-body a { color: ${c.primary} !important; }
 
-        /* 2. 视频链接 - 极简风格 (去诱导) */
+        /* --- [V8.1 样式修复：彻底解决遮挡问题] --- */
+
+        /* 1. 描述容器 (占位层) */
+        .prts-desc-wrapper {
+            position: relative;
+            height: 24px;
+            margin: 2px 0;
+            width: 100%;
+            /* 平时层级较低，但在悬停时极大提升，确保盖住下面的所有内容 */
+            z-index: 10;
+        }
+        .prts-desc-wrapper:hover {
+            z-index: 100; /* 关键：悬停时提升父级层级 */
+        }
+
+        /* 2. 描述内容 (实体层) */
+        .prts-desc-content {
+            width: 100%;
+            height: 24px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            /* cursor: help; */
+            font-size: 13px;
+            color: #6b7280;
+            line-height: 24px;
+            border-radius: 4px;
+            /* 默认背景透明，防止遮挡背景图 */
+            background-color: transparent; 
+        }
+
+        /* 3. 悬停展开状态 */
+        .prts-desc-wrapper:hover .prts-desc-content {
+            position: absolute;
+            top: -4px;
+            left: -8px;
+            width: calc(100% + 16px);
+            height: auto;
+            
+            white-space: normal; /* 允许换行 */
+            overflow: visible;
+            
+            /* 视觉样式 */
+            background-color: #ffffff; /* 必须是实色背景 */
+            color: #374151;
+            padding: 4px 8px;
+            
+            /* 强阴影，增加层次感 */
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2); 
+            border: 1px solid #e5e7eb;
+        }
+
+        /* 4. 暗黑模式适配 */
+        html.dark .prts-desc-content { color: #9ca3af; }
+        
+        html.dark .prts-desc-wrapper:hover .prts-desc-content {
+            background-color: #232326; /* 暗黑模式下的实色背景 */
+            color: #e5e7eb;
+            border-color: #3f3f46;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+        }
+
+        /* 5. 视频容器 & 按钮 (层级调低) */
+        .prts-video-box {
+            margin-top: 2px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            position: relative;
+            z-index: 1; /* 关键：层级要比展开后的描述低 */
+        }
+
         .prts-bili-link {
             display: inline-flex !important;
             align-items: center;
-            color: #64748b !important; /* 灰色，不抢眼 */
+            color: #94a3b8 !important; 
             font-size: 12px !important;
             font-weight: normal !important;
             text-decoration: none !important;
-            margin-top: 4px;
-            padding: 0;
+            padding: 2px 0;
             background: transparent !important;
             border: none !important;
             transition: color 0.2s;
+            cursor: pointer;
         }
         .prts-bili-link:hover {
-            color: #fb7299 !important; /* 悬停才显示B站粉 */
+            color: #fb7299 !important; 
             text-decoration: underline !important;
         }
-        .prts-bili-link .bp4-icon { margin-right: 4px; }
+
+        html.dark .prts-bili-link { color: #52525b !important; }
+        html.dark .prts-bili-link:hover { color: #fb7299 !important; }
+        
+        .prts-bili-link .bp4-icon { margin-right: 4px; font-size: 11px; }
 
 
         /* --- [筛选插件样式 (布局更新)] --- */
@@ -386,30 +461,6 @@
             box-shadow: none;
         }
         
-        /* 3. 描述文本 - 紧凑化 */
-        .prts-desc-compact {
-            font-size: 13px;
-            color: #6b7280;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            max-width: 100%;
-            cursor: default;
-            margin: 4px 0;
-            opacity: 0.7;
-        }
-        .prts-desc-compact:hover {
-            white-space: normal;
-            overflow: visible;
-            opacity: 1;
-            background: rgba(255,255,255,0.9);
-            position: relative; 
-            z-index: 50;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        html.dark .prts-desc-compact { color: #9ca3af; background: transparent; }
-        html.dark .prts-desc-compact:hover { background: #2d2d30; }
-        
         /* 2. 干员/干员组 统一网格 */
         .prts-op-grid {
             display: flex;
@@ -437,7 +488,7 @@
             height: 42px;
             /* 移除 overflow: hidden 以允许 Tooltip 显示 */
             /* border-radius: 4px;  <-- 移交给内部元素 */
-            cursor: help;
+            /* cursor: help; */
             box-shadow: 0 1px 2px rgba(0,0,0,0.1);
             transition: transform 0.2s, box-shadow 0.2s;
             box-sizing: border-box;
@@ -458,7 +509,7 @@
             background-color: #f8fafc; 
             border: 1px solid #cbd5e1; /* 浅灰色边框 */
             border-radius: 4px;
-            cursor: help;
+            /* cursor: help; */
             box-shadow: 0 1px 2px rgba(0,0,0,0.05);
             transition: transform 0.2s, box-shadow 0.2s;
             box-sizing: border-box;
@@ -506,7 +557,7 @@
             line-height: 1.1;
             padding: 2px;
             word-break: break-all;
-            cursor: help;
+            /* cursor: help; */
             box-sizing: border-box;
             transition: transform 0.2s;
         }
@@ -880,23 +931,86 @@
         }
     }
 
-    // --- Bilibili 链接净化 (去诱导版) ---
+    // --- [V8.0 逻辑：强力清洗 + 悬浮层构建] ---
     function cleanBilibiliLinks(cardInner) {
-        // 定位描述容器
+        // 1. 找到描述容器
         const descContainer = cardInner.querySelector('.grow.text-gray-700');
         if (!descContainer || descContainer.dataset.biliProcessed) return;
 
         let html = descContainer.innerHTML;
-        // 匹配 B站链接
-        const regex = /(?:【.*】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+)/gi;
+        let videoUrl = null;
 
-        if (regex.test(html)) {
-            // 替换为更温和的“参考视频”字样
-            descContainer.innerHTML = html.replace(regex,
-                '<div style="margin-top:2px;"><a href="$1" target="_blank" class="prts-bili-link"><span class="bp4-icon">▶</span>参考视频</a></div>'
-            );
-            descContainer.dataset.biliProcessed = "true";
+        // =========================================================
+        // A. 提取 B站链接 (提取后从原文删除)
+        // =========================================================
+        const regex = /((?:【.*?】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+))/gi;
+        const match = regex.exec(html);
+
+        if (match) {
+            const fullTextToRemove = match[1];
+            videoUrl = match[2];
+            // 从 HTML 中删掉链接文本
+            html = html.replace(fullTextToRemove, '');
         }
+
+        // =========================================================
+        // B. 强力清洗末尾空行 (Goal 1)
+        // =========================================================
+        // 正则解释：匹配末尾的 <p>空</p>, <br>, 空格，且重复多次
+        // (?: ... ) 非捕获组
+        // <p>\s*(?:<br\s*\/?>)?\s*<\/p>  匹配 <p>  </p> 或 <p><br></p>
+        // <br\s*\/?>                     匹配 <br>
+        // \s                             匹配换行符、空格
+        const trailingTrashRegex = /(?:<p>\s*(?:<br\s*\/?>)?\s*<\/p>|<br\s*\/?>|\s)+$/gi;
+
+        // 执行清洗
+        html = html.replace(trailingTrashRegex, '');
+
+        // 如果清洗后只剩下空壳（比如只有空格），显示默认占位
+        if (html.replace(/<[^>]+>/g, '').trim() === '') {
+            html = '(无文字描述)';
+        }
+
+        // =========================================================
+        // C. 重构 DOM 结构 (Goal 2: 悬浮层)
+        // =========================================================
+        // 以前是直接修改 innerHTML，现在我们要把它包起来
+        // 结构：Wrapper (固定高度) -> Content (悬浮) -> HTML
+
+        descContainer.innerHTML = `<div class="prts-desc-content">${html}</div>`;
+
+        // 给父容器添加 Wrapper 类，使其具备相对定位和固定高度
+        descContainer.classList.add('prts-desc-wrapper');
+        // 移除原有的 flex-grow 类，防止高度异常拉伸
+        descContainer.classList.remove('grow');
+        // 保持宽度占满
+        descContainer.style.width = '100%';
+
+        // =========================================================
+        // D. 插入视频按钮 (如果有)
+        // =========================================================
+        if (videoUrl) {
+            const btnContainer = document.createElement('div');
+            btnContainer.className = 'prts-video-box';
+
+            const linkBtn = document.createElement('a');
+            linkBtn.href = videoUrl;
+            linkBtn.target = "_blank";
+            linkBtn.className = 'prts-bili-link'; // 沿用 V7.1 的低调样式
+            linkBtn.innerHTML = `<span class="bp4-icon bp4-icon-video"></span>参考视频`;
+
+            linkBtn.onclick = (e) => {
+                e.stopPropagation();
+            };
+
+            btnContainer.appendChild(linkBtn);
+
+            if (descContainer.parentNode) {
+                descContainer.parentNode.insertBefore(btnContainer, descContainer.nextSibling);
+            }
+        }
+
+        descContainer.dataset.biliProcessed = "true";
     }
 
     function requestFilterUpdate() {
@@ -952,14 +1066,6 @@
                 // 4. 标记为已完成，以后不再处理此标题
                 heading.dataset.badgeProcessed = "true";
             }
-        }
-
-        // =========================================================
-        // 2. 【描述文本】折叠 (带防止重复添加检测)
-        // =========================================================
-        const descContainer = cardInner.querySelector('.grow.text-gray-700');
-        if (descContainer && !descContainer.classList.contains('prts-desc-compact')) {
-            descContainer.classList.add('prts-desc-compact');
         }
 
         // =========================================================
