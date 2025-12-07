@@ -318,84 +318,85 @@
         .prts-bili-link .bp4-icon { margin-right: 4px; font-size: 11px; }
 
 
-        /* --- [筛选插件样式 (布局更新)] --- */
+        /* --- [V10.2 UI 修复：原生风格 + 独立成行] --- */
+
+        /* 1. 筛选栏容器 (第二排) */
         #prts-filter-bar {
-            margin-top: 12px !important;
-            margin-bottom: 8px !important;
             display: flex;
+            align-items: center;
             flex-wrap: wrap;
-            align-items: center;
-            gap: 12px;
             width: 100%;
+            /* 上下间距，使其看起来像第二排工具栏 */
+            margin-top: 8px; 
+            margin-bottom: 12px;
+            padding-left: 2px; /* 微调对齐 */
         }
 
-        /* 按钮组样式 */
-        .prts-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        /* 分隔线样式 */
-        .prts-divider {
-            width: 1px;
-            height: 24px;
-            background-color: #d1d5db; /* Light gray */
-            margin: 0 4px;
-        }
-        html.dark .prts-divider {
-            background-color: #4b5563; /* Dark gray */
-        }
-
+        /* 2. 按钮风格：Blueprint Minimal (极简灰色) */
         .prts-btn {
+            background: none !important;
+            background-color: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            cursor: pointer !important;
             display: inline-flex !important;
             align-items: center !important;
             justify-content: center !important;
-            padding: 0.5rem 1rem !important;
-            min-height: 32px !important;
-            font-size: 0.875rem !important;
+            padding: 6px 12px !important;
+            font-size: 14px !important;
+            color: #5c7080 !important; /* 原生灰色 */
+            border-radius: 3px !important;
+            min-height: 30px !important;
+            line-height: 1 !important;
+            font-weight: normal !important;
+            margin-right: 4px !important;
+            transition: background-color 0.1s cubic-bezier(0.4, 1, 0.75, 0.9) !important;
+        }
+
+        /* 悬停 */
+        .prts-btn:hover {
+            background-color: rgba(167, 182, 194, 0.3) !important;
+            color: #1c2127 !important;
+            text-decoration: none !important;
+        }
+
+        /* 选中 */
+        .prts-btn.prts-active {
+            background-color: rgba(167, 182, 194, 0.3) !important;
+            color: #2563eb !important; /* 罗德岛蓝 */
             font-weight: 600 !important;
-            line-height: 1.25rem !important;
-            border-radius: 0.375rem !important;
-            cursor: pointer !important;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-            background-color: #f6f7f9;
-            color: #1c2127;
-            box-shadow: inset 0 0 0 1px rgba(17, 20, 24, 0.2), 0 1px 2px rgba(17, 20, 24, 0.1);
-            border: none !important;
-            user-select: none;
         }
 
-        /* 日间模式交互 */
-        html:not(.dark) .prts-btn:hover {
-            background-color: #edeff2 !important;
-            transform: translateY(-1px);
-        }
-        html:not(.dark) .prts-btn.prts-active {
-            background-color: #2563eb !important;
-            color: #ffffff !important;
-            box-shadow: 0 2px 4px rgba(37, 99, 235, 0.3) !important;
-        }
-        html:not(.dark) .prts-btn.prts-active .bp4-icon { color: #ffffff !important; }
-        html:not(.dark) .prts-btn.prts-setting-active {
-            background-color: #4b5563 !important;
-            color: #ffffff !important;
-        }
-
-        /* 暗黑模式适配 (筛选按钮) */
-        html.dark .prts-btn {
-            background-color: #2d2d30 !important;
-            color: #e0e0e0 !important;
-            border: 1px solid #38383b !important;
-        }
+        /* 暗黑模式 */
+        html.dark .prts-btn { color: #a7b6c2 !important; }
+        html.dark .prts-btn:hover,
         html.dark .prts-btn.prts-active {
-            background-color: ${c.primary} !important;
-            color: #ffffff !important;
-            border-color: ${c.primary} !important;
+            background-color: rgba(138, 155, 168, 0.15) !important;
+            color: #f5f8fa !important;
         }
+        html.dark .prts-btn.prts-active { color: #60a5fa !important; }
 
-        .prts-btn .bp4-icon { margin-right: 8px !important; color: #5f6b7c; }
-        html.dark .prts-btn .bp4-icon { color: #9ca3af !important; }
+        /* 图标 */
+        .prts-btn .bp4-icon {
+            margin-right: 7px !important;
+            color: #5c7080 !important;
+            fill: currentColor !important;
+        }
+        html.dark .prts-btn .bp4-icon { color: #a7b6c2 !important; }
+        .prts-btn.prts-active .bp4-icon { color: #2563eb !important; }
+        html.dark .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
+
+        /* 分隔符 */
+        .prts-divider {
+            width: 1px;
+            height: 16px;
+            background-color: rgba(16, 22, 26, 0.15);
+            margin: 0 8px;
+            display: inline-block;
+        }
+        html.dark .prts-divider {
+            background-color: rgba(255, 255, 255, 0.15);
+        }
 
         /* --- 状态标签样式 --- */
         .prts-status-label {
@@ -1003,8 +1004,12 @@
     function toggleDisplayMode() {
         displayMode = (displayMode === 'GRAY') ? 'HIDE' : 'GRAY';
         GM_setValue(DISPLAY_MODE_KEY, displayMode);
-        const btn = document.getElementById('btn-setting');
-        if (btn) btn.innerHTML = `<span class="bp4-icon" style="font-size: 16px;">${displayMode === 'GRAY' ? '👁️' : '🚫'}</span>${displayMode === 'GRAY' ? '置灰模式' : '隐藏模式'}`;
+
+        // 简单粗暴：删掉整个栏，injectFilterControls 会自动重建
+        const bar = document.getElementById('prts-filter-bar');
+        if (bar) bar.remove();
+        injectFilterControls();
+
         requestFilterUpdate();
     }
 
@@ -1030,19 +1035,18 @@
         else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
     }
 
-    // 注入筛选工具栏 (布局优化版)
+    // --- [V10.3 注入逻辑：高清 Material 图标修复版] ---
     function injectFilterControls() {
         if (isFilterDisabledPage()) {
-            const existingBar = document.getElementById('prts-filter-bar');
-            if (existingBar) existingBar.remove();
+            const existing = document.getElementById('prts-filter-bar');
+            if (existing) existing.remove();
             return;
         }
 
         const searchInputGroup = document.querySelector('.bp4-input-group');
         if (!searchInputGroup) return;
-
-        const anchorNode = searchInputGroup.parentElement;
-        if (!anchorNode) return;
+        const searchRow = searchInputGroup.parentElement;
+        if (!searchRow) return;
 
         let controlBar = document.getElementById('prts-filter-bar');
 
@@ -1050,44 +1054,59 @@
             controlBar = document.createElement('div');
             controlBar.id = 'prts-filter-bar';
 
-            // 辅助函数：创建按钮
-            const createBtn = (text, icon, onClick, id) => {
+            const createBpBtn = (text, svgPath, onClick, id) => {
                 const btn = document.createElement('button');
+                btn.type = "button";
                 btn.className = 'prts-btn';
                 btn.id = id;
-                btn.innerHTML = `<span class="bp4-icon" style="font-size: 16px;">${icon}</span>${text}`;
+                // 注意：这里 viewBox 改为了 "0 0 24 24" 以适配高清图标
+                btn.innerHTML = `
+                    <span class="bp4-icon" aria-hidden="true" style="margin-right:6px">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="${svgPath}"></path></svg>
+                    </span>
+                    <span class="bp4-button-text">${text}</span>
+                `;
                 btn.onclick = onClick;
                 return btn;
             };
 
-            // 创建分组 1：功能/设置 (导入、模式切换)
-            const groupConfig = document.createElement('div');
-            groupConfig.className = 'prts-group';
-            groupConfig.append(
-                createBtn('导入干员', '📂', handleImport, 'btn-import'),
-                createBtn(displayMode === 'GRAY' ? '置灰模式' : '隐藏模式', displayMode === 'GRAY' ? '👁️' : '🚫', toggleDisplayMode, 'btn-setting')
+            const createDivider = () => {
+                const div = document.createElement('div');
+                div.className = 'prts-divider';
+                return div;
+            };
+
+            // 使用 Material Design 标准图标路径 (24x24)
+            const paths = {
+                // 干净的导入图标 (箭头指向底座)
+                import: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
+
+                // 眼睛 (置灰模式 - 可见)
+                eyeOn: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
+
+                // 划掉的眼睛 (隐藏模式 - 不可见)
+                eyeOff: 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-4.01.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z',
+
+                // 星星 (完美阵容)
+                perfect: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
+
+                // 人群 (允许助战)
+                support: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'
+            };
+
+            controlBar.append(
+                createBpBtn('导入干员', paths.import, handleImport, 'btn-import'),
+                createBpBtn(displayMode === 'GRAY' ? '置灰模式' : '隐藏模式', displayMode === 'GRAY' ? paths.eyeOn : paths.eyeOff, toggleDisplayMode, 'btn-setting'),
+                createDivider(),
+                createBpBtn('完美阵容', paths.perfect, () => toggleFilter('PERFECT'), 'btn-perfect'),
+                createBpBtn('允许助战', paths.support, () => toggleFilter('SUPPORT'), 'btn-support')
             );
-
-            // 分隔线
-            const divider = document.createElement('div');
-            divider.className = 'prts-divider';
-
-            // 创建分组 2：筛选操作 (完美阵容、助战)
-            const groupFilter = document.createElement('div');
-            groupFilter.className = 'prts-group';
-            groupFilter.append(
-                createBtn('完美阵容', '💎', () => toggleFilter('PERFECT'), 'btn-perfect'),
-                createBtn('允许助战', '🤝', () => toggleFilter('SUPPORT'), 'btn-support')
-            );
-
-            // 组装到控制栏
-            controlBar.append(groupConfig, divider, groupFilter);
 
             updateFilterButtonStyles();
         }
 
-        if (anchorNode.nextSibling !== controlBar) {
-            anchorNode.parentNode.insertBefore(controlBar, anchorNode.nextSibling);
+        if (searchRow.nextSibling !== controlBar) {
+            searchRow.parentNode.insertBefore(controlBar, searchRow.nextSibling);
             if (currentFilterMode !== 'NONE') requestFilterUpdate();
         }
     }
