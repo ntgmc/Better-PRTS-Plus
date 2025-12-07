@@ -727,6 +727,167 @@
         .prts-tag-fix { background-color: #f59e0b; }
         .prts-tag-event { background-color: #3b82f6; }
         .prts-tag-note { background-color: #64748b; }
+        
+        /* --- [V9.4 悬浮球样式：优雅慢速动画版] --- */
+
+        /* 1. 悬浮球容器 (定位与基座) */
+        #prts-float-container {
+            position: fixed;
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            opacity: 0.6;
+            user-select: none;
+            
+            /* [核心修改]：
+               1. 增加 transform 属性的过渡，让贴边/展开有动画
+               2. 时间设为 0.6s (更慢)
+               3. 使用 ease-out (先快后慢) 让动作更自然
+            */
+            transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+        
+        /* 交互状态：悬停、打开面板时变为不透明 */
+        #prts-float-container:hover,
+        #prts-float-container.prts-float-open {
+            opacity: 1;
+        }
+
+        /* [关键修复]：拖拽时必须关闭动画，否则会感到严重的延迟 */
+        #prts-float-container.is-dragging {
+            opacity: 1;
+            transition: none !important;
+        }
+
+        /* 吸附动画 (松手后的归位动画) */
+        #prts-float-container.is-snapping {
+            transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* 2. 贴边自动隐藏逻辑 */
+        /* 右侧吸附隐藏 */
+        #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) {
+            transform: translateX(calc(100% - 12px));
+        }
+        /* 左侧吸附隐藏 */
+        #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) {
+            transform: translateX(calc(-100% + 12px));
+        }
+
+        /* 3. 悬浮按钮 (图标) */
+        .prts-float-btn {
+            width: 48px;
+            height: 48px;
+            background-color: #fff;
+            border: 1px solid #e5e7eb;
+            border-right: none; /* 默认贴右边 */
+            border-radius: 8px 0 0 8px;
+            box-shadow: -2px 2px 8px rgba(0,0,0,0.1);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #374151;
+            transition: all 0.3s; /* 按钮本身的颜色变化不需要太慢 */
+            position: relative;
+            z-index: 2;
+        }
+        .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
+        
+        /* 左侧吸附时翻转 */
+        #prts-float-container.snap-left .prts-float-btn {
+            border-radius: 0 8px 8px 0;
+            border-right: 1px solid #e5e7eb;
+            border-left: none;
+            box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
+        }
+
+        /* 暗黑模式按钮 */
+        html.dark .prts-float-btn {
+            background-color: #232326;
+            border-color: #3f3f46;
+            color: #e5e7eb;
+            box-shadow: -2px 2px 12px rgba(0,0,0,0.5);
+        }
+
+        /* 4. 控制面板 */
+        .prts-settings-panel {
+            position: absolute;
+            top: 0;
+            width: 260px;
+            background: #fff;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1;
+            
+            /* 默认隐藏 */
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+            
+            /* 面板弹出也慢一点，保持一致 */
+            transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        /* 面板定位 */
+        /* 右侧吸附时：面板在左 */
+        .prts-settings-panel {
+            right: 55px; left: auto;
+            transform: translateX(20px) scale(0.95);
+            transform-origin: top right;
+        }
+        /* 左侧吸附时：面板在右 */
+        #prts-float-container.snap-left .prts-settings-panel {
+            left: 55px; right: auto;
+            transform: translateX(-20px) scale(0.95);
+            transform-origin: top left;
+        }
+
+        /* 激活显示 */
+        #prts-float-container.prts-float-open .prts-settings-panel {
+            visibility: visible;
+            opacity: 1;
+            transform: translateX(0) scale(1);
+            pointer-events: auto;
+        }
+
+        /* 暗黑模式面板 */
+        html.dark .prts-settings-panel {
+            background: #18181c;
+            border-color: #3f3f46;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+        }
+
+        /* 5. 面板内容 (保持不变) */
+        .prts-panel-title {
+            font-size: 14px; font-weight: bold; margin-bottom: 12px;
+            color: #1f2937; display: flex; align-items: center;
+            padding-bottom: 8px; border-bottom: 1px solid #f3f4f6;
+        }
+        html.dark .prts-panel-title { color: #f3f4f6; border-color: #3f3f46; }
+
+        .prts-panel-item {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 12px; font-size: 13px; color: #4b5563;
+        }
+        html.dark .prts-panel-item { color: #d1d5db; }
+
+        .prts-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+        .prts-switch input { opacity: 0; width: 0; height: 0; }
+        .prts-slider {
+            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #ccc; transition: .4s; border-radius: 34px;
+        }
+        .prts-slider:before {
+            position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px;
+            background-color: white; transition: .4s; border-radius: 50%;
+        }
+        input:checked + .prts-slider { background-color: #3b82f6; }
+        input:checked + .prts-slider:before { transform: translateX(16px); }
+        html.dark .prts-slider { background-color: #4b5563; }
+        html.dark input:checked + .prts-slider { background-color: #2563eb; }
     `;
 
     GM_addStyle(mergedStyles);
@@ -933,6 +1094,7 @@
 
     // --- [V8.0 逻辑：强力清洗 + 悬浮层构建] ---
     function cleanBilibiliLinks(cardInner) {
+        if (!CONFIG.cleanLink) return;
         // 1. 找到描述容器
         const descContainer = cardInner.querySelector('.grow.text-gray-700');
         if (!descContainer || descContainer.dataset.biliProcessed) return;
@@ -1020,6 +1182,7 @@
 
 // --- [V6.0 最终完美版：支持异步加载 + 独立状态锁] ---
     function optimizeCardVisuals(card, cardInner) {
+        if (!CONFIG.visuals) return;
         // 注意：移除了最外层的 card.dataset.visualOptimized 锁
         // 改为内部独立控制，因为关卡代号和干员列表可能不同步加载
 
@@ -1279,6 +1442,7 @@
 
     // --- [V6.3 侧边栏逻辑修复] ---
     function optimizeSidebar() {
+        if (!CONFIG.sidebar) return;
         const cards = document.querySelectorAll('.bp4-card');
 
         cards.forEach(card => {
@@ -1367,6 +1531,215 @@
         }
     }
 
+
+    // =========================================================================
+    //                            MODULE 6: 悬浮控制球 (UI/Logic)
+    // =========================================================================
+
+    // 配置状态 (使用 GM_getValue 存储开关状态，默认为 true)
+    const CONFIG = {
+        visuals: GM_getValue('prts_cfg_visuals', true), // 干员头像优化
+        sidebar: GM_getValue('prts_cfg_sidebar', true), // 侧边栏优化
+        cleanLink: GM_getValue('prts_cfg_link', true),  // 链接净化
+        filterBar: GM_getValue('prts_cfg_filter', true) // 显示筛选栏
+    };
+
+    function saveConfig() {
+        GM_setValue('prts_cfg_visuals', CONFIG.visuals);
+        GM_setValue('prts_cfg_sidebar', CONFIG.sidebar);
+        GM_setValue('prts_cfg_link', CONFIG.cleanLink);
+        GM_setValue('prts_cfg_filter', CONFIG.filterBar);
+        // 保存后通常需要刷新页面或重新触发逻辑，这里简单处理为刷新生效提示
+        // 或者是实时生效（视功能而定）
+    }
+
+    // --- [V9.3 逻辑修复：修复点击后无法自动贴边隐藏的问题] ---
+    function createFloatingBall() {
+        if (document.getElementById('prts-float-container')) return;
+
+        // 1. 读取位置
+        const savedPos = JSON.parse(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
+
+        const container = document.createElement('div');
+        container.id = 'prts-float-container';
+
+        // 初始化位置
+        container.style.top = savedPos.top;
+        if (savedPos.isRight) {
+            container.style.left = 'auto';
+            container.style.right = '0px';
+            container.classList.add('snap-right');
+        } else {
+            container.style.left = '0px';
+            container.style.right = 'auto';
+            container.classList.add('snap-left');
+        }
+
+        // 2. 创建按钮
+        const btn = document.createElement('div');
+        btn.className = 'prts-float-btn';
+        btn.title = "脚本设置 (可拖拽)";
+        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z"></path></svg>`;
+
+        // 3. 创建面板
+        const panel = document.createElement('div');
+        panel.className = 'prts-settings-panel';
+
+        // --- 面板内容构建 (保持不变) ---
+        const createSwitch = (label, checked, onChange) => {
+            const div = document.createElement('div');
+            div.className = 'prts-panel-item';
+            div.innerHTML = `<span>${label}</span><label class="prts-switch"><input type="checkbox" ${checked ? 'checked' : ''}><span class="prts-slider"></span></label>`;
+            const input = div.querySelector('input');
+            input.onchange = (e) => onChange(e.target.checked);
+            return div;
+        };
+        const title = document.createElement('div');
+        title.className = 'prts-panel-title';
+        title.innerHTML = `<span style="margin-right:auto">功能开关</span><span style="font-size:12px;opacity:0.6">刷新生效</span>`;
+        panel.appendChild(title);
+
+        panel.appendChild(createSwitch('🌙 暗黑模式', isDarkMode, (val) => {
+            isDarkMode = val; localStorage.setItem(DARK_MODE_KEY, isDarkMode); applyDarkMode(isDarkMode);
+        }));
+        panel.appendChild(createSwitch('🖼️ 作业卡片美化', CONFIG.visuals, (val) => {
+            CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
+        }));
+        panel.appendChild(createSwitch('🗂️ 侧边栏净化', CONFIG.sidebar, (val) => {
+            CONFIG.sidebar = val; saveConfig(); if(val) optimizeSidebar();
+        }));
+        panel.appendChild(createSwitch('🔗 视频链接优化', CONFIG.cleanLink, (val) => {
+            CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
+        }));
+        const importBtn = document.createElement('button');
+        importBtn.className = 'prts-btn';
+        importBtn.style.width = '100%'; importBtn.style.marginTop = '8px';
+        importBtn.innerHTML = '📂 导入干员数据';
+        importBtn.onclick = handleImport;
+        panel.appendChild(importBtn);
+        // --- 面板内容结束 ---
+
+        container.appendChild(panel);
+        container.appendChild(btn);
+        document.body.appendChild(container);
+
+        // =========================================================
+        // 4. 拖拽逻辑 (已修复)
+        // =========================================================
+        let isDragging = false;
+        let hasMoved = false;
+        let startX, startY;
+        let initialLeft, initialTop;
+
+        btn.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            hasMoved = false;
+            startX = e.clientX;
+            startY = e.clientY;
+
+            const rect = container.getBoundingClientRect();
+            initialLeft = rect.left;
+            initialTop = rect.top;
+
+            container.classList.remove('is-snapping');
+            container.classList.add('is-dragging');
+
+            // 锁定当前位置，防止跳变
+            container.style.left = initialLeft + 'px';
+            container.style.top = initialTop + 'px';
+            container.style.right = 'auto';
+            // 关键：禁用 CSS transform，由 JS 接管位置
+            container.style.transform = 'none';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const dx = e.clientX - startX;
+            const dy = e.clientY - startY;
+
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                hasMoved = true;
+            }
+
+            let newLeft = initialLeft + dx;
+            let newTop = initialTop + dy;
+
+            // 边界限制
+            const winWidth = window.innerWidth;
+            const winHeight = window.innerHeight;
+            const elWidth = container.offsetWidth;
+            const elHeight = container.offsetHeight;
+
+            if (newLeft < 0) newLeft = 0;
+            if (newLeft > winWidth - elWidth) newLeft = winWidth - elWidth;
+            if (newTop < 0) newTop = 0;
+            if (newTop > winHeight - elHeight) newTop = winHeight - elHeight;
+
+            container.style.left = newLeft + 'px';
+            container.style.top = newTop + 'px';
+        });
+
+        document.addEventListener('mouseup', (e) => {
+            if (!isDragging) return;
+            isDragging = false;
+            container.classList.remove('is-dragging');
+
+            // [核心修复]：无论是否发生拖动，都要清除内联 transform
+            // 否则 'transform: none' 会残留，导致 CSS 中的 translateX 失效，无法缩回
+            container.style.transform = '';
+
+            if (hasMoved) {
+                // --- 吸附逻辑 ---
+                const winWidth = window.innerWidth;
+                const rect = container.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+
+                container.classList.add('is-snapping');
+
+                let isRight = true;
+                if (centerX < winWidth / 2) {
+                    container.style.left = '0px';
+                    container.style.right = 'auto';
+                    container.classList.remove('snap-right');
+                    container.classList.add('snap-left');
+                    isRight = false;
+                } else {
+                    container.style.left = 'auto';
+                    container.style.right = '0px';
+                    container.classList.remove('snap-left');
+                    container.classList.add('snap-right');
+                    isRight = true;
+                }
+
+                const topPercent = (rect.top / window.innerHeight * 100).toFixed(1) + '%';
+                container.style.top = topPercent;
+
+                GM_setValue('prts_float_pos', JSON.stringify({
+                    top: topPercent,
+                    isRight: isRight
+                }));
+            }
+        });
+
+        // 5. 点击交互
+        btn.onclick = (e) => {
+            e.stopPropagation();
+            if (!hasMoved) {
+                container.classList.toggle('prts-float-open');
+            }
+        };
+
+        panel.onclick = (e) => e.stopPropagation();
+
+        document.addEventListener('click', () => {
+            if (!isDragging) {
+                container.classList.remove('prts-float-open');
+            }
+        });
+    }
+
+
     // =========================================================================
     //                            MODULE 5: 统一执行与监听
     // =========================================================================
@@ -1377,6 +1750,7 @@
 
         // 2. 初始化筛选数据
         loadOwnedOps();
+        createFloatingBall(); // <--- 启动悬浮球
         injectFilterControls();
 
         // 3. 统一观察者
@@ -1419,6 +1793,8 @@
             manageDarkModeButton();
             optimizeSidebar();
             optimizeDialogContent();
+            createFloatingBall();
+            if (CONFIG.sidebar) optimizeSidebar(); // 加入开关控制
             if (!isFilterDisabledPage() && !document.getElementById('prts-filter-bar')) {
                 injectFilterControls();
             }
