@@ -889,6 +889,25 @@
         input:checked + .prts-slider:before { transform: translateX(16px); }
         html.dark .prts-slider { background-color: #4b5563; }
         html.dark input:checked + .prts-slider { background-color: #2563eb; }
+        
+        /* --- [V11.3 弹窗头像化样式] --- */
+        
+        .prts-popover-grid {
+            display: flex; flex-wrap: wrap; gap: 6px; max-width: 320px; padding: 4px;
+        }
+        .prts-popover-item {
+            position: relative; width: 48px; height: 48px;
+            background-color: #1f2937; border: 1px solid #e5e7eb;
+            border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        }
+        html.dark .prts-popover-item { border-color: #4b5563; }
+        .prts-popover-img {
+            width: 100%; height: 100%; object-fit: cover; border-radius: 3px;
+        }
+        .prts-popover-skill {
+            position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7);
+            color: #fff; font-size: 10px; padding: 1px 4px; border-top-left-radius: 4px; line-height: 1.2;
+        }
     `;
 
     GM_addStyle(mergedStyles);
@@ -1199,7 +1218,7 @@
         rafId = requestAnimationFrame(applyFilterLogic);
     }
 
-// --- [V6.0 最终完美版：支持异步加载 + 独立状态锁] ---
+    // --- [V6.0 最终完美版：支持异步加载 + 独立状态锁] ---
     function optimizeCardVisuals(card, cardInner) {
         if (!CONFIG.visuals) return;
         // 注意：移除了最外层的 card.dataset.visualOptimized 锁
@@ -1336,6 +1355,79 @@
                    // labelDiv.dataset.opsProcessed = "true"; // 可选：如果干员列表不会变，可以加上这个锁
                 }
             }
+        }
+    }
+
+    // --- [V11.0 逻辑：拦截弹窗并头像化] ---
+    function enhancePopover(portalNode) {
+        // 1. 找到内容容器
+        const content = portalNode.querySelector('.bp4-popover2-content');
+        if (!content || content.dataset.optimized) return;
+
+        // 2. 获取原始文本 (例如: "-> 纯烬艾雅法拉 1, 蜜莓 1")
+        const text = content.innerText.trim();
+
+        // 3. 快速判断：必须包含干员数据的特征
+        // 特征1: 以 "->" 开头 (Zoot的习惯)
+        // 特征2: 或者包含 "," 分隔的列表
+        if (!text.startsWith('->') && !text.includes(',')) return;
+
+        // 4. 解析干员列表
+        // 移除 "->" 前缀，按逗号分隔
+        const rawList = text.replace(/^->\s*/, '').split(/[,，]\s*/);
+
+        // 准备数据容器
+        const validOps = [];
+
+        rawList.forEach(entry => {
+            const parts = entry.trim().split(/\s+/); // "纯烬艾雅法拉 1" -> ["纯烬艾雅法拉", "1"]
+            const name = parts[0];
+            const skill = parts[1] || "";
+
+            // 检查是否在我们的 ID 库中
+            if (OP_ID_MAP[name]) {
+                validOps.push({
+                    name: name,
+                    id: OP_ID_MAP[name],
+                    skill: skill
+                });
+            }
+        });
+
+        // 5. 只有当确实解析出了干员，才进行替换
+        if (validOps.length > 0) {
+            // 清空原有文字
+            content.innerHTML = '';
+
+            // 创建网格
+            const grid = document.createElement('div');
+            grid.className = 'prts-popover-grid';
+
+            validOps.forEach(op => {
+                const item = document.createElement('div');
+                item.className = 'prts-popover-item';
+                item.title = `${op.name} ${op.skill ? '(技能 ' + op.skill + ')' : ''}`;
+
+                const img = document.createElement('img');
+                img.src = `https://zoot.plus/assets/operator-avatars/webp96/${op.id}.webp`;
+                img.className = 'prts-popover-img';
+
+                item.appendChild(img);
+
+                if (op.skill) {
+                    const badge = document.createElement('div');
+                    badge.className = 'prts-popover-skill';
+                    badge.innerText = op.skill;
+                    item.appendChild(badge);
+                }
+
+                grid.appendChild(item);
+            });
+
+            content.appendChild(grid);
+
+            // 标记已处理
+            content.dataset.optimized = "true";
         }
     }
 
@@ -1806,6 +1898,43 @@
         });
 
         observer.observe(document.body, { childList: true, subtree: true });
+
+        // --- [V11.1 修复] 针对 Portal 内部变化的专用观察者 ---
+        // 解决：第二次悬停时，Portal 节点被复用导致无法触发替换的问题
+        const portalInnerObserver = new MutationObserver((mutations) => {
+            if (!CONFIG.visuals) return;
+            // 当 Portal 内部发生变化时，尝试重新执行增强逻辑
+            // 注意：enhancePopover 内部有 dataset.optimized 检查，防止死循环
+            mutations.forEach(mutation => {
+                const portalNode = mutation.target.closest('.bp4-portal');
+                if (portalNode) {
+                    enhancePopover(portalNode);
+                }
+            });
+        });
+
+        // 监听 Body 根目录下的弹窗生成
+        const bodyObserver = new MutationObserver((mutations) => {
+            if (!CONFIG.visuals) return;
+
+            mutations.forEach(mutation => {
+                if (mutation.addedNodes.length > 0) {
+                    mutation.addedNodes.forEach(node => {
+                        // 检查是否是 Blueprint 的 Portal
+                        if (node.nodeType === 1 && node.classList.contains('bp4-portal')) {
+                            // 1. 立即尝试处理 (针对第一次渲染)
+                            setTimeout(() => enhancePopover(node), 0);
+
+                            // 2. [关键修复] 持续监听这个 Portal 内部的变化
+                            // 这样当鼠标第二次悬停，React 刷新内部文字时，我们能再次捕捉到
+                            portalInnerObserver.observe(node, { childList: true, subtree: true });
+                        }
+                    });
+                }
+            });
+        });
+
+        bodyObserver.observe(document.body, { childList: true });
 
         // 保底定时器 (应对极其顽固的React刷新)
         setInterval(() => {
