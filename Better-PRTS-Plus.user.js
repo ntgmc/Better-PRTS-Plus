@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    http://tampermonkey.net/
-// @version      2.0
-// @description  [整合版] 在 zoot.plus 实现“完美持有/助战筛选”与“更好的暗黑模式”。修复登录框反白、突袭标签、作业详情、B站链接净化及弹窗底部白底问题。
+// @version      2.6
+// @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
 // @grant        GM_setValue
