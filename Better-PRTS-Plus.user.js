@@ -606,41 +606,48 @@
         html.dark [data-prts-tooltip]:hover::after { background-color: #202b33; }
         html.dark [data-prts-tooltip]:hover::before { border-color: #202b33 transparent transparent transparent; }
 
-        /* --- [V11.4 样式紧急修复：角标颜色强制高亮] --- */
+        /* --- [V11.5 样式终极调优：高雅黑金风格] --- */
 
-        /* 1. 基础角标样式 (卡片 & 弹窗通用) */
+        /* 通用角标样式 (卡片 & 弹窗) */
         .prts-op-skill, .prts-popover-skill {
             position: absolute;
             bottom: 0;
             right: 0;
-            
-            /* 强制白底黑字，确保最高对比度 */
-            background-color: #ffffff !important; 
-            color: #000000 !important;
-            
-            font-size: 11px !important;
-            font-weight: 900 !important; /* 最粗体 */
-            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-            
-            padding: 0 4px;
-            min-width: 14px;
-            text-align: center;
-            line-height: 14px;
-            
-            border-top-left-radius: 4px;
-            /* 加深阴影，防止在亮色头像上看不清边界 */
-            box-shadow: 0 0 2px rgba(0,0,0,0.5); 
-            pointer-events: none;
             z-index: 10;
+            
+            /* 1. 字体排版 */
+            font-size: 11px !important;
+            font-weight: 800 !important;
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            line-height: 1.1;
+            text-align: center;
+            padding: 1px 4px;
+            min-width: 14px;
+            
+            /* 2. 形状 */
+            border-top-left-radius: 4px;
+            
+            /* 3. [核心美学]：深色底 + 亮色描边 */
+            /* 这种组合在任何颜色的头像上都能看清，且不刺眼 */
+            background-color: #18181b !important; /* 深邃黑灰 */
+            color: #f3f4f6 !important;            /* 柔和亮白 */
+            
+            /* 4. [防隐身机制] */
+            /* 如果头像是黑的，这个半透明白边能让角标浮现出来 */
+            border-top: 1px solid rgba(255, 255, 255, 0.3);
+            border-left: 1px solid rgba(255, 255, 255, 0.3);
+            
+            /* 5. 阴影提升层次感 */
+            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
         }
 
-        /* 2. [关键修复] 针对弹窗内角标的特异性覆盖 */
-        /* 这里的层级必须非常深，以覆盖 V5.0 中那个通配符 * 的颜色强制 */
+        /* 针对弹窗内暗黑模式的强制覆盖 (防止被全局反色影响) */
         html.dark .bp4-popover2-content .prts-popover-skill,
         html.dark .prts-popover-skill {
-            background-color: #ffffff !important; /* 保持纯白底 */
-            color: #000000 !important;            /* 强制纯黑字 */
-            border: 1px solid #d1d5db;            /* 加个微弱灰边框防止晕染 */
+            background-color: #18181b !important;
+            color: #f3f4f6 !important;
+            border-color: rgba(255, 255, 255, 0.3) !important;
         }
 
         /* 日间模式也加个保险 */
