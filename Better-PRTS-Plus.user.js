@@ -63,882 +63,178 @@
     // =========================================================================
 
     const mergedStyles = `
-        /* --- [暗黑模式核心样式] --- */
-        html.dark, html.dark body, html.dark #root, html.dark #app,
-        html.dark .bg-zinc-50, html.dark .bg-slate-50, html.dark .bg-gray-50, html.dark .bg-white,
-        html.dark .bg-zinc-100, html.dark .bg-slate-100, html.dark .bg-gray-100 {
-            background-color: ${c.bgDeep} !important;
-            color: ${c.textMain} !important;
-        }
-
-        /* 顶部导航栏 */
-        html.dark .bp4-navbar {
-            background-color: ${c.bgCard} !important;
-            border-bottom: 1px solid ${c.border} !important;
-            box-shadow: none !important;
-        }
-
-        /* 抽屉(Drawer) 与 弹窗(Dialog/Overlay) 核心修复 */
-        html.dark .bp4-drawer,
-        html.dark .bp4-drawer > section,
-        html.dark .bp4-overlay-content,
-        html.dark .bp4-dialog {
-            background-color: ${c.bgCard} !important;
-            color: ${c.textMain} !important;
-            box-shadow: 0 0 0 1px ${c.border}, 0 4px 8px rgba(0,0,0,0.5) !important;
-        }
-
-        /* 抽屉/弹窗 头部修复 */
-        html.dark .bp4-drawer .bg-slate-100,
-        html.dark .bp4-drawer header,
-        html.dark .bp4-dialog-header {
-            background-color: ${c.bgCard} !important;
-            border-bottom: 1px solid ${c.border} !important;
-            color: ${c.textMain} !important;
-        }
-        
-        /* [新增修复] 弹窗底部操作栏 (Footer) */
-        html.dark .bp4-dialog-footer,
-        html.dark .bp4-dialog-footer-fixed {
-            background-color: ${c.bgCard} !important;
-            border-top: 1px solid ${c.border} !important;
-            color: ${c.textMain} !important;
-        }
-
-        html.dark .bp4-dialog-header .bp4-heading {
-            color: #fff !important;
-        }
-        html.dark .bp4-dialog-close-button .bp4-icon {
-            color: ${c.textSub} !important;
-        }
-
-        /* 组件通用 */
-        html.dark .bp4-card, html.dark .card-container {
-            background-color: ${c.bgCard} !important;
-            border: 1px solid ${c.border} !important;
-            box-shadow: none !important;
-            color: ${c.textMain} !important;
-        }
-
-        /* 菜单项文字与交互 */
-        html.dark .bp4-menu-item {
-            color: ${c.textMain} !important;
-        }
-        html.dark .bp4-menu-item:hover,
-        html.dark .bp4-menu-item.bp4-active,
-        html.dark .bp4-menu-item.bp4-intent-primary.bp4-active {
-            background-color: ${c.primary} !important;
-            color: #fff !important;
-        }
-        html.dark .bp4-menu-item.bp4-disabled {
-            color: ${c.textSub} !important;
-            background-color: transparent !important;
-        }
-
-        /* --- [修复作业详情动作序列颜色条] --- */
-        html.dark .bp4-card.border-l-4 {
-            border-left-width: 4px !important;
-        }
-        html.dark .border-sky-700 { border-left-color: #0369a1 !important; }    /* 部署 */
-        html.dark .border-pink-700 { border-left-color: #be185d !important; }   /* 倍速/撤退 */
-        html.dark .border-violet-700 { border-left-color: #6d28d9 !important; } /* 技能/挂机 */
-        html.dark .border-red-700 { border-left-color: #b91c1c !important; }    /* 警告/撤退 */
+        /* --- [暗黑模式核心: 背景与文字] --- */
+        html.dark, html.dark body, html.dark #root, html.dark #app, html.dark .bg-zinc-50, html.dark .bg-slate-50, html.dark .bg-gray-50, html.dark .bg-white, html.dark .bg-zinc-100, html.dark .bg-slate-100, html.dark .bg-gray-100 { background-color: ${c.bgDeep} !important; color: ${c.textMain} !important; }
+    
+        /* --- [导航栏、抽屉、弹窗] --- */
+        html.dark .bp4-navbar { background-color: ${c.bgCard} !important; border-bottom: 1px solid ${c.border} !important; box-shadow: none !important; }
+        html.dark .bp4-drawer, html.dark .bp4-drawer > section, html.dark .bp4-overlay-content, html.dark .bp4-dialog { background-color: ${c.bgCard} !important; color: ${c.textMain} !important; box-shadow: 0 0 0 1px ${c.border}, 0 4px 8px rgba(0,0,0,0.5) !important; }
+        html.dark .bp4-drawer .bg-slate-100, html.dark .bp4-drawer header, html.dark .bp4-dialog-header { background-color: ${c.bgCard} !important; border-bottom: 1px solid ${c.border} !important; color: ${c.textMain} !important; }
+        html.dark .bp4-dialog-footer, html.dark .bp4-dialog-footer-fixed { background-color: ${c.bgCard} !important; border-top: 1px solid ${c.border} !important; color: ${c.textMain} !important; }
+        html.dark .bp4-dialog-header .bp4-heading { color: #fff !important; }
+        html.dark .bp4-dialog-close-button .bp4-icon { color: ${c.textSub} !important; }
+    
+        /* --- [组件: 卡片、菜单、输入框、按钮] --- */
+        html.dark .bp4-card, html.dark .card-container { background-color: ${c.bgCard} !important; border: 1px solid ${c.border} !important; box-shadow: none !important; color: ${c.textMain} !important; }
+        html.dark .bp4-menu-item { color: ${c.textMain} !important; }
+        html.dark .bp4-menu-item:hover, html.dark .bp4-menu-item.bp4-active, html.dark .bp4-menu-item.bp4-intent-primary.bp4-active { background-color: ${c.primary} !important; color: #fff !important; }
+        html.dark .bp4-menu-item.bp4-disabled { color: ${c.textSub} !important; background-color: transparent !important; }
+        html.dark .bp4-button { background-color: ${c.bgHover} !important; background-image: none !important; border: 1px solid ${c.border} !important; color: ${c.textMain} !important; box-shadow: none !important; }
+        html.dark .bp4-button:hover { background-color: #3e3e42 !important; }
+        html.dark .bp4-button.bp4-intent-primary { background-color: ${c.primary} !important; color: #fff !important; border: none !important; }
+        html.dark .bp4-input, html.dark textarea, html.dark select, html.dark .bp4-dialog .bp4-input { background-color: ${c.bgHover} !important; color: #fff !important; border: 1px solid ${c.border} !important; box-shadow: none !important; }
+        html.dark .bp4-input::placeholder { color: #666 !important; }
+    
+        /* --- [颜色修正: 边框、文字、Tab] --- */
+        html.dark .bp4-card.border-l-4 { border-left-width: 4px !important; }
+        html.dark .border-sky-700 { border-left-color: #0369a1 !important; }
+        html.dark .border-pink-700 { border-left-color: #be185d !important; }
+        html.dark .border-violet-700 { border-left-color: #6d28d9 !important; }
+        html.dark .border-red-700 { border-left-color: #b91c1c !important; }
         html.dark .border-emerald-700 { border-left-color: #047857 !important; }
         html.dark .border-yellow-700 { border-left-color: #a16207 !important; }
-
-        /* 文字颜色适配 */
         html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark .bp4-heading, html.dark strong { color: #fff !important; }
         html.dark .text-gray-700, html.dark .text-zinc-600, html.dark .text-slate-900, html.dark .text-gray-800 { color: ${c.textMain} !important; }
         html.dark .text-gray-500, html.dark .text-zinc-500 { color: ${c.textSub} !important; }
-
-        /* 登录Tab页签适配 */
         html.dark .bp4-tab { color: ${c.textSub} !important; }
         html.dark .bp4-tab[aria-selected="true"] { color: ${c.primary} !important; }
-
-        /* --- [按钮与输入框修复] --- */
-        html.dark .bp4-button {
-            background-color: ${c.bgHover} !important;
-            background-image: none !important;
-            border: 1px solid ${c.border} !important;
-            color: ${c.textMain} !important;
-            box-shadow: none !important;
-        }
-        html.dark .bp4-button:hover { background-color: #3e3e42 !important; }
-        html.dark .bp4-button.bp4-intent-primary {
-            background-color: ${c.primary} !important;
-            color: #fff !important;
-            border: none !important;
-        }
-
-        /* 输入框本体 */
-        html.dark .bp4-input, html.dark textarea, html.dark select {
-            background-color: ${c.bgHover} !important;
-            color: #fff !important;
-            border: 1px solid ${c.border} !important;
-            box-shadow: none !important;
-        }
-        html.dark .bp4-input::placeholder { color: #666 !important; }
-
-        /* 弹窗内的输入框（加强权重） */
-        html.dark .bp4-dialog .bp4-input {
-            background-color: ${c.bgHover} !important;
-            color: #fff !important;
-        }
-
-        /* --- [关键：修复浏览器自动填充(Autofill)导致的白色/黄色背景] --- */
-        html.dark input:-webkit-autofill,
-        html.dark input:-webkit-autofill:hover,
-        html.dark input:-webkit-autofill:focus,
-        html.dark input:-webkit-autofill:active {
-            -webkit-box-shadow: 0 0 0 30px ${c.bgHover} inset !important;
-            -webkit-text-fill-color: #fff !important;
-            caret-color: #fff !important;
-            transition: background-color 5000s ease-in-out 0s;
-        }
-
-        /* 标签 (Tag) 修复 */
-        html.dark .bp4-tag {
-            background-color: #333 !important;
-            color: #ccc !important;
-            border: 1px solid #444 !important;
-        }
-        html.dark .bp4-tag[class*="bg-red-"], html.dark .bp4-tag.bg-red-400 {
-            background-color: ${c.tagRedBg} !important;
-            color: ${c.tagRedText} !important;
-            border-color: ${c.tagRedBorder} !important;
-        }
+    
+        /* --- [特殊修复: Autofill、Tag、Markdown] --- */
+        html.dark input:-webkit-autofill, html.dark input:-webkit-autofill:hover, html.dark input:-webkit-autofill:focus, html.dark input:-webkit-autofill:active { -webkit-box-shadow: 0 0 0 30px ${c.bgHover} inset !important; -webkit-text-fill-color: #fff !important; caret-color: #fff !important; transition: background-color 5000s ease-in-out 0s; }
+        html.dark .bp4-tag { background-color: #333 !important; color: #ccc !important; border: 1px solid #444 !important; }
+        html.dark .bp4-tag[class*="bg-red-"], html.dark .bp4-tag.bg-red-400 { background-color: ${c.tagRedBg} !important; color: ${c.tagRedText} !important; border-color: ${c.tagRedBorder} !important; }
         html.dark .bg-orange-200 { background-color: #4a3020 !important; border-color: #6d4020 !important; }
-
-        /* Markdown & Links */
         html.dark .markdown-body { color: ${c.textMain} !important; background: transparent !important; }
         html.dark .markdown-body pre, html.dark .markdown-body code { background-color: ${c.bgHover} !important; color: ${c.textMain} !important; }
         html.dark .markdown-body table tr:nth-child(2n) { background-color: rgba(255, 255, 255, 0.05) !important; }
         html.dark .markdown-body a { color: ${c.primary} !important; }
-
-        /* --- [V8.1 样式修复：彻底解决遮挡问题] --- */
-
-        /* 1. 描述容器 (占位层) */
-        .prts-desc-wrapper {
-            position: relative;
-            height: 24px;
-            margin: 2px 0;
-            width: 100%;
-            /* 平时层级较低，但在悬停时极大提升，确保盖住下面的所有内容 */
-            z-index: 10;
-        }
-        .prts-desc-wrapper:hover {
-            z-index: 100; /* 关键：悬停时提升父级层级 */
-        }
-
-        /* 2. 描述内容 (实体层) */
-        .prts-desc-content {
-            width: 100%;
-            height: 24px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            /* cursor: help; */
-            font-size: 13px;
-            color: #6b7280;
-            line-height: 24px;
-            border-radius: 4px;
-            /* 默认背景透明，防止遮挡背景图 */
-            background-color: transparent; 
-        }
-
-        /* 3. 悬停展开状态 */
-        .prts-desc-wrapper:hover .prts-desc-content {
-            position: absolute;
-            top: -4px;
-            left: -8px;
-            width: calc(100% + 16px);
-            height: auto;
-            
-            white-space: normal; /* 允许换行 */
-            overflow: visible;
-            
-            /* 视觉样式 */
-            background-color: #ffffff; /* 必须是实色背景 */
-            color: #374151;
-            padding: 4px 8px;
-            
-            /* 强阴影，增加层次感 */
-            box-shadow: 0 4px 16px rgba(0,0,0,0.2); 
-            border: 1px solid #e5e7eb;
-        }
-
-        /* 4. 暗黑模式适配 */
+    
+        /* --- [V8.1 描述容器: 悬停层级与展开] --- */
+        .prts-desc-wrapper { position: relative; height: 24px; margin: 2px 0; width: 100%; z-index: 10; }
+        .prts-desc-wrapper:hover { z-index: 100; }
+        .prts-desc-content { width: 100%; height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: #6b7280; line-height: 24px; border-radius: 4px; background-color: transparent; }
+        .prts-desc-wrapper:hover .prts-desc-content { position: absolute; top: -4px; left: -8px; width: calc(100% + 16px); height: auto; white-space: normal; overflow: visible; background-color: #ffffff; color: #374151; padding: 4px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); border: 1px solid #e5e7eb; }
         html.dark .prts-desc-content { color: #9ca3af; }
-        
-        html.dark .prts-desc-wrapper:hover .prts-desc-content {
-            background-color: #232326; /* 暗黑模式下的实色背景 */
-            color: #e5e7eb;
-            border-color: #3f3f46;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.6);
-        }
-
-        /* 5. 视频容器 & 按钮 (层级调低) */
-        .prts-video-box {
-            margin-top: 2px;
-            margin-bottom: 6px;
-            display: flex;
-            align-items: center;
-            position: relative;
-            z-index: 1; /* 关键：层级要比展开后的描述低 */
-        }
-
-        .prts-bili-link {
-            display: inline-flex !important;
-            align-items: center;
-            color: #94a3b8 !important; 
-            font-size: 12px !important;
-            font-weight: normal !important;
-            text-decoration: none !important;
-            padding: 2px 0;
-            background: transparent !important;
-            border: none !important;
-            transition: color 0.2s;
-            cursor: pointer;
-        }
-        .prts-bili-link:hover {
-            color: #fb7299 !important; 
-            text-decoration: underline !important;
-        }
-
+        html.dark .prts-desc-wrapper:hover .prts-desc-content { background-color: #232326; color: #e5e7eb; border-color: #3f3f46; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
+    
+        /* --- [视频链接与筛选栏] --- */
+        .prts-video-box { margin-top: 2px; margin-bottom: 6px; display: flex; align-items: center; position: relative; z-index: 1; }
+        .prts-bili-link { display: inline-flex !important; align-items: center; color: #94a3b8 !important; font-size: 12px !important; font-weight: normal !important; text-decoration: none !important; padding: 2px 0; background: transparent !important; border: none !important; transition: color 0.2s; cursor: pointer; }
+        .prts-bili-link:hover { color: #fb7299 !important; text-decoration: underline !important; }
         html.dark .prts-bili-link { color: #52525b !important; }
         html.dark .prts-bili-link:hover { color: #fb7299 !important; }
-        
         .prts-bili-link .bp4-icon { margin-right: 4px; font-size: 11px; }
-
-
-        /* --- [V10.2 UI 修复：原生风格 + 独立成行] --- */
-
-        /* 1. 筛选栏容器 (第二排) */
-        #prts-filter-bar {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            width: 100%;
-            /* 上下间距，使其看起来像第二排工具栏 */
-            margin-top: 8px; 
-            margin-bottom: 12px;
-            padding-left: 2px; /* 微调对齐 */
-        }
-
-        /* 2. 按钮风格：Blueprint Minimal (极简灰色) */
-        .prts-btn {
-            background: none !important;
-            background-color: transparent !important;
-            border: none !important;
-            box-shadow: none !important;
-            cursor: pointer !important;
-            display: inline-flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            padding: 6px 12px !important;
-            font-size: 14px !important;
-            color: #5c7080 !important; /* 原生灰色 */
-            border-radius: 3px !important;
-            min-height: 30px !important;
-            line-height: 1 !important;
-            font-weight: normal !important;
-            margin-right: 4px !important;
-            transition: background-color 0.1s cubic-bezier(0.4, 1, 0.75, 0.9) !important;
-        }
-
-        /* 悬停 */
-        .prts-btn:hover {
-            background-color: rgba(167, 182, 194, 0.3) !important;
-            color: #1c2127 !important;
-            text-decoration: none !important;
-        }
-
-        /* 选中 */
-        .prts-btn.prts-active {
-            background-color: rgba(167, 182, 194, 0.3) !important;
-            color: #2563eb !important; /* 罗德岛蓝 */
-            font-weight: 600 !important;
-        }
-
-        /* 暗黑模式 */
+    
+        /* --- [V10.2 原生风格筛选按钮] --- */
+        #prts-filter-bar { display: flex; align-items: center; flex-wrap: wrap; width: 100%; margin-top: 8px; margin-bottom: 12px; padding-left: 2px; }
+        .prts-btn { background: none !important; background-color: transparent !important; border: none !important; box-shadow: none !important; cursor: pointer !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 6px 12px !important; font-size: 14px !important; color: #5c7080 !important; border-radius: 3px !important; min-height: 30px !important; line-height: 1 !important; font-weight: normal !important; margin-right: 4px !important; transition: background-color 0.1s cubic-bezier(0.4, 1, 0.75, 0.9) !important; }
+        .prts-btn:hover { background-color: rgba(167, 182, 194, 0.3) !important; color: #1c2127 !important; text-decoration: none !important; }
+        .prts-btn.prts-active { background-color: rgba(167, 182, 194, 0.3) !important; color: #2563eb !important; font-weight: 600 !important; }
         html.dark .prts-btn { color: #a7b6c2 !important; }
-        html.dark .prts-btn:hover,
-        html.dark .prts-btn.prts-active {
-            background-color: rgba(138, 155, 168, 0.15) !important;
-            color: #f5f8fa !important;
-        }
+        html.dark .prts-btn:hover, html.dark .prts-btn.prts-active { background-color: rgba(138, 155, 168, 0.15) !important; color: #f5f8fa !important; }
         html.dark .prts-btn.prts-active { color: #60a5fa !important; }
-
-        /* 图标 */
-        .prts-btn .bp4-icon {
-            margin-right: 7px !important;
-            color: #5c7080 !important;
-            fill: currentColor !important;
-        }
+        .prts-btn .bp4-icon { margin-right: 7px !important; color: #5c7080 !important; fill: currentColor !important; }
         html.dark .prts-btn .bp4-icon { color: #a7b6c2 !important; }
         .prts-btn.prts-active .bp4-icon { color: #2563eb !important; }
         html.dark .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
-
-        /* 分隔符 */
-        .prts-divider {
-            width: 1px;
-            height: 16px;
-            background-color: rgba(16, 22, 26, 0.15);
-            margin: 0 8px;
-            display: inline-block;
-        }
-        html.dark .prts-divider {
-            background-color: rgba(255, 255, 255, 0.15);
-        }
-
-        /* --- 状态标签样式 --- */
-        .prts-status-label {
-            margin-top: 12px !important;
-            padding-top: 8px !important;
-            border-top: 1px dashed #e5e7eb !important;
-            font-size: 13px !important;
-            font-weight: 700 !important;
-            display: flex !important;
-            align-items: center !important;
-            line-height: 1.5 !important;
-        }
+        .prts-divider { width: 1px; height: 16px; background-color: rgba(16, 22, 26, 0.15); margin: 0 8px; display: inline-block; }
+        html.dark .prts-divider { background-color: rgba(255, 255, 255, 0.15); }
+    
+        /* --- [状态标签与卡片置灰] --- */
+        .prts-status-label { margin-top: 12px !important; padding-top: 8px !important; border-top: 1px dashed #e5e7eb !important; font-size: 13px !important; font-weight: 700 !important; display: flex !important; align-items: center !important; line-height: 1.5 !important; }
         html.dark .prts-status-label { border-top-color: #444 !important; }
-
         .prts-label-support { color: #d97706 !important; }
         html.dark .prts-label-support { color: #ff9d2e !important; }
-
         .prts-label-missing { color: #dc2626 !important; }
         html.dark .prts-label-missing { color: #f87171 !important; }
-
-        /* --- 卡片视觉降级 (置灰模式) --- */
-        .prts-card-gray .bp4-card {
-            opacity: 0.4 !important;
-            filter: grayscale(0.9) !important;
-            transition: opacity 0.2s ease, filter 0.2s ease !important;
-            background-color: #f3f4f6 !important;
-        }
+        .prts-card-gray .bp4-card { opacity: 0.4 !important; filter: grayscale(0.9) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; background-color: #f3f4f6 !important; }
         html.dark .prts-card-gray .bp4-card { background-color: #1a1a1a !important; }
-
-        /* 悬停恢复 */
-        .prts-card-gray:hover .bp4-card {
-            opacity: 0.95 !important;
-            filter: grayscale(0) !important;
-        }
-        
-        /* --- [V6.1 日间模式配色修复] --- */
-
-        /* 1. 关卡代号徽章 - 配色优化 */
-        .prts-level-badge {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            /* 日间模式：使用罗德岛亮蓝，清爽醒目 */
-            background-color: #3b82f6; 
-            color: #ffffff !important;
-            padding: 2px 8px;
-            border-radius: 4px;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-            font-weight: 700;
-            font-size: 0.95em;
-            margin-right: 8px;
-            border: 1px solid #2563eb; /* 边框稍微深一点 */
-            vertical-align: middle;
-            line-height: 1.2;
-            flex-shrink: 0;
-            box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
-        }
-        /* 暗黑模式：保持深色沉浸感，但改为深蓝而非纯黑 */
-        html.dark .prts-level-badge {
-            background-color: #1e3a8a; /* 深蓝色 */
-            border-color: #1e40af;
-            color: #e0e7ff !important;
-            box-shadow: none;
-        }
-        
-        /* 2. 干员/干员组 统一网格 */
-        .prts-op-grid {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px; /* 间距 */
-            margin-top: 8px;
-            margin-bottom: 8px;
-            align-items: center;
-        }
-
-        /* 3. 核心修复：强制交互层(Popover Wrapper)对齐 */
-        /* Zoot原本的 wrapper 可能是 block 或 inline，导致高度塌陷或对齐错误 */
-        .prts-op-grid .bp4-popover2-target {
-            display: inline-flex !important; 
-            margin: 0 !important;
-            padding: 0 !important;
-            vertical-align: top !important;
-            height: 42px !important; /* 强制高度一致 */
-        }
-
-        /* 3. 统一容器基础样式 */
-        .prts-op-item, .prts-op-text {
-            position: relative;
-            width: 42px;
-            height: 42px;
-            /* 移除 overflow: hidden 以允许 Tooltip 显示 */
-            /* border-radius: 4px;  <-- 移交给内部元素 */
-            /* cursor: help; */
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-sizing: border-box;
-        }
-        
-        .prts-op-item:hover, .prts-op-text:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            z-index: 50; /* 提升层级确保气泡在最上层 */
-        }
-
-        /* 2. 干员头像容器 - 配色优化 */
-        .prts-op-item {
-            position: relative;
-            width: 42px;
-            height: 42px;
-            /* 日间模式：浅灰白底色，避免"黑洞" */
-            background-color: #f8fafc; 
-            border: 1px solid #cbd5e1; /* 浅灰色边框 */
-            border-radius: 4px;
-            /* cursor: help; */
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            transition: transform 0.2s, box-shadow 0.2s;
-            box-sizing: border-box;
-        }
-        /* 暗黑模式：深色底，避免太亮刺眼 */
-        html.dark .prts-op-item {
-            background-color: #1f2937;
-            border-color: #374151;
-        }
-
-        .prts-op-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            z-index: 50;
-            border-color: #3b82f6; /* 悬停时边框变蓝 */
-        }
-        html.dark .prts-op-item:hover {
-            border-color: #60a5fa;
-        }
-        
-        .prts-op-img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-            border-radius: 3px; /* 图片自己负责圆角 */
-        }
-        
-        /* 3. 干员组(文字方块) - 保持一致性微调 */
-        .prts-op-text {
-            position: relative;
-            width: 42px;
-            height: 42px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            /* 日间模式 */
-            background-color: #f1f5f9;
-            color: #475569;
-            border: 1px dashed #94a3b8;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
-            text-align: center;
-            line-height: 1.1;
-            padding: 2px;
-            word-break: break-all;
-            /* cursor: help; */
-            box-sizing: border-box;
-            transition: transform 0.2s;
-        }
-        .prts-op-text:hover {
-            transform: translateY(-2px);
-            z-index: 50;
-            border-style: solid;
-            border-color: #3b82f6;
-            background-color: #fff;
-        }
-        /* 暗黑模式 */
-        html.dark .prts-op-text {
-            background-color: #27272a;
-            color: #d1d5db;
-            border-color: #52525b;
-        }
-        html.dark .prts-op-text:hover {
-            background-color: #27272a;
-            border-color: #60a5fa;
-        }
-        
-        /* 4. [新增] 模拟 Zoot 原生风格的 Tooltip */
-        /* 通过 data-prts-tooltip 属性触发 */
-        [data-prts-tooltip]:hover::after {
-            content: attr(data-prts-tooltip);
-            position: absolute;
-            bottom: 115%; /* 显示在上方 */
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: #30404d; /* Blueprint Dark Gray */
-            color: #f5f8fa;
-            padding: 5px 8px;
-            font-size: 12px;
-            border-radius: 3px;
-            white-space: nowrap;
-            pointer-events: none;
-            box-shadow: 0 0 0 1px rgba(16,22,26,.1), 0 2px 4px rgba(16,22,26,.2), 0 8px 24px rgba(16,22,26,.2);
-            z-index: 100;
-        }
-        /* 小三角 */
-        [data-prts-tooltip]:hover::before {
-            content: "";
-            position: absolute;
-            bottom: 100%; /* 紧贴上方 */
-            left: 50%;
-            transform: translateX(-50%);
-            border-width: 5px;
-            border-style: solid;
-            border-color: #30404d transparent transparent transparent;
-            z-index: 100;
-        }
+        .prts-card-gray:hover .bp4-card { opacity: 0.95 !important; filter: grayscale(0) !important; }
+    
+        /* --- [V6.1 关卡徽章与干员网格] --- */
+        .prts-level-badge { display: inline-flex; align-items: center; justify-content: center; background-color: #3b82f6; color: #ffffff !important; padding: 2px 8px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 700; font-size: 0.95em; margin-right: 8px; border: 1px solid #2563eb; vertical-align: middle; line-height: 1.2; flex-shrink: 0; box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2); }
+        html.dark .prts-level-badge { background-color: #1e3a8a; border-color: #1e40af; color: #e0e7ff !important; box-shadow: none; }
+        .prts-op-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; align-items: center; }
+        .prts-op-grid .bp4-popover2-target { display: inline-flex !important; margin: 0 !important; padding: 0 !important; vertical-align: top !important; height: 42px !important; }
+    
+        /* --- [干员头像/文字容器] --- */
+        .prts-op-item, .prts-op-text { position: relative; width: 42px; height: 42px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; box-sizing: border-box; }
+        .prts-op-item:hover, .prts-op-text:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 50; }
+        .prts-op-item { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        html.dark .prts-op-item { background-color: #1f2937; border-color: #374151; }
+        .prts-op-item:hover { border-color: #3b82f6; }
+        html.dark .prts-op-item:hover { border-color: #60a5fa; }
+        .prts-op-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
+        .prts-op-text { display: flex; align-items: center; justify-content: center; background-color: #f1f5f9; color: #475569; border: 1px dashed #94a3b8; border-radius: 4px; font-size: 12px; font-weight: bold; text-align: center; line-height: 1.1; padding: 2px; word-break: break-all; }
+        .prts-op-text:hover { border-style: solid; border-color: #3b82f6; background-color: #fff; }
+        html.dark .prts-op-text { background-color: #27272a; color: #d1d5db; border-color: #52525b; }
+        html.dark .prts-op-text:hover { background-color: #27272a; border-color: #60a5fa; }
+    
+        /* --- [原生 Tooltip 模拟] --- */
+        [data-prts-tooltip]:hover::after { content: attr(data-prts-tooltip); position: absolute; bottom: 115%; left: 50%; transform: translateX(-50%); background-color: #30404d; color: #f5f8fa; padding: 5px 8px; font-size: 12px; border-radius: 3px; white-space: nowrap; pointer-events: none; box-shadow: 0 0 0 1px rgba(16,22,26,.1), 0 2px 4px rgba(16,22,26,.2), 0 8px 24px rgba(16,22,26,.2); z-index: 100; }
+        [data-prts-tooltip]:hover::before { content: ""; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); border-width: 5px; border-style: solid; border-color: #30404d transparent transparent transparent; z-index: 100; }
         html.dark [data-prts-tooltip]:hover::after { background-color: #202b33; }
         html.dark [data-prts-tooltip]:hover::before { border-color: #202b33 transparent transparent transparent; }
-
-        /* --- [V11.5 样式终极调优：高雅黑金风格] --- */
-
-        /* 通用角标样式 (卡片 & 弹窗) */
-        .prts-op-skill, .prts-popover-skill {
-            position: absolute;
-            bottom: 0;
-            right: 0;
-            z-index: 10;
-            
-            /* 1. 字体排版 */
-            font-size: 11px !important;
-            font-weight: 800 !important;
-            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-            line-height: 1.1;
-            text-align: center;
-            padding: 1px 4px;
-            min-width: 14px;
-            
-            /* 2. 形状 */
-            border-top-left-radius: 4px;
-            
-            /* 3. [核心美学]：深色底 + 亮色描边 */
-            /* 这种组合在任何颜色的头像上都能看清，且不刺眼 */
-            background-color: #18181b !important; /* 深邃黑灰 */
-            color: #f3f4f6 !important;            /* 柔和亮白 */
-            
-            /* 4. [防隐身机制] */
-            /* 如果头像是黑的，这个半透明白边能让角标浮现出来 */
-            border-top: 1px solid rgba(255, 255, 255, 0.3);
-            border-left: 1px solid rgba(255, 255, 255, 0.3);
-            
-            /* 5. 阴影提升层次感 */
-            box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5);
-            pointer-events: none;
-        }
-
-        /* 针对弹窗内暗黑模式的强制覆盖 (防止被全局反色影响) */
-        html.dark .bp4-popover2-content .prts-popover-skill,
-        html.dark .prts-popover-skill {
-            background-color: #18181b !important;
-            color: #f3f4f6 !important;
-            border-color: rgba(255, 255, 255, 0.3) !important;
-        }
-
-        /* 日间模式也加个保险 */
-        .bp4-popover2-content .prts-popover-skill {
-            background-color: #ffffff !important;
-            color: #000000 !important;
-            border: 1px solid #e5e7eb;
-        }
-        
-        /* --- [V5.0 修复：Tooltip/气泡提示 配色修复] --- */
-        /* 针对 "复制神秘代码" 等所有悬停提示 */
-        html.dark .bp4-popover2-content {
-            background-color: #262626 !important; /* 深灰色背景，比纯黑稍亮 */
-            color: #ffffff !important;             /* 强制纯白文字 */
-            border: 1px solid #404040 !important;  /* 增加微弱边框，提升辨识度 */
-            box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important;
-        }
-
-        /* 暴力覆盖 Tooltip 内部可能存在的 Tailwind 文字颜色类 (如 text-slate-700) */
-        html.dark .bp4-popover2-content,
-        html.dark .bp4-popover2-content * {
-            color: #ffffff !important;
-        }
-
-        /* 修复气泡连接处的小三角 (Arrow) 颜色 */
-        html.dark .bp4-popover2-arrow-fill {
-            fill: #262626 !important; /* 填充色与背景一致 */
-        }
-        html.dark .bp4-popover2-arrow-border {
-            fill: #404040 !important; /* 边框色与边框一致 */
-        }
-        
-        /* 隐藏原始标签 */
+    
+        /* --- [V11.5 技能角标] --- */
+        .prts-op-skill, .prts-popover-skill { position: absolute; bottom: 0; right: 0; z-index: 10; font-size: 11px !important; font-weight: 800 !important; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.1; text-align: center; padding: 1px 4px; min-width: 14px; border-top-left-radius: 4px; background-color: #18181b !important; color: #f3f4f6 !important; border-top: 1px solid rgba(255, 255, 255, 0.3); border-left: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); pointer-events: none; }
+        html.dark .bp4-popover2-content .prts-popover-skill, html.dark .prts-popover-skill { background-color: #18181b !important; color: #f3f4f6 !important; border-color: rgba(255, 255, 255, 0.3) !important; }
+        .bp4-popover2-content .prts-popover-skill { background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb; }
+    
+        /* --- [V5.0 Tooltip/气泡] --- */
+        html.dark .bp4-popover2-content { background-color: #262626 !important; color: #ffffff !important; border: 1px solid #404040 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
+        html.dark .bp4-popover2-content, html.dark .bp4-popover2-content * { color: #ffffff !important; }
+        html.dark .bp4-popover2-arrow-fill { fill: #262626 !important; }
+        html.dark .bp4-popover2-arrow-border { fill: #404040 !important; }
         .bp4-tag[data-op-extracted="true"] { display: none !important; }
-        
-        /* --- [V6.3 侧边栏最终修复：解决文字消失] --- */
-
-        /* 1. 创作工具折叠 */
-        .prts-sidebar-collapsed {
-            max-height: 48px !important;
-            overflow: hidden !important;
-            cursor: pointer !important;
-            opacity: 0.9;
-        }
-        .prts-sidebar-header-icon {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .prts-sidebar-header-icon::after {
-            content: "▼";
-            font-size: 0.8em;
-            color: #9ca3af;
-            transition: transform 0.3s;
-        }
+    
+        /* --- [V6.3 侧边栏与公告] --- */
+        .prts-sidebar-collapsed { max-height: 48px !important; overflow: hidden !important; cursor: pointer !important; opacity: 0.9; }
+        .prts-sidebar-header-icon { display: flex; align-items: center; justify-content: space-between; }
+        .prts-sidebar-header-icon::after { content: "▼"; font-size: 0.8em; color: #9ca3af; transition: transform 0.3s; }
         .prts-sidebar-expanded .prts-sidebar-header-icon::after { transform: rotate(180deg); }
-
-        /* 2. 公告按钮 (Notice Button) */
-        .prts-notice-btn {
-            cursor: pointer !important;
-            border-left: 4px solid #3b82f6 !important; /* 蓝色左边条 */
-            transition: transform 0.2s, box-shadow 0.2s !important;
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: center !important;
-            min-height: 48px !important;
-            padding: 0 16px !important; /* 增加左右内边距 */
-        }
-        .prts-notice-btn:hover {
-            transform: translateX(-2px);
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important;
-        }
-
-        /* [核心修复]：只隐藏包含列表的那个 div，而不是所有带 flex 的元素 */
-        /* 这里的 > div 表示只隐藏直接子元素中的 div，通常是放列表的容器 */
-        .prts-notice-btn > div:not(.bp4-heading), 
-        .prts-notice-btn ul {
-            display: none !important;
-        }
-
-        /* [核心修复]：强制标题显示并纠正颜色 */
-        .prts-notice-btn h4.bp4-heading {
-            display: flex !important; /* 恢复 flex 布局 */
-            align-items: center !important;
-            margin: 0 !important;
-            width: 100% !important;
-            opacity: 1 !important;
-            visibility: visible !important;
-            color: #1f2937 !important; /* 日间：深灰 */
-        }
-        
-        /* 暗黑模式下强制反白 */
-        html.dark .prts-notice-btn h4.bp4-heading {
-            color: #f3f4f6 !important; /* 夜间：亮白 */
-        }
-
-        /* 3. 弹窗内标签 */
-        .prts-dialog-tag {
-            display: inline-block;
-            padding: 2px 6px;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: bold;
-            margin-right: 8px;
-            color: #fff;
-            vertical-align: middle;
-        }
-        .prts-tag-update { background-color: #10b981; }
-        .prts-tag-fix { background-color: #f59e0b; }
-        .prts-tag-event { background-color: #3b82f6; }
-        .prts-tag-note { background-color: #64748b; }
-        
-        /* --- [V9.4 悬浮球样式：优雅慢速动画版] --- */
-
-        /* 1. 悬浮球容器 (定位与基座) */
-        #prts-float-container {
-            position: fixed;
-            z-index: 9999;
-            display: flex;
-            align-items: center;
-            opacity: 0.6;
-            user-select: none;
-            
-            /* [核心修改]：
-               1. 增加 transform 属性的过渡，让贴边/展开有动画
-               2. 时间设为 0.6s (更慢)
-               3. 使用 ease-out (先快后慢) 让动作更自然
-            */
-            transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-        
-        /* 交互状态：悬停、打开面板时变为不透明 */
-        #prts-float-container:hover,
-        #prts-float-container.prts-float-open {
-            opacity: 1;
-        }
-
-        /* [关键修复]：拖拽时必须关闭动画，否则会感到严重的延迟 */
-        #prts-float-container.is-dragging {
-            opacity: 1;
-            transition: none !important;
-        }
-
-        /* 吸附动画 (松手后的归位动画) */
-        #prts-float-container.is-snapping {
-            transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        /* 2. 贴边自动隐藏逻辑 */
-        /* 右侧吸附隐藏 */
-        #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) {
-            transform: translateX(calc(100% - 12px));
-        }
-        /* 左侧吸附隐藏 */
-        #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) {
-            transform: translateX(calc(-100% + 12px));
-        }
-
-        /* 3. 悬浮按钮 (图标) */
-        .prts-float-btn {
-            width: 48px;
-            height: 48px;
-            background-color: #fff;
-            border: 1px solid #e5e7eb;
-            border-right: none; /* 默认贴右边 */
-            border-radius: 8px 0 0 8px;
-            box-shadow: -2px 2px 8px rgba(0,0,0,0.1);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #374151;
-            transition: all 0.3s; /* 按钮本身的颜色变化不需要太慢 */
-            position: relative;
-            z-index: 2;
-        }
+        .prts-notice-btn { cursor: pointer !important; border-left: 4px solid #3b82f6 !important; transition: transform 0.2s, box-shadow 0.2s !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-height: 48px !important; padding: 0 16px !important; }
+        .prts-notice-btn:hover { transform: translateX(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; }
+        .prts-notice-btn > div:not(.bp4-heading), .prts-notice-btn ul { display: none !important; }
+        .prts-notice-btn h4.bp4-heading { display: flex !important; align-items: center !important; margin: 0 !important; width: 100% !important; opacity: 1 !important; visibility: visible !important; color: #1f2937 !important; }
+        html.dark .prts-notice-btn h4.bp4-heading { color: #f3f4f6 !important; }
+        .prts-dialog-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-weight: bold; margin-right: 8px; color: #fff; vertical-align: middle; }
+        .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; } .prts-tag-event { background-color: #3b82f6; } .prts-tag-note { background-color: #64748b; }
+    
+        /* --- [V9.4 悬浮球 & 控制面板] --- */
+        #prts-float-container { position: fixed; z-index: 9999; display: flex; align-items: center; opacity: 0.6; user-select: none; transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+        #prts-float-container:hover, #prts-float-container.prts-float-open { opacity: 1; }
+        #prts-float-container.is-dragging { opacity: 1; transition: none !important; }
+        #prts-float-container.is-snapping { transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+        #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 12px)); }
+        #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 12px)); }
+        .prts-float-btn { width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none; border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2; }
         .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
-        
-        /* 左侧吸附时翻转 */
-        #prts-float-container.snap-left .prts-float-btn {
-            border-radius: 0 8px 8px 0;
-            border-right: 1px solid #e5e7eb;
-            border-left: none;
-            box-shadow: 2px 2px 8px rgba(0,0,0,0.1);
-        }
-
-        /* 暗黑模式按钮 */
-        html.dark .prts-float-btn {
-            background-color: #232326;
-            border-color: #3f3f46;
-            color: #e5e7eb;
-            box-shadow: -2px 2px 12px rgba(0,0,0,0.5);
-        }
-
-        /* 4. 控制面板 */
-        .prts-settings-panel {
-            position: absolute;
-            top: 0;
-            width: 260px;
-            background: #fff;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-            z-index: 1;
-            
-            /* 默认隐藏 */
-            visibility: hidden;
-            opacity: 0;
-            pointer-events: none;
-            
-            /* 面板弹出也慢一点，保持一致 */
-            transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1);
-        }
-
-        /* 面板定位 */
-        /* 右侧吸附时：面板在左 */
-        .prts-settings-panel {
-            right: 55px; left: auto;
-            transform: translateX(20px) scale(0.95);
-            transform-origin: top right;
-        }
-        /* 左侧吸附时：面板在右 */
-        #prts-float-container.snap-left .prts-settings-panel {
-            left: 55px; right: auto;
-            transform: translateX(-20px) scale(0.95);
-            transform-origin: top left;
-        }
-
-        /* 激活显示 */
-        #prts-float-container.prts-float-open .prts-settings-panel {
-            visibility: visible;
-            opacity: 1;
-            transform: translateX(0) scale(1);
-            pointer-events: auto;
-        }
-
-        /* 暗黑模式面板 */
-        html.dark .prts-settings-panel {
-            background: #18181c;
-            border-color: #3f3f46;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.6);
-        }
-
-        /* 5. 面板内容 (保持不变) */
-        .prts-panel-title {
-            font-size: 14px; font-weight: bold; margin-bottom: 12px;
-            color: #1f2937; display: flex; align-items: center;
-            padding-bottom: 8px; border-bottom: 1px solid #f3f4f6;
-        }
+        #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
+        html.dark .prts-float-btn { background-color: #232326; border-color: #3f3f46; color: #e5e7eb; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
+        .prts-settings-panel { position: absolute; top: 0; width: 260px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 1; visibility: hidden; opacity: 0; pointer-events: none; transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1); right: 55px; left: auto; transform: translateX(20px) scale(0.95); transform-origin: top right; }
+        #prts-float-container.snap-left .prts-settings-panel { left: 55px; right: auto; transform: translateX(-20px) scale(0.95); transform-origin: top left; }
+        #prts-float-container.prts-float-open .prts-settings-panel { visibility: visible; opacity: 1; transform: translateX(0) scale(1); pointer-events: auto; }
+        html.dark .prts-settings-panel { background: #18181c; border-color: #3f3f46; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+        .prts-panel-title { font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #1f2937; display: flex; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f3f4f6; }
         html.dark .prts-panel-title { color: #f3f4f6; border-color: #3f3f46; }
-
-        .prts-panel-item {
-            display: flex; align-items: center; justify-content: space-between;
-            margin-bottom: 12px; font-size: 13px; color: #4b5563;
-        }
+        .prts-panel-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; color: #4b5563; }
         html.dark .prts-panel-item { color: #d1d5db; }
-
         .prts-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
         .prts-switch input { opacity: 0; width: 0; height: 0; }
-        .prts-slider {
-            position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-            background-color: #ccc; transition: .4s; border-radius: 34px;
-        }
-        .prts-slider:before {
-            position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px;
-            background-color: white; transition: .4s; border-radius: 50%;
-        }
+        .prts-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .prts-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
         input:checked + .prts-slider { background-color: #3b82f6; }
         input:checked + .prts-slider:before { transform: translateX(16px); }
         html.dark .prts-slider { background-color: #4b5563; }
         html.dark input:checked + .prts-slider { background-color: #2563eb; }
-        
-        /* --- [V11.3 弹窗头像化样式] --- */
-        
-        .prts-popover-grid {
-            display: flex; flex-wrap: wrap; gap: 6px; max-width: 320px; padding: 4px;
-        }
-        .prts-popover-item {
-            position: relative; width: 48px; height: 48px;
-            background-color: #1f2937; border: 1px solid #e5e7eb;
-            border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        }
+    
+        /* --- [V11.3 弹窗网格] --- */
+        .prts-popover-grid { display: flex; flex-wrap: wrap; gap: 6px; max-width: 320px; padding: 4px; }
+        .prts-popover-item { position: relative; width: 48px; height: 48px; background-color: #1f2937; border: 1px solid #e5e7eb; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
         html.dark .prts-popover-item { border-color: #4b5563; }
-        .prts-popover-img {
-            width: 100%; height: 100%; object-fit: cover; border-radius: 3px;
-        }
-        .prts-popover-skill {
-            position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7);
-            color: #fff; font-size: 10px; padding: 1px 4px; border-top-left-radius: 4px; line-height: 1.2;
-        }
+        .prts-popover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
+        .prts-popover-skill { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: #fff; font-size: 10px; padding: 1px 4px; border-top-left-radius: 4px; line-height: 1.2; }
     `;
 
     GM_addStyle(mergedStyles);
