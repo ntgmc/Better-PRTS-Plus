@@ -53,7 +53,7 @@
 
 | 渠道 | 说明 | 链接 |
 | :--- | :--- | :--- |
-| **Greasy Fork** | (推荐) 支持自动更新 | [**点击安装**](https://greasyfork.org/zh-CN/scripts/你的脚本ID) |
+| **Greasy Fork** | (推荐) 支持自动更新 | [**点击安装**](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus) |
 | **GitHub** | 开发者版本 | [**点击安装**](https://github.com/ntgmc/Better-PRTS-Plus/raw/main/Better-PRTS-Plus.user.js) |
 
 ## 📖 使用指南
