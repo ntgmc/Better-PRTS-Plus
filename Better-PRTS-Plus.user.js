@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    http://tampermonkey.net/
-// @version      2.6
+// @version      2.7
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
@@ -270,6 +270,55 @@
         html.dark .prts-popover-item { border-color: #4b5563; }
         .prts-popover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
         .prts-popover-skill { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: #fff; font-size: 10px; padding: 1px 4px; border-top-left-radius: 4px; line-height: 1.2; }
+        
+        /* --- [V12.7 终极修复：通用下拉菜单/Select/Minimal 暗黑适配] --- */
+
+        /* 1. 覆盖所有通过 Portal 生成的弹出层内容 */
+        /* 涵盖 Select, Suggest, Minimal, ContextMenu 等所有类型 */
+        html.dark .bp4-portal .bp4-popover2-content,
+        html.dark .bp4-portal .bp4-menu {
+            background-color: #232326 !important; /* 强制深色卡片背景 */
+            color: #e0e0e0 !important;            /* 强制浅色文字 */
+            border: 1px solid #3f3f46 !important; /* 深灰边框 */
+            box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important; /* 深色投影 */
+        }
+
+        /* 2. 专门针对 Select 下拉框 (listbox-xx) 的容器修复 */
+        html.dark .bp4-select-popover .bp4-popover2-content {
+            background-color: #232326 !important;
+            color: #e0e0e0 !important;
+        }
+
+        /* 3. 专门针对 Minimal (极简) 弹窗的修复 */
+        /* 您提到的 "bp4-minimal ... !p-0.overflow-hidden" 这种结构 */
+        html.dark .bp4-popover2.bp4-minimal .bp4-popover2-content {
+            background-color: #232326 !important;
+            border: 1px solid #3f3f46 !important;
+        }
+
+        /* 4. 菜单项交互状态 (Hover/Active/Selected) */
+        html.dark .bp4-menu-item {
+            background-color: transparent !important;
+            color: #e0e0e0 !important;
+        }
+        
+        /* 鼠标悬停 或 选中项 */
+        html.dark .bp4-menu-item:hover,
+        html.dark .bp4-menu-item.bp4-active,
+        html.dark .bp4-menu-item.bp4-selected,
+        html.dark .bp4-menu-item.bp4-intent-primary.bp4-active {
+            background-color: #3b82f6 !important; /* 罗德岛蓝高亮 */
+            color: #ffffff !important;            /* 白字 */
+        }
+
+        /* 5. 修复弹窗连接处的小三角 (Arrow) */
+        /* 让它和背景色融为一体 */
+        html.dark .bp4-popover2-arrow-fill {
+            fill: #232326 !important;
+        }
+        html.dark .bp4-popover2-arrow-border {
+            fill: #3f3f46 !important;
+        }
     `;
 
     GM_addStyle(mergedStyles);
