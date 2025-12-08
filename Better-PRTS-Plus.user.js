@@ -11,6 +11,34 @@
 // @run-at       document-body
 // ==/UserScript==
 
+/**
+ * =========================================================================
+ *                            Better-PRTS-Plus 代码结构说明
+ * =========================================================================
+ *
+ * 本脚本主要包含以下模块：
+ * 1. 配置与常量：定义全局颜色、存储键值及状态变量。
+ * 2. 数据与样式：干员映射表与CSS样式注入（*按要求在此处省略具体内容*）。
+ * 3. 核心逻辑：暗黑模式切换、DOM元素获取与注入。
+ * 4. 业务逻辑：
+ *    - [V10.x] 筛选栏控制与图标逻辑
+ *    - [V6.x] 卡片视觉优化（徽章、干员头像）
+ *    - [V8.x] 内容清洗（B站链接、描述折叠）
+ *    - [V11.x] 弹窗增强（详情网格化）
+ *    - [V9.x] 全局悬浮球与设置面板
+ * 5. 初始化与监听：MutationObserver 统一管理与入口函数。
+ *
+ * 版本号标识说明：
+ * [V3.0] 暗黑模式核心
+ * [V5.0] Tooltip/气泡交互
+ * [V6.0] 卡片/列表视觉优化
+ * [V8.0] 文本清洗与链接优化
+ * [V9.0] 悬浮球与设置系统
+ * [V10.0] 筛选器核心逻辑
+ * [V11.0] 弹窗与详情增强
+ * =========================================================================
+ */
+
 (function() {
     'use strict';
 
@@ -19,10 +47,10 @@
     // =========================================================================
 
     const OPS_STORAGE_KEY = 'prts_plus_user_ops';
-    const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 'GRAY' | 'HIDE'
+    const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 可选值: 'GRAY' | 'HIDE'
     const DARK_MODE_KEY = 'prts_plus_dark_mode_v3';
 
-    // 罗德岛配色定义 (用于暗黑模式)
+    // [V3.0 样式配置] 罗德岛配色定义
     const c = {
         bgDeep: '#18181c',      // 全局深底
         bgCard: '#232326',      // 卡片/弹窗
@@ -36,32 +64,39 @@
         tagRedBorder: '#7f1d1d' // 突袭-深红边框
     };
 
-    // =========================================================================
-    //                            [新增] 干员头像数据映射
-    // =========================================================================
-    const RAW_OPS = [
-      {"id":"char_002_amiya","name":"阿米娅"},{"id":"char_003_kalts","name":"凯尔希"},{"id":"char_009_12fce","name":"12F"},{"id":"char_010_chen","name":"陈"},{"id":"char_017_huang","name":"煌"},{"id":"char_1011_lava2","name":"炎狱炎熔"},{"id":"char_1012_skadi2","name":"浊心斯卡蒂"},{"id":"char_1013_chen2","name":"假日威龙陈"},{"id":"char_1014_nearl2","name":"耀骑士临光"},{"id":"char_1016_agoat2","name":"纯烬艾雅法拉"},{"id":"char_1019_siege2","name":"维娜·维多利亚"},{"id":"char_101_sora","name":"空"},{"id":"char_1020_reed2","name":"焰影苇草"},{"id":"char_1021_kroos2","name":"寒芒克洛丝"},{"id":"char_1023_ghost2","name":"归溟幽灵鲨"},{"id":"char_1024_hbisc2","name":"濯尘芙蓉"},{"id":"char_1026_gvial2","name":"百炼嘉维尔"},{"id":"char_1027_greyy2","name":"承曦格雷伊"},{"id":"char_1028_texas2","name":"缄默德克萨斯"},{"id":"char_1029_yato2","name":"麒麟R夜刀"},{"id":"char_102_texas","name":"德克萨斯"},{"id":"char_1030_noirc2","name":"火龙S黑角"},{"id":"char_1031_slent2","name":"淬羽赫默"},{"id":"char_1032_excu2","name":"圣约送葬人"},{"id":"char_1033_swire2","name":"琳琅诗怀雅"},{"id":"char_1034_jesca2","name":"涤火杰西卡"},{"id":"char_1035_wisdel","name":"维什戴尔"},{"id":"char_1036_fang2","name":"历阵锐枪芬"},{"id":"char_1038_whitw2","name":"荒芜拉普兰德"},{"id":"char_1039_thorn2","name":"引星棘刺"},{"id":"char_103_angel","name":"能天使"},{"id":"char_1040_blaze2","name":"烛煌"},{"id":"char_1041_angel2","name":"新约能天使"},{"id":"char_1042_phatm2","name":"酒神"},{"id":"char_1043_leizi2","name":"司霆惊蛰"},{"id":"char_1044_hsgma2","name":"斩业星熊"},{"id":"char_1045_svash2","name":"凛御银灰"},{"id":"char_1046_sbell2","name":"圣聆初雪"},{"id":"char_1047_halo2","name":"溯光星源"},{"id":"char_106_franka","name":"芙兰卡"},{"id":"char_107_liskam","name":"雷蛇"},{"id":"char_108_silent","name":"赫默"},{"id":"char_109_fmout","name":"远山"},{"id":"char_110_deepcl","name":"深海色"},{"id":"char_112_siege","name":"推进之王"},{"id":"char_113_cqbw","name":"W"},{"id":"char_115_headbr","name":"凛冬"},{"id":"char_117_myrrh","name":"末药"},{"id":"char_118_yuki","name":"白雪"},{"id":"char_120_hibisc","name":"芙蓉"},{"id":"char_121_lava","name":"炎熔"},{"id":"char_122_beagle","name":"米格鲁"},{"id":"char_123_fang","name":"芬"},{"id":"char_124_kroos","name":"克洛丝"},{"id":"char_126_shotst","name":"流星"},{"id":"char_127_estell","name":"艾丝黛尔"},{"id":"char_128_plosis","name":"白面鸮"},{"id":"char_129_bluep","name":"蓝毒"},{"id":"char_130_doberm","name":"杜宾"},{"id":"char_131_flameb","name":"炎客"},{"id":"char_133_mm","name":"梅"},{"id":"char_134_ifrit","name":"伊芙利特"},{"id":"char_135_halo","name":"星源"},{"id":"char_136_hsguma","name":"星熊"},{"id":"char_137_brownb","name":"猎蜂"},{"id":"char_140_whitew","name":"拉普兰德"},{"id":"char_141_nights","name":"夜烟"},{"id":"char_143_ghost","name":"幽灵鲨"},{"id":"char_144_red","name":"红"},{"id":"char_145_prove","name":"普罗旺斯"},{"id":"char_147_shining","name":"闪灵"},{"id":"char_148_nearl","name":"临光"},{"id":"char_149_scave","name":"清道夫"},{"id":"char_1502_crosly","name":"弑君者"},{"id":"char_150_snakek","name":"蛇屠箱"},{"id":"char_151_myrtle","name":"桃金娘"},{"id":"char_154_morgan","name":"摩根"},{"id":"char_155_tiger","name":"因陀罗"},{"id":"char_157_dagda","name":"达格达"},{"id":"char_158_milu","name":"守林人"},{"id":"char_159_peacok","name":"断罪者"},{"id":"char_163_hpsts","name":"火神"},{"id":"char_164_nightm","name":"夜魔"},{"id":"char_166_skfire","name":"天火"},{"id":"char_171_bldsk","name":"华法琳"},{"id":"char_172_svrash","name":"银灰"},{"id":"char_173_slchan","name":"崖心"},{"id":"char_174_slbell","name":"初雪"},{"id":"char_179_cgbird","name":"夜莺"},{"id":"char_180_amgoat","name":"艾雅法拉"},{"id":"char_181_flower","name":"调香师"},{"id":"char_183_skgoat","name":"地灵"},{"id":"char_185_frncat","name":"慕斯"},{"id":"char_187_ccheal","name":"嘉维尔"},{"id":"char_188_helage","name":"赫拉格"},{"id":"char_190_clour","name":"红云"},{"id":"char_192_falco","name":"翎羽"},{"id":"char_193_frostl","name":"霜叶"},{"id":"char_194_leto","name":"烈夏"},{"id":"char_195_glassb","name":"真理"},{"id":"char_196_sunbr","name":"古米"},{"id":"char_197_poca","name":"早露"},{"id":"char_198_blackd","name":"讯使"},{"id":"char_199_yak","name":"角峰"},{"id":"char_2012_typhon","name":"提丰"},{"id":"char_2013_cerber","name":"刻俄柏"},{"id":"char_2014_nian","name":"年"},{"id":"char_2015_dusk","name":"夕"},{"id":"char_201_moeshd","name":"可颂"},{"id":"char_2023_ling","name":"令"},{"id":"char_2024_chyue","name":"重岳"},{"id":"char_2025_shu","name":"黍"},{"id":"char_2026_yu","name":"余"},{"id":"char_202_demkni","name":"塞雷娅"},{"id":"char_204_platnm","name":"白金"},{"id":"char_206_gnosis","name":"灵知"},{"id":"char_208_melan","name":"玫兰莎"},{"id":"char_209_ardign","name":"卡缇"},{"id":"char_210_stward","name":"史都华德"},{"id":"char_211_adnach","name":"安德切尔"},{"id":"char_212_ansel","name":"安赛尔"},{"id":"char_213_mostma","name":"莫斯提马"},{"id":"char_214_kafka","name":"卡夫卡"},{"id":"char_215_mantic","name":"狮蝎"},{"id":"char_218_cuttle","name":"安哲拉"},{"id":"char_219_meteo","name":"陨星"},{"id":"char_220_grani","name":"格拉尼"},{"id":"char_222_bpipe","name":"风笛"},{"id":"char_225_haak","name":"阿"},{"id":"char_226_hmau","name":"吽"},{"id":"char_230_savage","name":"暴行"},{"id":"char_235_jesica","name":"杰西卡"},{"id":"char_236_rope","name":"暗索"},{"id":"char_237_gravel","name":"砾"},{"id":"char_240_wyvern","name":"香草"},{"id":"char_241_panda","name":"食铁兽"},{"id":"char_242_otter","name":"梅尔"},{"id":"char_243_waaifu","name":"槐琥"},{"id":"char_245_cello","name":"塑心"},{"id":"char_248_mgllan","name":"麦哲伦"},{"id":"char_249_mlyss","name":"缪尔赛思"},{"id":"char_250_phatom","name":"傀影"},{"id":"char_252_bibeak","name":"柏喙"},{"id":"char_253_greyy","name":"格雷伊"},{"id":"char_254_vodfox","name":"巫恋"},{"id":"char_258_podego","name":"波登可"},{"id":"char_260_durnar","name":"坚雷"},{"id":"char_261_sddrag","name":"苇草"},{"id":"char_263_skadi","name":"斯卡蒂"},{"id":"char_264_f12yin","name":"山"},{"id":"char_265_sophia","name":"鞭刃"},{"id":"char_271_spikes","name":"芳汀"},{"id":"char_272_strong","name":"孑"},{"id":"char_274_astesi","name":"星极"},{"id":"char_275_breeze","name":"微风"},{"id":"char_277_sqrrel","name":"阿消"},{"id":"char_278_orchid","name":"梓兰"},{"id":"char_279_excu","name":"送葬人"},{"id":"char_281_popka","name":"泡普卡"},{"id":"char_282_catap","name":"空爆"},{"id":"char_283_midn","name":"月见夜"},{"id":"char_284_spot","name":"斑点"},{"id":"char_285_medic2","name":"Lancet-2"},{"id":"char_286_cast3","name":"Castle-3"},{"id":"char_289_gyuki","name":"缠丸"},{"id":"char_290_vigna","name":"红豆"},{"id":"char_291_aglina","name":"安洁莉娜"},{"id":"char_293_thorns","name":"棘刺"},{"id":"char_294_ayer","name":"断崖"},{"id":"char_297_hamoni","name":"和弦"},{"id":"char_298_susuro","name":"苏苏洛"},{"id":"char_300_phenxi","name":"菲亚梅塔"},{"id":"char_301_cutter","name":"刻刀"},{"id":"char_302_glaze","name":"安比尔"},{"id":"char_304_zebra","name":"暴雨"},{"id":"char_306_leizi","name":"惊蛰"},{"id":"char_308_swire","name":"诗怀雅"},{"id":"char_311_mudrok","name":"泥岩"},{"id":"char_322_lmlee","name":"老鲤"},{"id":"char_325_bison","name":"拜松"},{"id":"char_326_glacus","name":"格劳克斯"},{"id":"char_328_cammou","name":"卡达"},{"id":"char_332_archet","name":"空弦"},{"id":"char_333_sidero","name":"铸铁"},{"id":"char_336_folivo","name":"稀音"},{"id":"char_337_utage","name":"宴"},{"id":"char_338_iris","name":"爱丽丝"},{"id":"char_340_shwaz","name":"黑"},{"id":"char_341_sntlla","name":"寒檀"},{"id":"char_343_tknogi","name":"月禾"},{"id":"char_344_beewax","name":"蜜蜡"},{"id":"char_345_folnic","name":"亚叶"},{"id":"char_346_aosta","name":"奥斯塔"},{"id":"char_347_jaksel","name":"杰克"},{"id":"char_348_ceylon","name":"锡兰"},{"id":"char_349_chiave","name":"贾维"},{"id":"char_350_surtr","name":"史尔特尔"},{"id":"char_355_ethan","name":"伊桑"},{"id":"char_356_broca","name":"布洛卡"},{"id":"char_358_lisa","name":"铃兰"},{"id":"char_362_saga","name":"嵯峨"},{"id":"char_363_toddi","name":"熔泉"},{"id":"char_365_aprl","name":"四月"},{"id":"char_366_acdrop","name":"酸糖"},{"id":"char_367_swllow","name":"灰喉"},{"id":"char_369_bena","name":"贝娜"},{"id":"char_373_lionhd","name":"莱恩哈特"},{"id":"char_376_therex","name":"THRM-EX"},{"id":"char_377_gdglow","name":"澄闪"},{"id":"char_378_asbest","name":"石棉"},{"id":"char_379_sesa","name":"慑砂"},{"id":"char_381_bubble","name":"泡泡"},{"id":"char_383_snsant","name":"雪雉"},{"id":"char_385_finlpp","name":"清流"},{"id":"char_388_mint","name":"薄绿"},{"id":"char_391_rosmon","name":"迷迭香"},{"id":"char_394_hadiya","name":"哈蒂娅"},{"id":"char_4000_jnight","name":"正义骑士号"},{"id":"char_4004_pudd","name":"布丁"},{"id":"char_4006_melnte","name":"玫拉"},{"id":"char_4009_irene","name":"艾丽妮"},{"id":"char_400_weedy","name":"温蒂"},{"id":"char_4010_etlchi","name":"隐德来希"},{"id":"char_4011_lessng","name":"止颂"},{"id":"char_4013_kjera","name":"耶拉"},{"id":"char_4014_lunacu","name":"子月"},{"id":"char_4015_spuria","name":"空构"},{"id":"char_4016_kazema","name":"风丸"},{"id":"char_4017_puzzle","name":"谜图"},{"id":"char_4019_ncdeer","name":"九色鹿"},{"id":"char_401_elysm","name":"极境"},{"id":"char_4023_rfalcn","name":"红隼"},{"id":"char_4025_aprot2","name":"暮落"},{"id":"char_4026_vulpis","name":"忍冬"},{"id":"char_4027_heyak","name":"霍尔海雅"},{"id":"char_402_tuye","name":"图耶"},{"id":"char_4032_provs","name":"但书"},{"id":"char_4036_forcer","name":"见行者"},{"id":"char_4039_horn","name":"号角"},{"id":"char_4040_rockr","name":"洛洛"},{"id":"char_4041_chnut","name":"褐果"},{"id":"char_4042_lumen","name":"流明"},{"id":"char_4043_erato","name":"埃拉托"},{"id":"char_4045_heidi","name":"海蒂"},{"id":"char_4046_ebnhlz","name":"黑键"},{"id":"char_4047_pianst","name":"车尔尼"},{"id":"char_4048_doroth","name":"多萝西"},{"id":"char_4051_akkord","name":"协律"},{"id":"char_4052_surfer","name":"寻澜"},{"id":"char_4054_malist","name":"至简"},{"id":"char_4055_bgsnow","name":"鸿雪"},{"id":"char_4058_pepe","name":"佩佩"},{"id":"char_405_absin","name":"苦艾"},{"id":"char_4062_totter","name":"铅踝"},{"id":"char_4063_quartz","name":"石英"},{"id":"char_4064_mlynar","name":"玛恩纳"},{"id":"char_4065_judge","name":"斥罪"},{"id":"char_4066_highmo","name":"海沫"},{"id":"char_4067_lolxh","name":"罗小黑"},{"id":"char_4071_peper","name":"明椒"},{"id":"char_4072_ironmn","name":"白铁"},{"id":"char_4077_palico","name":"泰拉大陆调查团"},{"id":"char_4078_bdhkgt","name":"截云"},{"id":"char_4079_haini","name":"海霓"},{"id":"char_4080_lin","name":"林"},{"id":"char_4081_warmy","name":"温米"},{"id":"char_4082_qiubai","name":"仇白"},{"id":"char_4083_chimes","name":"铎铃"},{"id":"char_4087_ines","name":"伊内丝"},{"id":"char_4088_hodrer","name":"赫德雷"},{"id":"char_4091_ulika","name":"U-Official"},{"id":"char_4093_frston","name":"Friston-3"},{"id":"char_4098_vvana","name":"薇薇安娜"},{"id":"char_4100_caper","name":"跃跃"},{"id":"char_4102_threye","name":"凛视"},{"id":"char_4104_coldst","name":"冰酿"},{"id":"char_4105_almond","name":"杏仁"},{"id":"char_4106_bryota","name":"苍苔"},{"id":"char_4107_vrdant","name":"维荻"},{"id":"char_4109_baslin","name":"深律"},{"id":"char_4110_delphn","name":"戴菲恩"},{"id":"char_4114_harold","name":"哈洛德"},{"id":"char_4116_blkkgt","name":"锏"},{"id":"char_4117_ray","name":"莱伊"},{"id":"char_4119_wanqin","name":"万顷"},{"id":"char_411_tomimi","name":"特米米"},{"id":"char_4121_zuole","name":"左乐"},{"id":"char_4122_grabds","name":"小满"},{"id":"char_4123_ela","name":"艾拉"},{"id":"char_4124_iana","name":"双月"},{"id":"char_4125_rdoc","name":"医生"},{"id":"char_4126_fuze","name":"导火索"},{"id":"char_4130_luton","name":"露托"},{"id":"char_4131_odda","name":"奥达"},{"id":"char_4132_ascln","name":"阿斯卡纶"},{"id":"char_4133_logos","name":"逻各斯"},{"id":"char_4134_cetsyr","name":"魔王"},{"id":"char_4136_phonor","name":"PhonoR-0"},{"id":"char_4137_udflow","name":"深巡"},{"id":"char_4138_narant","name":"娜仁图亚"},{"id":"char_4139_papyrs","name":"莎草"},{"id":"char_4140_lasher","name":"衡沙"},{"id":"char_4141_marcil","name":"玛露西尔"},{"id":"char_4142_laios","name":"莱欧斯"},{"id":"char_4143_sensi","name":"森西"},{"id":"char_4144_chilc","name":"齐尔查克"},{"id":"char_4145_ulpia","name":"乌尔比安"},{"id":"char_4146_nymph","name":"妮芙"},{"id":"char_4147_mitm","name":"渡桥"},{"id":"char_4148_philae","name":"菲莱"},{"id":"char_4151_tinman","name":"锡人"},{"id":"char_4155_talr","name":"裁度"},{"id":"char_415_flint","name":"燧石"},{"id":"char_4162_cathy","name":"凯瑟琳"},{"id":"char_4163_rosesa","name":"瑰盐"},{"id":"char_4164_tecno","name":"特克诺"},{"id":"char_4165_ctrail","name":"云迹"},{"id":"char_416_zumama","name":"森蚺"},{"id":"char_4171_wulfen","name":"钼铅"},{"id":"char_4172_xingzh","name":"行箸"},{"id":"char_4173_nowell","name":"诺威尔"},{"id":"char_4177_brigid","name":"水灯心"},{"id":"char_4178_alanna","name":"阿兰娜"},{"id":"char_4179_monstr","name":"Mon3tr"},{"id":"char_4182_oblvns","name":"丰川祥子"},{"id":"char_4183_mortis","name":"若叶睦"},{"id":"char_4184_dolris","name":"三角初华"},{"id":"char_4185_amoris","name":"祐天寺若麦"},{"id":"char_4186_tmoris","name":"八幡海铃"},{"id":"char_4187_graceb","name":"聆音"},{"id":"char_4188_confes","name":"CONFESS-47"},{"id":"char_4191_tippi","name":"蒂比"},{"id":"char_4193_lemuen","name":"蕾缪安"},{"id":"char_4194_rmixer","name":"信仰搅拌机"},{"id":"char_4195_radian","name":"电弧"},{"id":"char_4196_reckpr","name":"录武官"},{"id":"char_4198_christ","name":"Miss.Christine"},{"id":"char_4199_makiri","name":"松桐"},{"id":"char_4202_haruka","name":"遥"},{"id":"char_4203_kichi","name":"吉星"},{"id":"char_4204_mantra","name":"真言"},{"id":"char_4207_branch","name":"折桠"},{"id":"char_4208_wintim","name":"冬时"},{"id":"char_420_flamtl","name":"焰尾"},{"id":"char_4211_snhunt","name":"雪猎"},{"id":"char_421_crow","name":"羽毛笔"},{"id":"char_422_aurora","name":"极光"},{"id":"char_423_blemsh","name":"瑕光"},{"id":"char_426_billro","name":"卡涅利安"},{"id":"char_427_vigil","name":"伺夜"},{"id":"char_430_fartth","name":"远牙"},{"id":"char_431_ashlok","name":"灰毫"},{"id":"char_433_windft","name":"掠风"},{"id":"char_436_whispr","name":"絮雨"},{"id":"char_437_mizuki","name":"水月"},{"id":"char_440_pinecn","name":"松果"},{"id":"char_445_wscoot","name":"骋风"},{"id":"char_446_aroma","name":"阿罗玛"},{"id":"char_449_glider","name":"蜜莓"},{"id":"char_450_necras","name":"死芒"},{"id":"char_451_robin","name":"罗宾"},{"id":"char_452_bstalk","name":"豆苗"},{"id":"char_455_nothin","name":"乌有"},{"id":"char_456_ash","name":"灰烬"},{"id":"char_457_blitz","name":"闪击"},{"id":"char_458_rfrost","name":"霜华"},{"id":"char_459_tachak","name":"战车"},{"id":"char_464_cement","name":"洋灰"},{"id":"char_466_qanik","name":"雪绒"},{"id":"char_469_indigo","name":"深靛"},{"id":"char_472_pasngr","name":"异客"},{"id":"char_473_mberry","name":"桑葚"},{"id":"char_474_glady","name":"歌蕾蒂娅"},{"id":"char_475_akafyu","name":"赤冬"},{"id":"char_476_blkngt","name":"夜半"},{"id":"char_478_kirara","name":"绮良"},{"id":"char_479_sleach","name":"琴柳"},{"id":"char_484_robrta","name":"罗比菈塔"},{"id":"char_485_pallas","name":"帕拉斯"},{"id":"char_486_takila","name":"龙舌兰"},{"id":"char_487_bobb","name":"波卜"},{"id":"char_488_buildr","name":"青枳"},{"id":"char_489_serum","name":"蚀清"},{"id":"char_491_humus","name":"休谟斯"},{"id":"char_492_quercu","name":"夏栎"},{"id":"char_493_firwhl","name":"火哨"},{"id":"char_494_vendla","name":"刺玫"},{"id":"char_496_wildmn","name":"野鬃"},{"id":"char_497_ctable","name":"晓歌"},{"id":"char_498_inside","name":"隐现"},{"id":"char_499_kaitou","name":"折光"},{"id":"char_500_noirc","name":"黑角"},{"id":"char_501_durin","name":"杜林"},{"id":"char_502_nblade","name":"夜刀"},{"id":"char_503_rang","name":"巡林者"}
-    ];
+    // [V9.4 设置配置] 功能开关默认状态
+    const CONFIG = {
+        visuals: GM_getValue('prts_cfg_visuals', true), // 干员头像优化
+        sidebar: GM_getValue('prts_cfg_sidebar', true), // 侧边栏优化
+        cleanLink: GM_getValue('prts_cfg_link', true),  // 链接净化
+        filterBar: GM_getValue('prts_cfg_filter', true) // 显示筛选栏
+    };
 
-    // 生成 ID 映射表
-    const OP_ID_MAP = {};
-    RAW_OPS.forEach(op => { OP_ID_MAP[op.name] = op.id; });
-
-    // 状态变量 - 筛选
+    // 全局状态变量
     let currentFilterMode = 'NONE';
     let displayMode = GM_getValue(DISPLAY_MODE_KEY, 'GRAY');
     let ownedOpsSet = new Set();
     let isProcessingFilter = false;
     let rafId = null;
     let filterDebounceTimer = null;
-
-    // 状态变量 - 暗黑模式
     let isDarkMode = localStorage.getItem(DARK_MODE_KEY) === null ? true : (localStorage.getItem(DARK_MODE_KEY) === 'true');
 
     // =========================================================================
-    //                            MODULE 2: 样式定义
+    //                            MODULE 2: 数据与样式
     // =========================================================================
 
+    // [数据] 干员头像数据映射
+    const RAW_OPS = [
+      {"id":"char_002_amiya","name":"阿米娅"},{"id":"char_003_kalts","name":"凯尔希"},{"id":"char_009_12fce","name":"12F"},{"id":"char_010_chen","name":"陈"},{"id":"char_017_huang","name":"煌"},{"id":"char_1011_lava2","name":"炎狱炎熔"},{"id":"char_1012_skadi2","name":"浊心斯卡蒂"},{"id":"char_1013_chen2","name":"假日威龙陈"},{"id":"char_1014_nearl2","name":"耀骑士临光"},{"id":"char_1016_agoat2","name":"纯烬艾雅法拉"},{"id":"char_1019_siege2","name":"维娜·维多利亚"},{"id":"char_101_sora","name":"空"},{"id":"char_1020_reed2","name":"焰影苇草"},{"id":"char_1021_kroos2","name":"寒芒克洛丝"},{"id":"char_1023_ghost2","name":"归溟幽灵鲨"},{"id":"char_1024_hbisc2","name":"濯尘芙蓉"},{"id":"char_1026_gvial2","name":"百炼嘉维尔"},{"id":"char_1027_greyy2","name":"承曦格雷伊"},{"id":"char_1028_texas2","name":"缄默德克萨斯"},{"id":"char_1029_yato2","name":"麒麟R夜刀"},{"id":"char_102_texas","name":"德克萨斯"},{"id":"char_1030_noirc2","name":"火龙S黑角"},{"id":"char_1031_slent2","name":"淬羽赫默"},{"id":"char_1032_excu2","name":"圣约送葬人"},{"id":"char_1033_swire2","name":"琳琅诗怀雅"},{"id":"char_1034_jesca2","name":"涤火杰西卡"},{"id":"char_1035_wisdel","name":"维什戴尔"},{"id":"char_1036_fang2","name":"历阵锐枪芬"},{"id":"char_1038_whitw2","name":"荒芜拉普兰德"},{"id":"char_1039_thorn2","name":"引星棘刺"},{"id":"char_103_angel","name":"能天使"},{"id":"char_1040_blaze2","name":"烛煌"},{"id":"char_1041_angel2","name":"新约能天使"},{"id":"char_1042_phatm2","name":"酒神"},{"id":"char_1043_leizi2","name":"司霆惊蛰"},{"id":"char_1044_hsgma2","name":"斩业星熊"},{"id":"char_1045_svash2","name":"凛御银灰"},{"id":"char_1046_sbell2","name":"圣聆初雪"},{"id":"char_1047_halo2","name":"溯光星源"},{"id":"char_106_franka","name":"芙兰卡"},{"id":"char_107_liskam","name":"雷蛇"},{"id":"char_108_silent","name":"赫默"},{"id":"char_109_fmout","name":"远山"},{"id":"char_110_deepcl","name":"深海色"},{"id":"char_112_siege","name":"推进之王"},{"id":"char_113_cqbw","name":"W"},{"id":"char_115_headbr","name":"凛冬"},{"id":"char_117_myrrh","name":"末药"},{"id":"char_118_yuki","name":"白雪"},{"id":"char_120_hibisc","name":"芙蓉"},{"id":"char_121_lava","name":"炎熔"},{"id":"char_122_beagle","name":"米格鲁"},{"id":"char_123_fang","name":"芬"},{"id":"char_124_kroos","name":"克洛丝"},{"id":"char_126_shotst","name":"流星"},{"id":"char_127_estell","name":"艾丝黛尔"},{"id":"char_128_plosis","name":"白面鸮"},{"id":"char_129_bluep","name":"蓝毒"},{"id":"char_130_doberm","name":"杜宾"},{"id":"char_131_flameb","name":"炎客"},{"id":"char_133_mm","name":"梅"},{"id":"char_134_ifrit","name":"伊芙利特"},{"id":"char_135_halo","name":"星源"},{"id":"char_136_hsguma","name":"星熊"},{"id":"char_137_brownb","name":"猎蜂"},{"id":"char_140_whitew","name":"拉普兰德"},{"id":"char_141_nights","name":"夜烟"},{"id":"char_143_ghost","name":"幽灵鲨"},{"id":"char_144_red","name":"红"},{"id":"char_145_prove","name":"普罗旺斯"},{"id":"char_147_shining","name":"闪灵"},{"id":"char_148_nearl","name":"临光"},{"id":"char_149_scave","name":"清道夫"},{"id":"char_1502_crosly","name":"弑君者"},{"id":"char_150_snakek","name":"蛇屠箱"},{"id":"char_151_myrtle","name":"桃金娘"},{"id":"char_154_morgan","name":"摩根"},{"id":"char_155_tiger","name":"因陀罗"},{"id":"char_157_dagda","name":"达格达"},{"id":"char_158_milu","name":"守林人"},{"id":"char_159_peacok","name":"断罪者"},{"id":"char_163_hpsts","name":"火神"},{"id":"char_164_nightm","name":"夜魔"},{"id":"char_166_skfire","name":"天火"},{"id":"char_171_bldsk","name":"华法琳"},{"id":"char_172_svrash","name":"银灰"},{"id":"char_173_slchan","name":"崖心"},{"id":"char_174_slbell","name":"初雪"},{"id":"char_179_cgbird","name":"夜莺"},{"id":"char_180_amgoat","name":"艾雅法拉"},{"id":"char_181_flower","name":"调香师"},{"id":"char_183_skgoat","name":"地灵"},{"id":"char_185_frncat","name":"慕斯"},{"id":"char_187_ccheal","name":"嘉维尔"},{"id":"char_188_helage","name":"赫拉格"},{"id":"char_190_clour","name":"红云"},{"id":"char_192_falco","name":"翎羽"},{"id":"char_193_frostl","name":"霜叶"},{"id":"char_194_leto","name":"烈夏"},{"id":"char_195_glassb","name":"真理"},{"id":"char_196_sunbr","name":"古米"},{"id":"char_197_poca","name":"早露"},{"id":"char_198_blackd","name":"讯使"},{"id":"char_199_yak","name":"角峰"},{"id":"char_2012_typhon","name":"提丰"},{"id":"char_2013_cerber","name":"刻俄柏"},{"id":"char_2014_nian","name":"年"},{"id":"char_2015_dusk","name":"夕"},{"id":"char_201_moeshd","name":"可颂"},{"id":"char_2023_ling","name":"令"},{"id":"char_2024_chyue","name":"重岳"},{"id":"char_2025_shu","name":"黍"},{"id":"char_2026_yu","name":"余"},{"id":"char_202_demkni","name":"塞雷娅"},{"id":"char_204_platnm","name":"白金"},{"id":"char_206_gnosis","name":"灵知"},{"id":"char_208_melan","name":"玫兰莎"},{"id":"char_209_ardign","name":"卡缇"},{"id":"char_210_stward","name":"史都华德"},{"id":"char_211_adnach","name":"安德切尔"},{"id":"char_212_ansel","name":"安赛尔"},{"id":"char_213_mostma","name":"莫斯提马"},{"id":"char_214_kafka","name":"卡夫卡"},{"id":"char_215_mantic","name":"狮蝎"},{"id":"char_218_cuttle","name":"安哲拉"},{"id":"char_219_meteo","name":"陨星"},{"id":"char_220_grani","name":"格拉尼"},{"id":"char_222_bpipe","name":"风笛"},{"id":"char_225_haak","name":"阿"},{"id":"char_226_hmau","name":"吽"},{"id":"char_230_savage","name":"暴行"},{"id":"char_235_jesica","name":"杰西卡"},{"id":"char_236_rope","name":"暗索"},{"id":"char_237_gravel","name":"砾"},{"id":"char_240_wyvern","name":"香草"},{"id":"char_241_panda","name":"食铁兽"},{"id":"char_242_otter","name":"梅尔"},{"id":"char_243_waaifu","name":"槐琥"},{"id":"char_245_cello","name":"塑心"},{"id":"char_248_mgllan","name":"麦哲伦"},{"id":"char_249_mlyss","name":"缪尔赛思"},{"id":"char_250_phatom","name":"傀影"},{"id":"char_252_bibeak","name":"柏喙"},{"id":"char_253_greyy","name":"格雷伊"},{"id":"char_254_vodfox","name":"巫恋"},{"id":"char_258_podego","name":"波登可"},{"id":"char_260_durnar","name":"坚雷"},{"id":"char_261_sddrag","name":"苇草"},{"id":"char_263_skadi","name":"斯卡蒂"},{"id":"char_264_f12yin","name":"山"},{"id":"char_265_sophia","name":"鞭刃"},{"id":"char_271_spikes","name":"芳汀"},{"id":"char_272_strong","name":"孑"},{"id":"char_274_astesi","name":"星极"},{"id":"char_275_breeze","name":"微风"},{"id":"char_277_sqrrel","name":"阿消"},{"id":"char_278_orchid","name":"梓兰"},{"id":"char_279_excu","name":"送葬人"},{"id":"char_281_popka","name":"泡普卡"},{"id":"char_282_catap","name":"空爆"},{"id":"char_283_midn","name":"月见夜"},{"id":"char_284_spot","name":"斑点"},{"id":"char_285_medic2","name":"Lancet-2"},{"id":"char_286_cast3","name":"Castle-3"},{"id":"char_289_gyuki","name":"缠丸"},{"id":"char_290_vigna","name":"红豆"},{"id":"char_291_aglina","name":"安洁莉娜"},{"id":"char_293_thorns","name":"棘刺"},{"id":"char_294_ayer","name":"断崖"},{"id":"char_297_hamoni","name":"和弦"},{"id":"char_298_susuro","name":"苏苏洛"},{"id":"char_300_phenxi","name":"菲亚梅塔"},{"id":"char_301_cutter","name":"刻刀"},{"id":"char_302_glaze","name":"安比尔"},{"id":"char_304_zebra","name":"暴雨"},{"id":"char_306_leizi","name":"惊蛰"},{"id":"char_308_swire","name":"诗怀雅"},{"id":"char_311_mudrok","name":"泥岩"},{"id":"char_322_lmlee","name":"老鲤"},{"id":"char_325_bison","name":"拜松"},{"id":"char_326_glacus","name":"格劳克斯"},{"id":"char_328_cammou","name":"卡达"},{"id":"char_332_archet","name":"空弦"},{"id":"char_333_sidero","name":"铸铁"},{"id":"char_336_folivo","name":"稀音"},{"id":"char_337_utage","name":"宴"},{"id":"char_338_iris","name":"爱丽丝"},{"id":"char_340_shwaz","name":"黑"},{"id":"char_341_sntlla","name":"寒檀"},{"id":"char_343_tknogi","name":"月禾"},{"id":"char_344_beewax","name":"蜜蜡"},{"id":"char_345_folnic","name":"亚叶"},{"id":"char_346_aosta","name":"奥斯塔"},{"id":"char_347_jaksel","name":"杰克"},{"id":"char_348_ceylon","name":"锡兰"},{"id":"char_349_chiave","name":"贾维"},{"id":"char_350_surtr","name":"史尔特尔"},{"id":"char_355_ethan","name":"伊桑"},{"id":"char_356_broca","name":"布洛卡"},{"id":"char_358_lisa","name":"铃兰"},{"id":"char_362_saga","name":"嵯峨"},{"id":"char_363_toddi","name":"熔泉"},{"id":"char_365_aprl","name":"四月"},{"id":"char_366_acdrop","name":"酸糖"},{"id":"char_367_swllow","name":"灰喉"},{"id":"char_369_bena","name":"贝娜"},{"id":"char_373_lionhd","name":"莱恩哈特"},{"id":"char_376_therex","name":"THRM-EX"},{"id":"char_377_gdglow","name":"澄闪"},{"id":"char_378_asbest","name":"石棉"},{"id":"char_379_sesa","name":"慑砂"},{"id":"char_381_bubble","name":"泡泡"},{"id":"char_383_snsant","name":"雪雉"},{"id":"char_385_finlpp","name":"清流"},{"id":"char_388_mint","name":"薄绿"},{"id":"char_391_rosmon","name":"迷迭香"},{"id":"char_394_hadiya","name":"哈蒂娅"},{"id":"char_4000_jnight","name":"正义骑士号"},{"id":"char_4004_pudd","name":"布丁"},{"id":"char_4006_melnte","name":"玫拉"},{"id":"char_4009_irene","name":"艾丽妮"},{"id":"char_400_weedy","name":"温蒂"},{"id":"char_4010_etlchi","name":"隐德来希"},{"id":"char_4011_lessng","name":"止颂"},{"id":"char_4013_kjera","name":"耶拉"},{"id":"char_4014_lunacu","name":"子月"},{"id":"char_4015_spuria","name":"空构"},{"id":"char_4016_kazema","name":"风丸"},{"id":"char_4017_puzzle","name":"谜图"},{"id":"char_4019_ncdeer","name":"九色鹿"},{"id":"char_401_elysm","name":"极境"},{"id":"char_4023_rfalcn","name":"红隼"},{"id":"char_4025_aprot2","name":"暮落"},{"id":"char_4026_vulpis","name":"忍冬"},{"id":"char_4027_heyak","name":"霍尔海雅"},{"id":"char_402_tuye","name":"图耶"},{"id":"char_4032_provs","name":"但书"},{"id":"char_4036_forcer","name":"见行者"},{"id":"char_4039_horn","name":"号角"},{"id":"char_4040_rockr","name":"洛洛"},{"id":"char_4041_chnut","name":"褐果"},{"id":"char_4042_lumen","name":"流明"},{"id":"char_4043_erato","name":"埃拉托"},{"id":"char_4045_heidi","name":"海蒂"},{"id":"char_4046_ebnhlz","name":"黑键"},{"id":"char_4047_pianst","name":"车尔尼"},{"id":"char_4048_doroth","name":"多萝西"},{"id":"char_4051_akkord","name":"协律"},{"id":"char_4052_surfer","name":"寻澜"},{"id":"char_4054_malist","name":"至简"},{"id":"char_4055_bgsnow","name":"鸿雪"},{"id":"char_4058_pepe","name":"佩佩"},{"id":"char_405_absin","name":"苦艾"},{"id":"char_4062_totter","name":"铅踝"},{"id":"char_4063_quartz","name":"石英"},{"id":"char_4064_mlynar","name":"玛恩纳"},{"id":"char_4065_judge","name":"斥罪"},{"id":"char_4066_highmo","name":"海沫"},{"id":"char_4067_lolxh","name":"罗小黑"},{"id":"char_4071_peper","name":"明椒"},{"id":"char_4072_ironmn","name":"白铁"},{"id":"char_4077_palico","name":"泰拉大陆调查团"},{"id":"char_4078_bdhkgt","name":"截云"},{"id":"char_4079_haini","name":"海霓"},{"id":"char_4080_lin","name":"林"},{"id":"char_4081_warmy","name":"温米"},{"id":"char_4082_qiubai","name":"仇白"},{"id":"char_4083_chimes","name":"铎铃"},{"id":"char_4087_ines","name":"伊内丝"},{"id":"char_4088_hodrer","name":"赫德雷"},{"id":"char_4091_ulika","name":"U-Official"},{"id":"char_4093_frston","name":"Friston-3"},{"id":"char_4098_vvana","name":"薇薇安娜"},{"id":"char_4100_caper","name":"跃跃"},{"id":"char_4102_threye","name":"凛视"},{"id":"char_4104_coldst","name":"冰酿"},{"id":"char_4105_almond","name":"杏仁"},{"id":"char_4106_bryota","name":"苍苔"},{"id":"char_4107_vrdant","name":"维荻"},{"id":"char_4109_baslin","name":"深律"},{"id":"char_4110_delphn","name":"戴菲恩"},{"id":"char_4114_harold","name":"哈洛德"},{"id":"char_4116_blkkgt","name":"锏"},{"id":"char_4117_ray","name":"莱伊"},{"id":"char_4119_wanqin","name":"万顷"},{"id":"char_411_tomimi","name":"特米米"},{"id":"char_4121_zuole","name":"左乐"},{"id":"char_4122_grabds","name":"小满"},{"id":"char_4123_ela","name":"艾拉"},{"id":"char_4124_iana","name":"双月"},{"id":"char_4125_rdoc","name":"医生"},{"id":"char_4126_fuze","name":"导火索"},{"id":"char_4130_luton","name":"露托"},{"id":"char_4131_odda","name":"奥达"},{"id":"char_4132_ascln","name":"阿斯卡纶"},{"id":"char_4133_logos","name":"逻各斯"},{"id":"char_4134_cetsyr","name":"魔王"},{"id":"char_4136_phonor","name":"PhonoR-0"},{"id":"char_4137_udflow","name":"深巡"},{"id":"char_4138_narant","name":"娜仁图亚"},{"id":"char_4139_papyrs","name":"莎草"},{"id":"char_4140_lasher","name":"衡沙"},{"id":"char_4141_marcil","name":"玛露西尔"},{"id":"char_4142_laios","name":"莱欧斯"},{"id":"char_4143_sensi","name":"森西"},{"id":"char_4144_chilc","name":"齐尔查克"},{"id":"char_4145_ulpia","name":"乌尔比安"},{"id":"char_4146_nymph","name":"妮芙"},{"id":"char_4147_mitm","name":"渡桥"},{"id":"char_4148_philae","name":"菲莱"},{"id":"char_4151_tinman","name":"锡人"},{"id":"char_4155_talr","name":"裁度"},{"id":"char_415_flint","name":"燧石"},{"id":"char_4162_cathy","name":"凯瑟琳"},{"id":"char_4163_rosesa","name":"瑰盐"},{"id":"char_4164_tecno","name":"特克诺"},{"id":"char_4165_ctrail","name":"云迹"},{"id":"char_416_zumama","name":"森蚺"},{"id":"char_4171_wulfen","name":"钼铅"},{"id":"char_4172_xingzh","name":"行箸"},{"id":"char_4173_nowell","name":"诺威尔"},{"id":"char_4177_brigid","name":"水灯心"},{"id":"char_4178_alanna","name":"阿兰娜"},{"id":"char_4179_monstr","name":"Mon3tr"},{"id":"char_4182_oblvns","name":"丰川祥子"},{"id":"char_4183_mortis","name":"若叶睦"},{"id":"char_4184_dolris","name":"三角初华"},{"id":"char_4185_amoris","name":"祐天寺若麦"},{"id":"char_4186_tmoris","name":"八幡海铃"},{"id":"char_4187_graceb","name":"聆音"},{"id":"char_4188_confes","name":"CONFESS-47"},{"id":"char_4191_tippi","name":"蒂比"},{"id":"char_4193_lemuen","name":"蕾缪安"},{"id":"char_4194_rmixer","name":"信仰搅拌机"},{"id":"char_4195_radian","name":"电弧"},{"id":"char_4196_reckpr","name":"录武官"},{"id":"char_4198_christ","name":"Miss.Christine"},{"id":"char_4199_makiri","name":"松桐"},{"id":"char_4202_haruka","name":"遥"},{"id":"char_4203_kichi","name":"吉星"},{"id":"char_4204_mantra","name":"真言"},{"id":"char_4207_branch","name":"折桠"},{"id":"char_4208_wintim","name":"冬时"},{"id":"char_420_flamtl","name":"焰尾"},{"id":"char_4211_snhunt","name":"雪猎"},{"id":"char_421_crow","name":"羽毛笔"},{"id":"char_422_aurora","name":"极光"},{"id":"char_423_blemsh","name":"瑕光"},{"id":"char_426_billro","name":"卡涅利安"},{"id":"char_427_vigil","name":"伺夜"},{"id":"char_430_fartth","name":"远牙"},{"id":"char_431_ashlok","name":"灰毫"},{"id":"char_433_windft","name":"掠风"},{"id":"char_436_whispr","name":"絮雨"},{"id":"char_437_mizuki","name":"水月"},{"id":"char_440_pinecn","name":"松果"},{"id":"char_445_wscoot","name":"骋风"},{"id":"char_446_aroma","name":"阿罗玛"},{"id":"char_449_glider","name":"蜜莓"},{"id":"char_450_necras","name":"死芒"},{"id":"char_451_robin","name":"罗宾"},{"id":"char_452_bstalk","name":"豆苗"},{"id":"char_455_nothin","name":"乌有"},{"id":"char_456_ash","name":"灰烬"},{"id":"char_457_blitz","name":"闪击"},{"id":"char_458_rfrost","name":"霜华"},{"id":"char_459_tachak","name":"战车"},{"id":"char_464_cement","name":"洋灰"},{"id":"char_466_qanik","name":"雪绒"},{"id":"char_469_indigo","name":"深靛"},{"id":"char_472_pasngr","name":"异客"},{"id":"char_473_mberry","name":"桑葚"},{"id":"char_474_glady","name":"歌蕾蒂娅"},{"id":"char_475_akafyu","name":"赤冬"},{"id":"char_476_blkngt","name":"夜半"},{"id":"char_478_kirara","name":"绮良"},{"id":"char_479_sleach","name":"琴柳"},{"id":"char_484_robrta","name":"罗比菈塔"},{"id":"char_485_pallas","name":"帕拉斯"},{"id":"char_486_takila","name":"龙舌兰"},{"id":"char_487_bobb","name":"波卜"},{"id":"char_488_buildr","name":"青枳"},{"id":"char_489_serum","name":"蚀清"},{"id":"char_491_humus","name":"休谟斯"},{"id":"char_492_quercu","name":"夏栎"},{"id":"char_493_firwhl","name":"火哨"},{"id":"char_494_vendla","name":"刺玫"},{"id":"char_496_wildmn","name":"野鬃"},{"id":"char_497_ctable","name":"晓歌"},{"id":"char_498_inside","name":"隐现"},{"id":"char_499_kaitou","name":"折光"},{"id":"char_500_noirc","name":"黑角"},{"id":"char_501_durin","name":"杜林"},{"id":"char_502_nblade","name":"夜刀"},{"id":"char_503_rang","name":"巡林者"}
+    ];
+
+    // 生成 ID 映射表
+    const OP_ID_MAP = {};
+    if (typeof RAW_OPS !== 'undefined' && RAW_OPS.length > 0) {
+        RAW_OPS.forEach(op => { OP_ID_MAP[op.name] = op.id; });
+    }
+
+    // [样式] CSS 样式定义
     const mergedStyles = `
         /* --- [暗黑模式核心: 背景与文字] --- */
         html.dark, html.dark body, html.dark #root, html.dark #app, html.dark .bg-zinc-50, html.dark .bg-slate-50, html.dark .bg-gray-50, html.dark .bg-white, html.dark .bg-zinc-100, html.dark .bg-slate-100, html.dark .bg-gray-100 { background-color: ${c.bgDeep} !important; color: ${c.textMain} !important; }
@@ -240,9 +275,13 @@
     GM_addStyle(mergedStyles);
 
     // =========================================================================
-    //                            MODULE 3: 暗黑模式逻辑
+    //                            MODULE 3: 核心逻辑 - 暗黑模式 & 工具
     // =========================================================================
 
+    /**
+     * [V3.0 暗黑模式] 应用样式类名
+     * @param {boolean} enable 是否启用
+     */
     function applyDarkMode(enable) {
         const html = document.documentElement;
         if (enable) {
@@ -253,12 +292,18 @@
         updateDarkModeButtonIcon(enable);
     }
 
+    /**
+     * [V3.0 暗黑模式] 切换开关逻辑
+     */
     function toggleDarkMode() {
         isDarkMode = !isDarkMode;
         localStorage.setItem(DARK_MODE_KEY, isDarkMode);
         applyDarkMode(isDarkMode);
     }
 
+    /**
+     * [V3.0 暗黑模式] 更新按钮图标状态
+     */
     function updateDarkModeButtonIcon(isDark) {
         const btn = document.getElementById('prts-mode-toggle');
         if (!btn) return;
@@ -271,24 +316,28 @@
         btn.style.color = isDark ? c.primary : '#5f6b7c';
     }
 
-    // 辅助函数：通过 XPath 获取元素
+    /**
+     * [工具] XPath 元素查找
+     */
     function getElementByXPath(path) {
         return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
     }
 
+    /**
+     * [V3.0 暗黑模式] 替换原生切换按钮
+     */
     function manageDarkModeButton() {
-        // 1. 隐藏原版按钮
         const targetXPath = "/html/body/main/div/div[1]/div[4]/button[2]";
         const oldButton = getElementByXPath(targetXPath);
+        // 隐藏原生按钮
         if (oldButton && oldButton.id !== 'prts-mode-toggle') {
             oldButton.style.display = 'none';
         }
 
-        // 2. 插入自定义按钮
-        // 尝试找到容器
         const containerXPath = "/html/body/main/div/div[1]/div[4]";
         const container = getElementByXPath(containerXPath) || document.querySelector('.bp4-navbar .flex.md\\:gap-4.gap-3');
 
+        // 插入自定义按钮
         if (container && !document.getElementById('prts-mode-toggle')) {
             const myBtn = document.createElement('button');
             myBtn.id = 'prts-mode-toggle';
@@ -302,14 +351,20 @@
     }
 
     // =========================================================================
-    //                            MODULE 4: 筛选与净化逻辑
+    //                            MODULE 4: 业务逻辑 - 筛选与净化
     // =========================================================================
 
+    /**
+     * [工具] 判断当前页面是否禁用筛选功能
+     */
     function isFilterDisabledPage() {
         const path = window.location.pathname;
         return path.startsWith('/create') || path.startsWith('/editor');
     }
 
+    /**
+     * [V10.0 数据管理] 加载用户持有干员
+     */
     function loadOwnedOps() {
         const storedData = GM_getValue(OPS_STORAGE_KEY, '[]');
         try {
@@ -321,6 +376,9 @@
         }
     }
 
+    /**
+     * [V10.0 数据管理] 导入干员数据
+     */
     function handleImport() {
         const input = document.createElement('input');
         input.type = 'file';
@@ -347,18 +405,23 @@
         input.click();
     }
 
+    /**
+     * [V10.2 交互] 切换显示模式（置灰/隐藏）
+     */
     function toggleDisplayMode() {
         displayMode = (displayMode === 'GRAY') ? 'HIDE' : 'GRAY';
         GM_setValue(DISPLAY_MODE_KEY, displayMode);
 
-        // 简单粗暴：删掉整个栏，injectFilterControls 会自动重建
         const bar = document.getElementById('prts-filter-bar');
         if (bar) bar.remove();
-        injectFilterControls();
+        injectFilterControls(); // 重建UI以更新图标状态
 
         requestFilterUpdate();
     }
 
+    /**
+     * [V10.0 筛选核心] 切换筛选模式（完美/助战）
+     */
     function toggleFilter(mode) {
         if (ownedOpsSet.size === 0) {
             alert('请先导入干员数据！');
@@ -369,6 +432,9 @@
         requestFilterUpdate();
     }
 
+    /**
+     * [V10.2 交互] 更新筛选按钮激活状态
+     */
     function updateFilterButtonStyles() {
         const perfectBtn = document.getElementById('btn-perfect');
         const supportBtn = document.getElementById('btn-support');
@@ -381,7 +447,9 @@
         else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
     }
 
-    // --- [V10.3 注入逻辑：高清 Material 图标修复版] ---
+    /**
+     * [V10.3 UI组件] 注入筛选控制栏与Material图标
+     */
     function injectFilterControls() {
         if (isFilterDisabledPage()) {
             const existing = document.getElementById('prts-filter-bar');
@@ -405,7 +473,6 @@
                 btn.type = "button";
                 btn.className = 'prts-btn';
                 btn.id = id;
-                // 注意：这里 viewBox 改为了 "0 0 24 24" 以适配高清图标
                 btn.innerHTML = `
                     <span class="bp4-icon" aria-hidden="true" style="margin-right:6px">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="${svgPath}"></path></svg>
@@ -422,21 +489,11 @@
                 return div;
             };
 
-            // 使用 Material Design 标准图标路径 (24x24)
             const paths = {
-                // 干净的导入图标 (箭头指向底座)
                 import: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
-
-                // 眼睛 (置灰模式 - 可见)
                 eyeOn: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
-
-                // 划掉的眼睛 (隐藏模式 - 不可见)
                 eyeOff: 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-4.01.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z',
-
-                // 星星 (完美阵容)
                 perfect: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
-
-                // 人群 (允许助战)
                 support: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'
             };
 
@@ -457,65 +514,42 @@
         }
     }
 
-    // --- [V8.0 逻辑：强力清洗 + 悬浮层构建] ---
+    /**
+     * [V8.0 内容清洗] B站链接净化与悬浮层重构
+     * 提取描述中的链接转换为按钮，并优化多余空行
+     */
     function cleanBilibiliLinks(cardInner) {
         if (!CONFIG.cleanLink) return;
-        // 1. 找到描述容器
         const descContainer = cardInner.querySelector('.grow.text-gray-700');
         if (!descContainer || descContainer.dataset.biliProcessed) return;
 
         let html = descContainer.innerHTML;
         let videoUrl = null;
 
-        // =========================================================
-        // A. 提取 B站链接 (提取后从原文删除)
-        // =========================================================
+        // 提取链接
         const regex = /((?:【.*?】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+))/gi;
         const match = regex.exec(html);
 
         if (match) {
-            const fullTextToRemove = match[1];
             videoUrl = match[2];
-            // 从 HTML 中删掉链接文本
-            html = html.replace(fullTextToRemove, '');
+            html = html.replace(match[1], '');
         }
 
-        // =========================================================
-        // B. 强力清洗末尾空行 (Goal 1)
-        // =========================================================
-        // 正则解释：匹配末尾的 <p>空</p>, <br>, 空格，且重复多次
-        // (?: ... ) 非捕获组
-        // <p>\s*(?:<br\s*\/?>)?\s*<\/p>  匹配 <p>  </p> 或 <p><br></p>
-        // <br\s*\/?>                     匹配 <br>
-        // \s                             匹配换行符、空格
+        // 清洗末尾空行
         const trailingTrashRegex = /(?:<p>\s*(?:<br\s*\/?>)?\s*<\/p>|<br\s*\/?>|\s)+$/gi;
-
-        // 执行清洗
         html = html.replace(trailingTrashRegex, '');
 
-        // 如果清洗后只剩下空壳（比如只有空格），显示默认占位
         if (html.replace(/<[^>]+>/g, '').trim() === '') {
             html = '(无文字描述)';
         }
 
-        // =========================================================
-        // C. 重构 DOM 结构 (Goal 2: 悬浮层)
-        // =========================================================
-        // 以前是直接修改 innerHTML，现在我们要把它包起来
-        // 结构：Wrapper (固定高度) -> Content (悬浮) -> HTML
-
+        // 重构为悬浮层结构
         descContainer.innerHTML = `<div class="prts-desc-content">${html}</div>`;
-
-        // 给父容器添加 Wrapper 类，使其具备相对定位和固定高度
         descContainer.classList.add('prts-desc-wrapper');
-        // 移除原有的 flex-grow 类，防止高度异常拉伸
         descContainer.classList.remove('grow');
-        // 保持宽度占满
         descContainer.style.width = '100%';
 
-        // =========================================================
-        // D. 插入视频按钮 (如果有)
-        // =========================================================
+        // 插入视频按钮
         if (videoUrl) {
             const btnContainer = document.createElement('div');
             btnContainer.className = 'prts-video-box';
@@ -523,15 +557,11 @@
             const linkBtn = document.createElement('a');
             linkBtn.href = videoUrl;
             linkBtn.target = "_blank";
-            linkBtn.className = 'prts-bili-link'; // 沿用 V7.1 的低调样式
+            linkBtn.className = 'prts-bili-link';
             linkBtn.innerHTML = `<span class="bp4-icon bp4-icon-video"></span>参考视频`;
-
-            linkBtn.onclick = (e) => {
-                e.stopPropagation();
-            };
+            linkBtn.onclick = (e) => e.stopPropagation();
 
             btnContainer.appendChild(linkBtn);
-
             if (descContainer.parentNode) {
                 descContainer.parentNode.insertBefore(btnContainer, descContainer.nextSibling);
             }
@@ -545,39 +575,26 @@
         rafId = requestAnimationFrame(applyFilterLogic);
     }
 
-    // --- [V6.0 最终完美版：支持异步加载 + 独立状态锁] ---
+    /**
+     * [V6.0 视觉优化] 关卡徽章异步处理与干员头像化
+     * 包含异步等待策略与独立状态锁
+     */
     function optimizeCardVisuals(card, cardInner) {
         if (!CONFIG.visuals) return;
-        // 注意：移除了最外层的 card.dataset.visualOptimized 锁
-        // 改为内部独立控制，因为关卡代号和干员列表可能不同步加载
 
-        // =========================================================
-        // 1. 【关卡代号】异步等待策略
-        // =========================================================
         const heading = cardInner.querySelector('h4, h5, .bp4-heading');
         const stageCodeSpan = cardInner.querySelector('.flex.whitespace-pre .inline-block.font-bold.my-auto');
 
-        // 只有当标题存在，且【从未处理过徽章】时才执行
+        // 处理关卡代号徽章
         if (stageCodeSpan && heading && !heading.dataset.badgeProcessed) {
-            const rawCode = stageCodeSpan.innerText.trim(); // 获取当前显示的文字
-
-            // --- 核心判断逻辑 ---
-            // 内部ID特征：包含下划线 "_" (如 act47side_07) 或者 以小写字母开头且较长
-            // 有效代号特征：通常较短，或者以大写字母/数字开头 (如 UR-7, 1-7, H12-4)
+            const rawCode = stageCodeSpan.innerText.trim();
+            // 判断是否为内部ID (如 act47side_07)，如果是则跳过等待下次渲染
             const isInternalId = rawCode.includes('_') || (rawCode.length > 5 && /^[a-z]/.test(rawCode));
 
-            if (isInternalId) {
-                // console.log('检测到内部ID，等待异步更新:', rawCode);
-                // 关键点：直接跳过，不标记 badgeProcessed。
-                // 等网页 DOM 变成 "UR-7" 时，Observer 会再次调用此函数，那时就会进入下面的 else
-            } else {
-                // console.log('检测到有效代号，执行处理:', rawCode);
-
-                // 1. 寻找存放标题文本的具体容器
+            if (!isInternalId) {
                 const titleTextNode = heading.querySelector('.whitespace-nowrap.overflow-hidden.text-ellipsis') || heading;
                 let currentText = titleTextNode.innerText;
 
-                // 2. 标题去重清洗
                 const escapedCode = rawCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 const regex = new RegExp(`^\\s*(\\[|【)?\\s*${escapedCode}\\s*(\\]|】)?\\s*([-|:：\\s]+)?`, 'i');
 
@@ -585,37 +602,29 @@
                     titleTextNode.innerText = currentText.replace(regex, '');
                 }
 
-                // 3. 插入徽章
                 const badge = document.createElement('span');
                 badge.className = 'prts-level-badge';
                 badge.innerText = rawCode;
                 heading.insertBefore(badge, heading.firstChild);
 
-                // 4. 标记为已完成，以后不再处理此标题
                 heading.dataset.badgeProcessed = "true";
             }
         }
 
-        // =========================================================
-        // 3. 【干员列表】交互一致性处理
-        // =========================================================
+        // 处理干员列表头像化
         const allDivs = Array.from(cardInner.querySelectorAll('div'));
         const labelDiv = allDivs.find(div => div.innerText.trim() === '干员/干员组');
 
-        // 使用 dataset.opsProcessed 独立控制干员部分的锁
         if (labelDiv && !labelDiv.dataset.opsProcessed) {
             const tagsContainer = labelDiv.nextElementSibling;
             if (tagsContainer) {
                 const tags = tagsContainer.querySelectorAll('.bp4-tag');
-
                 let grid = tagsContainer.querySelector('.prts-op-grid');
                 if (!grid) {
                     grid = document.createElement('div');
                     grid.className = 'prts-op-grid';
                     tagsContainer.insertBefore(grid, tagsContainer.firstChild);
                 }
-
-                let hasProcessedAny = false;
 
                 tags.forEach(tag => {
                     if (tag.dataset.opExtracted) return;
@@ -629,19 +638,17 @@
                     let newItem = null;
 
                     if (OP_ID_MAP[nameKey]) {
-                        // A: 图片头像
+                        // 图片头像
                         const opId = OP_ID_MAP[nameKey];
                         newItem = document.createElement('div');
                         newItem.className = 'prts-op-item';
-
                         const img = document.createElement('img');
                         img.src = `https://zoot.plus/assets/operator-avatars/webp96/${opId}.webp`;
                         img.className = 'prts-op-img';
                         img.loading = "lazy";
                         newItem.appendChild(img);
-
                     } else if (nameKey.length > 0) {
-                        // B: 文字方块
+                        // 文字方块
                         newItem = document.createElement('div');
                         newItem.className = 'prts-op-text';
                         newItem.innerText = nameKey;
@@ -656,92 +663,62 @@
 
                     if (!newItem) return;
 
-                    // 交互处理
                     const interactiveWrapper = tag.closest('.bp4-popover2-target');
-
                     if (interactiveWrapper) {
                         grid.appendChild(interactiveWrapper);
                         interactiveWrapper.innerHTML = '';
                         interactiveWrapper.appendChild(newItem);
                     } else {
-                        // 模拟 Tooltip
+                        // 模拟 [V5.0 Tooltip]
                         const tooltipText = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
                         newItem.setAttribute('data-prts-tooltip', tooltipText);
-
                         grid.appendChild(newItem);
                         tag.style.display = 'none';
                     }
 
                     tag.dataset.opExtracted = "true";
-                    hasProcessedAny = true;
                 });
-
-                // 只有当真的找到了干员并处理后，才给干员部分上锁
-                // 这样即使干员也是异步加载的，也能正确处理
-                if (hasProcessedAny && tags.length > 0) {
-                   // labelDiv.dataset.opsProcessed = "true"; // 可选：如果干员列表不会变，可以加上这个锁
-                }
             }
         }
     }
 
-    // --- [V11.2 逻辑：适配单干员及列表] ---
+    /**
+     * [V11.2 弹窗优化] 适配单干员显示与列表解析
+     * 解析悬浮弹窗中的文本，转换为网格化的干员头像
+     */
     function enhancePopover(portalNode) {
-        // 1. 找到内容容器
         const content = portalNode.querySelector('.bp4-popover2-content');
         if (!content || content.dataset.optimized) return;
 
-        // 2. 获取原始文本
         const text = content.innerText.trim();
-
-        // 3. 判断逻辑升级：
-        // (1) 有箭头 "->" (Zoot标准格式)
-        // (2) 有逗号 "," (列表格式)
-        // (3) [新增] 单干员格式：取第一个词，看是否为有效干员名
-
-        // 预处理：去掉可能的箭头，提取第一个词作为潜在干员名
         const cleanText = text.replace(/^->\s*/, '');
-        const firstWord = cleanText.split(/[\s,，]+/)[0]; // 按空格或逗号分割，取第一个
+        const firstWord = cleanText.split(/[\s,，]+/)[0];
         const isSingleOperator = OP_ID_MAP[firstWord];
 
-        // 如果既不是箭头格式，也不是列表，且第一个词也不是干员，则认为是无关弹窗，直接返回
+        // 仅处理箭头格式、列表格式或有效的单干员名
         if (!text.startsWith('->') && !text.includes(',') && !isSingleOperator) return;
 
-        // 4. 解析干员列表 (逻辑保持不变，天然支持单干员)
-        // 移除 "->" 前缀，按逗号分隔
         const rawList = cleanText.split(/[,，]\s*/);
-
-        // 准备数据容器
         const validOps = [];
 
         rawList.forEach(entry => {
-            const parts = entry.trim().split(/\s+/); // "纯烬艾雅法拉 1" -> ["纯烬艾雅法拉", "1"]
+            const parts = entry.trim().split(/\s+/);
             const name = parts[0];
             const skill = parts[1] || "";
 
-            // 检查是否在我们的 ID 库中
             if (OP_ID_MAP[name]) {
-                validOps.push({
-                    name: name,
-                    id: OP_ID_MAP[name],
-                    skill: skill
-                });
+                validOps.push({ name: name, id: OP_ID_MAP[name], skill: skill });
             }
         });
 
-        // 5. 只有当确实解析出了干员，才进行替换
         if (validOps.length > 0) {
-            // 清空原有文字
             content.innerHTML = '';
-
-            // 创建网格
             const grid = document.createElement('div');
             grid.className = 'prts-popover-grid';
 
             validOps.forEach(op => {
                 const item = document.createElement('div');
                 item.className = 'prts-popover-item';
-                // 单干员时，title提示依然保留，体验更好
                 item.title = `${op.name} ${op.skill ? '(技能 ' + op.skill + ')' : ''}`;
 
                 const img = document.createElement('img');
@@ -749,24 +726,23 @@
                 img.className = 'prts-popover-img';
 
                 item.appendChild(img);
-
                 if (op.skill) {
                     const badge = document.createElement('div');
                     badge.className = 'prts-popover-skill';
                     badge.innerText = op.skill;
                     item.appendChild(badge);
                 }
-
                 grid.appendChild(item);
             });
 
             content.appendChild(grid);
-
-            // 标记已处理
             content.dataset.optimized = "true";
         }
     }
 
+    /**
+     * [V10.0 筛选核心] 应用筛选逻辑
+     */
     function applyFilterLogic() {
         if (isFilterDisabledPage()) return;
         isProcessingFilter = true;
@@ -779,16 +755,11 @@
                 const cardInner = card.querySelector('.bp4-card');
                 if (!cardInner) return;
 
-                // 1. [新增] 视觉优化 (头像化、徽章化、折叠描述)
-                //    注意：这一步在筛选逻辑之前执行，改善视觉体验
+                // 视觉优化
                 optimizeCardVisuals(card, cardInner);
-
-                // 2. [原有] Bilibili 链接净化
+                // 链接清洗
                 cleanBilibiliLinks(cardInner);
 
-                // 3. [原有] 筛选逻辑 (保持不变，但需注意选择器)
-                //    注意：虽然CSS隐藏了 .bp4-tag，但DOM中它们依然存在，
-                //    所以下面的 querySelectorAll('.bp4-tag') 依然能正常工作。
                 let isUnavailable = false;
                 let statusType = null;
                 let statusValue = null;
@@ -800,7 +771,6 @@
                     tags.forEach(tag => {
                         if (tag.querySelector('h4')) return;
                         const text = tag.innerText.trim();
-                        // 过滤非干员标签
                         if (['普通', '突袭', 'Beta'].includes(text) ||
                             text.includes('活动关卡') || text.includes('剿灭') || text.includes('危机合约') ||
                             text.includes('|') || text.startsWith('[') || text.includes('更新') ||
@@ -836,7 +806,7 @@
                     }
                 }
 
-                // 处理隐藏
+                // 处理隐藏与置灰
                 if (isUnavailable && displayMode === 'HIDE') {
                     if (card.style.display !== 'none') card.style.display = 'none';
                     return;
@@ -844,7 +814,6 @@
                     if (card.style.display === 'none') card.style.display = '';
                 }
 
-                // 处理置灰
                 const hasGrayClass = card.classList.contains('prts-card-gray');
                 if (isUnavailable && displayMode === 'GRAY') {
                     if (!hasGrayClass) card.classList.add('prts-card-gray');
@@ -852,7 +821,7 @@
                     if (hasGrayClass) card.classList.remove('prts-card-gray');
                 }
 
-                // 处理标签
+                // 更新状态标签
                 const existingLabel = cardInner.querySelector('.prts-status-label');
                 if (!statusType) {
                     if (existingLabel) existingLabel.remove();
@@ -887,7 +856,13 @@
         }
     }
 
-    // --- [V6.3 侧边栏逻辑修复] ---
+    // =========================================================================
+    //                            MODULE 5: 业务逻辑 - 侧边栏与悬浮球
+    // =========================================================================
+
+    /**
+     * [V6.3 侧边栏优化] 折叠创作工具与美化公告
+     */
     function optimizeSidebar() {
         if (!CONFIG.sidebar) return;
         const cards = document.querySelectorAll('.bp4-card');
@@ -896,7 +871,6 @@
             if (card.dataset.sidebarOptimized) return;
             const textContent = card.innerText;
 
-            // 1. 创作工具 (折叠)
             if (textContent.includes('创建新作业') || textContent.includes('拖拽上传')) {
                 card.classList.add('prts-sidebar-collapsed');
                 const header = card.querySelector('h4, h5, h3, .bp4-heading') || card.firstElementChild;
@@ -916,46 +890,34 @@
                 card.dataset.sidebarOptimized = "true";
             }
 
-            // 2. 公告 (按钮化)
-            // 判断条件：包含“公告”二字，并且里面有个列表(ul)，确保没找错卡片
             if (textContent.includes('公告') && card.querySelector('ul')) {
                 card.classList.add('prts-notice-btn');
-
                 const header = card.querySelector('h4, h5, h3, .bp4-heading');
                 if (header) {
-                    // 使用 emoji 代替图标，保证绝对可见
                     header.innerHTML = `📢 站务公告 <span style="font-size:12px; opacity:0.7; font-weight:normal; margin-left:auto;">点击查看详情</span>`;
-
-                    // 移除可能干扰颜色的原有类名 (text-gray-700)
                     header.classList.remove('text-gray-700');
                 }
-
                 card.dataset.sidebarOptimized = "true";
             }
         });
     }
 
-    // --- [V6.1 弹窗内部优化：给公告标题加高亮标签] ---
+    /**
+     * [V6.1 弹窗优化] 公告标题自动添加高亮标签
+     */
     function optimizeDialogContent() {
-        // 查找当前打开的弹窗
         const dialog = document.querySelector('.bp4-dialog');
         if (!dialog || dialog.dataset.contentOptimized) return;
 
-        // 检查标题是否是“公告”
         const title = dialog.querySelector('.bp4-heading');
         if (title && title.innerText.includes('公告')) {
-
-            // 找到内容区域 (.markdown-body)
             const contentBody = dialog.querySelector('.markdown-body');
             if (contentBody) {
-                // 遍历所有的 H2 标题 (公告通常用 H2 分割)
                 const headers = contentBody.querySelectorAll('h2');
-
                 headers.forEach(h2 => {
                     const text = h2.innerText;
                     let tagHtml = '';
 
-                    // 关键词匹配
                     if (text.includes('升级') || text.includes('优化') || text.includes('更新')) {
                         tagHtml = `<span class="prts-dialog-tag prts-tag-update">更新</span>`;
                     } else if (text.includes('修复') || text.includes('问题') || text.includes('Bug')) {
@@ -966,47 +928,33 @@
                         tagHtml = `<span class="prts-dialog-tag prts-tag-note">通知</span>`;
                     }
 
-                    // 插入标签到标题最前面
-                    // 注意：原标题里可能包含 span (日期)，我们只在最前面插入
                     if (!h2.querySelector('.prts-dialog-tag')) {
                         h2.innerHTML = tagHtml + h2.innerHTML;
                     }
                 });
             }
-
             dialog.dataset.contentOptimized = "true";
         }
     }
 
-
-    // =========================================================================
-    //                            MODULE 6: 悬浮控制球 (UI/Logic)
-    // =========================================================================
-
-    // 配置状态 (使用 GM_getValue 存储开关状态，默认为 true)
-    const CONFIG = {
-        visuals: GM_getValue('prts_cfg_visuals', true), // 干员头像优化
-        sidebar: GM_getValue('prts_cfg_sidebar', true), // 侧边栏优化
-        cleanLink: GM_getValue('prts_cfg_link', true),  // 链接净化
-        filterBar: GM_getValue('prts_cfg_filter', true) // 显示筛选栏
-    };
-
+    /**
+     * [V9.4 全局控制] 存储配置
+     */
     function saveConfig() {
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_sidebar', CONFIG.sidebar);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
         GM_setValue('prts_cfg_filter', CONFIG.filterBar);
-        // 保存后通常需要刷新页面或重新触发逻辑，这里简单处理为刷新生效提示
-        // 或者是实时生效（视功能而定）
     }
 
-    // --- [V9.3 逻辑修复：修复点击后无法自动贴边隐藏的问题] ---
+    /**
+     * [V9.4 全局控制] 悬浮球与设置面板逻辑
+     * 包含拖拽、自动吸附与面板开关
+     */
     function createFloatingBall() {
         if (document.getElementById('prts-float-container')) return;
 
-        // 1. 读取位置
         const savedPos = JSON.parse(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
-
         const container = document.createElement('div');
         container.id = 'prts-float-container';
 
@@ -1022,17 +970,14 @@
             container.classList.add('snap-left');
         }
 
-        // 2. 创建按钮
         const btn = document.createElement('div');
         btn.className = 'prts-float-btn';
         btn.title = "脚本设置 (可拖拽)";
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z"></path></svg>`;
 
-        // 3. 创建面板
         const panel = document.createElement('div');
         panel.className = 'prts-settings-panel';
 
-        // --- 面板内容构建 (保持不变) ---
         const createSwitch = (label, checked, onChange) => {
             const div = document.createElement('div');
             div.className = 'prts-panel-item';
@@ -1041,6 +986,7 @@
             input.onchange = (e) => onChange(e.target.checked);
             return div;
         };
+
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
         title.innerHTML = `<span style="margin-right:auto">功能开关</span><span style="font-size:12px;opacity:0.6">刷新生效</span>`;
@@ -1058,61 +1004,50 @@
         panel.appendChild(createSwitch('🔗 视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
         }));
+
         const importBtn = document.createElement('button');
         importBtn.className = 'prts-btn';
         importBtn.style.width = '100%'; importBtn.style.marginTop = '8px';
         importBtn.innerHTML = '📂 导入干员数据';
         importBtn.onclick = handleImport;
         panel.appendChild(importBtn);
-        // --- 面板内容结束 ---
 
         container.appendChild(panel);
         container.appendChild(btn);
         document.body.appendChild(container);
 
-        // =========================================================
-        // 4. 拖拽逻辑 (已修复)
-        // =========================================================
+        // 拖拽逻辑
         let isDragging = false;
         let hasMoved = false;
-        let startX, startY;
-        let initialLeft, initialTop;
+        let startX, startY, initialLeft, initialTop;
 
         btn.addEventListener('mousedown', (e) => {
             isDragging = true;
             hasMoved = false;
             startX = e.clientX;
             startY = e.clientY;
-
             const rect = container.getBoundingClientRect();
             initialLeft = rect.left;
             initialTop = rect.top;
 
             container.classList.remove('is-snapping');
             container.classList.add('is-dragging');
-
-            // 锁定当前位置，防止跳变
             container.style.left = initialLeft + 'px';
             container.style.top = initialTop + 'px';
             container.style.right = 'auto';
-            // 关键：禁用 CSS transform，由 JS 接管位置
             container.style.transform = 'none';
         });
 
         document.addEventListener('mousemove', (e) => {
             if (!isDragging) return;
-
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-
-            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
-                hasMoved = true;
-            }
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
 
             let newLeft = initialLeft + dx;
             let newTop = initialTop + dy;
 
-            // 边界限制
+            // 边界检查
             const winWidth = window.innerWidth;
             const winHeight = window.innerHeight;
             const elWidth = container.offsetWidth;
@@ -1131,19 +1066,14 @@
             if (!isDragging) return;
             isDragging = false;
             container.classList.remove('is-dragging');
-
-            // [核心修复]：无论是否发生拖动，都要清除内联 transform
-            // 否则 'transform: none' 会残留，导致 CSS 中的 translateX 失效，无法缩回
             container.style.transform = '';
 
             if (hasMoved) {
-                // --- 吸附逻辑 ---
                 const winWidth = window.innerWidth;
                 const rect = container.getBoundingClientRect();
                 const centerX = rect.left + rect.width / 2;
 
                 container.classList.add('is-snapping');
-
                 let isRight = true;
                 if (centerX < winWidth / 2) {
                     container.style.left = '0px';
@@ -1158,68 +1088,48 @@
                     container.classList.add('snap-right');
                     isRight = true;
                 }
-
                 const topPercent = (rect.top / window.innerHeight * 100).toFixed(1) + '%';
                 container.style.top = topPercent;
 
-                GM_setValue('prts_float_pos', JSON.stringify({
-                    top: topPercent,
-                    isRight: isRight
-                }));
+                GM_setValue('prts_float_pos', JSON.stringify({ top: topPercent, isRight: isRight }));
             }
         });
 
-        // 5. 点击交互
         btn.onclick = (e) => {
             e.stopPropagation();
-            if (!hasMoved) {
-                container.classList.toggle('prts-float-open');
-            }
+            if (!hasMoved) container.classList.toggle('prts-float-open');
         };
-
         panel.onclick = (e) => e.stopPropagation();
-
         document.addEventListener('click', () => {
-            if (!isDragging) {
-                container.classList.remove('prts-float-open');
-            }
+            if (!isDragging) container.classList.remove('prts-float-open');
         });
     }
 
-
     // =========================================================================
-    //                            MODULE 5: 统一执行与监听
+    //                            MODULE 6: 初始化与统一监听
     // =========================================================================
 
     function init() {
-        // 1. 初始化暗黑模式 (立即执行)
         applyDarkMode(isDarkMode);
-
-        // 2. 初始化筛选数据
         loadOwnedOps();
-        createFloatingBall(); // <--- 启动悬浮球
+        createFloatingBall();
         injectFilterControls();
 
-        // 3. 统一观察者
+        // 全局 DOM 观察者
         const observer = new MutationObserver((mutations) => {
-            // A. 暗黑模式按钮守护
+            // 暗黑模式与界面元素守护
             manageDarkModeButton();
-
-            // 调用右侧栏优化
             optimizeSidebar();
-
-            // 监听弹窗变化
             optimizeDialogContent();
 
-            // B. 筛选与页面变动检测
             if (isProcessingFilter) return;
             if (isFilterDisabledPage()) return;
 
+            // 筛选变动检测
             let domChanged = false;
             for (const mutation of mutations) {
                 if (mutation.target.classList && mutation.target.classList.contains('prts-status-label')) continue;
                 if (mutation.target.id === 'prts-filter-bar') continue;
-
                 if (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0) {
                     domChanged = true;
                     break;
@@ -1235,34 +1145,23 @@
 
         observer.observe(document.body, { childList: true, subtree: true });
 
-        // --- [V11.1 修复] 针对 Portal 内部变化的专用观察者 ---
-        // 解决：第二次悬停时，Portal 节点被复用导致无法触发替换的问题
+        // [V11.1 修复] Portal 内部变化专用观察者
         const portalInnerObserver = new MutationObserver((mutations) => {
             if (!CONFIG.visuals) return;
-            // 当 Portal 内部发生变化时，尝试重新执行增强逻辑
-            // 注意：enhancePopover 内部有 dataset.optimized 检查，防止死循环
             mutations.forEach(mutation => {
                 const portalNode = mutation.target.closest('.bp4-portal');
-                if (portalNode) {
-                    enhancePopover(portalNode);
-                }
+                if (portalNode) enhancePopover(portalNode);
             });
         });
 
-        // 监听 Body 根目录下的弹窗生成
+        // 监听 React Portal 容器生成 (用于弹窗和Tooltip)
         const bodyObserver = new MutationObserver((mutations) => {
             if (!CONFIG.visuals) return;
-
             mutations.forEach(mutation => {
                 if (mutation.addedNodes.length > 0) {
                     mutation.addedNodes.forEach(node => {
-                        // 检查是否是 Blueprint 的 Portal
                         if (node.nodeType === 1 && node.classList.contains('bp4-portal')) {
-                            // 1. 立即尝试处理 (针对第一次渲染)
                             setTimeout(() => enhancePopover(node), 0);
-
-                            // 2. [关键修复] 持续监听这个 Portal 内部的变化
-                            // 这样当鼠标第二次悬停，React 刷新内部文字时，我们能再次捕捉到
                             portalInnerObserver.observe(node, { childList: true, subtree: true });
                         }
                     });
@@ -1272,20 +1171,19 @@
 
         bodyObserver.observe(document.body, { childList: true });
 
-        // 保底定时器 (应对极其顽固的React刷新)
+        // 保底定时器
         setInterval(() => {
             manageDarkModeButton();
             optimizeSidebar();
             optimizeDialogContent();
             createFloatingBall();
-            if (CONFIG.sidebar) optimizeSidebar(); // 加入开关控制
+            if (CONFIG.sidebar) optimizeSidebar();
             if (!isFilterDisabledPage() && !document.getElementById('prts-filter-bar')) {
                 injectFilterControls();
             }
         }, 1000);
     }
 
-    // 启动
     init();
 
 })();
