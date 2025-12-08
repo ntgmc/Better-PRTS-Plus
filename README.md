@@ -19,7 +19,7 @@
 
 ## 📸 效果预览
 
-> ![Image](https://github.com/user-attachments/assets/00640304-eb59-43e4-90ee-584701cec319)
+![Image](https://github.com/user-attachments/assets/00640304-eb59-43e4-90ee-584701cec319)
 
 ## ✨ 核心功能
 
