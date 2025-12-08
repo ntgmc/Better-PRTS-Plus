@@ -120,13 +120,6 @@
             color: ${c.textMain} !important;
         }
 
-        /* --- [修复下拉菜单/Popover/Select 反白问题] --- */
-        html.dark .bp4-popover2-content,
-        html.dark .bp4-menu {
-            background-color: ${c.bgCard} !important;
-            color: ${c.textMain} !important;
-            border-radius: 4px;
-        }
         /* 菜单项文字与交互 */
         html.dark .bp4-menu-item {
             color: ${c.textMain} !important;
@@ -613,17 +606,48 @@
         html.dark [data-prts-tooltip]:hover::after { background-color: #202b33; }
         html.dark [data-prts-tooltip]:hover::before { border-color: #202b33 transparent transparent transparent; }
 
-        /* 技能/数量 角标 */
-        .prts-op-skill {
+        /* --- [V11.4 样式紧急修复：角标颜色强制高亮] --- */
+
+        /* 1. 基础角标样式 (卡片 & 弹窗通用) */
+        .prts-op-skill, .prts-popover-skill {
             position: absolute;
             bottom: 0;
             right: 0;
-            background: rgba(0,0,0,0.7);
-            color: #fff;
-            font-size: 9px;
-            padding: 1px 3px;
-            border-top-left-radius: 3px;
+            
+            /* 强制白底黑字，确保最高对比度 */
+            background-color: #ffffff !important; 
+            color: #000000 !important;
+            
+            font-size: 11px !important;
+            font-weight: 900 !important; /* 最粗体 */
+            font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+            
+            padding: 0 4px;
+            min-width: 14px;
+            text-align: center;
+            line-height: 14px;
+            
+            border-top-left-radius: 4px;
+            /* 加深阴影，防止在亮色头像上看不清边界 */
+            box-shadow: 0 0 2px rgba(0,0,0,0.5); 
             pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 2. [关键修复] 针对弹窗内角标的特异性覆盖 */
+        /* 这里的层级必须非常深，以覆盖 V5.0 中那个通配符 * 的颜色强制 */
+        html.dark .bp4-popover2-content .prts-popover-skill,
+        html.dark .prts-popover-skill {
+            background-color: #ffffff !important; /* 保持纯白底 */
+            color: #000000 !important;            /* 强制纯黑字 */
+            border: 1px solid #d1d5db;            /* 加个微弱灰边框防止晕染 */
+        }
+
+        /* 日间模式也加个保险 */
+        .bp4-popover2-content .prts-popover-skill {
+            background-color: #ffffff !important;
+            color: #000000 !important;
+            border: 1px solid #e5e7eb;
         }
         
         /* --- [V5.0 修复：Tooltip/气泡提示 配色修复] --- */
