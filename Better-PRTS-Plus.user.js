@@ -1358,23 +1358,31 @@
         }
     }
 
-    // --- [V11.0 逻辑：拦截弹窗并头像化] ---
+    // --- [V11.2 逻辑：适配单干员及列表] ---
     function enhancePopover(portalNode) {
         // 1. 找到内容容器
         const content = portalNode.querySelector('.bp4-popover2-content');
         if (!content || content.dataset.optimized) return;
 
-        // 2. 获取原始文本 (例如: "-> 纯烬艾雅法拉 1, 蜜莓 1")
+        // 2. 获取原始文本
         const text = content.innerText.trim();
 
-        // 3. 快速判断：必须包含干员数据的特征
-        // 特征1: 以 "->" 开头 (Zoot的习惯)
-        // 特征2: 或者包含 "," 分隔的列表
-        if (!text.startsWith('->') && !text.includes(',')) return;
+        // 3. 判断逻辑升级：
+        // (1) 有箭头 "->" (Zoot标准格式)
+        // (2) 有逗号 "," (列表格式)
+        // (3) [新增] 单干员格式：取第一个词，看是否为有效干员名
 
-        // 4. 解析干员列表
+        // 预处理：去掉可能的箭头，提取第一个词作为潜在干员名
+        const cleanText = text.replace(/^->\s*/, '');
+        const firstWord = cleanText.split(/[\s,，]+/)[0]; // 按空格或逗号分割，取第一个
+        const isSingleOperator = OP_ID_MAP[firstWord];
+
+        // 如果既不是箭头格式，也不是列表，且第一个词也不是干员，则认为是无关弹窗，直接返回
+        if (!text.startsWith('->') && !text.includes(',') && !isSingleOperator) return;
+
+        // 4. 解析干员列表 (逻辑保持不变，天然支持单干员)
         // 移除 "->" 前缀，按逗号分隔
-        const rawList = text.replace(/^->\s*/, '').split(/[,，]\s*/);
+        const rawList = cleanText.split(/[,，]\s*/);
 
         // 准备数据容器
         const validOps = [];
@@ -1406,6 +1414,7 @@
             validOps.forEach(op => {
                 const item = document.createElement('div');
                 item.className = 'prts-popover-item';
+                // 单干员时，title提示依然保留，体验更好
                 item.title = `${op.name} ${op.skill ? '(技能 ' + op.skill + ')' : ''}`;
 
                 const img = document.createElement('img');
