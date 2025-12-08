@@ -1,14 +1,20 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
-// @namespace    http://tampermonkey.net/
+// @namespace    https://github.com/ntgmc/Better-PRTS-Plus
 // @version      2.7
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
+// @icon         https://zoot.plus/favicon.ico
+// @homepage     https://github.com/ntgmc/Better-PRTS-Plus
+// @supportURL   https://github.com/ntgmc/Better-PRTS-Plus/issues
+// @updateURL    https://raw.githubusercontent.com/ntgmc/Better-PRTS-Plus/main/Better-PRTS-Plus.user.js
+// @downloadURL  https://raw.githubusercontent.com/ntgmc/Better-PRTS-Plus/main/Better-PRTS-Plus.user.js
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @run-at       document-body
+// @license      GPL-3.0 License
 // ==/UserScript==
 
 /**
