@@ -463,8 +463,10 @@
         if (!searchRow) return;
 
         let controlBar = document.getElementById('prts-filter-bar');
+        let isNew = false; // 标记是否是新建的
 
         if (!controlBar) {
+            isNew = true;
             controlBar = document.createElement('div');
             controlBar.id = 'prts-filter-bar';
 
@@ -504,13 +506,17 @@
                 createBpBtn('完美阵容', paths.perfect, () => toggleFilter('PERFECT'), 'btn-perfect'),
                 createBpBtn('允许助战', paths.support, () => toggleFilter('SUPPORT'), 'btn-support')
             );
-
-            updateFilterButtonStyles();
         }
 
         if (searchRow.nextSibling !== controlBar) {
             searchRow.parentNode.insertBefore(controlBar, searchRow.nextSibling);
-            if (currentFilterMode !== 'NONE') requestFilterUpdate();
+
+            // [关键修复]：只有当元素真正插入 DOM 后，getElementById 才能找到它们并应用样式
+            // 如果是新创建的，或者位置发生了变动，我们都重新应用一次样式，确保万无一失
+            if (currentFilterMode !== 'NONE' || isNew) {
+                updateFilterButtonStyles();
+                requestFilterUpdate();
+            }
         }
     }
 
