@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.7.1
+// @version      2.7.2
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
@@ -722,7 +722,7 @@
                         newItem = document.createElement('div');
                         newItem.className = 'prts-op-item';
                         const img = document.createElement('img');
-                        img.src = `https://zoot.plus/assets/operator-avatars/webp32/${opId}.webp`;
+                        img.src = `https://zoot.plus/assets/operator-avatars/webp96/${opId}.webp`;
                         img.className = 'prts-op-img';
                         img.loading = "lazy";
                         newItem.appendChild(img);
@@ -801,7 +801,7 @@
                 item.title = `${op.name} ${op.skill ? '(技能 ' + op.skill + ')' : ''}`;
 
                 const img = document.createElement('img');
-                img.src = `https://zoot.plus/assets/operator-avatars/webp32/${op.id}.webp`;
+                img.src = `https://zoot.plus/assets/operator-avatars/webp96/${op.id}.webp`;
                 img.className = 'prts-popover-img';
 
                 item.appendChild(img);
