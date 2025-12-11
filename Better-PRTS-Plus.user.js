@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.7.4
+// @version      2.7.5
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
@@ -123,6 +123,21 @@
     // [样式] CSS 样式定义
     const mergedStyles = `
     /* ==========================================================================
+       0. [全局强制] 输入框聚焦样式 (去除蓝色，统一为淡紫色光晕)
+       ========================================================================== */
+    /* 覆盖 Blueprint 默认的蓝色聚焦样式，应用 PR 定义的 Violet 风格 */
+    .bp4-input:focus, 
+    .bp4-input.bp4-active,
+    textarea:focus,
+    select:focus,
+    .bp4-dialog .bp4-input:focus,
+    .bp4-input-group .bp4-input:focus {
+        border-color: none !important;
+        box-shadow: 0 0 3px colors.violet.500 !important;
+        outline: none !important;
+    }
+
+    /* ==========================================================================
        1. [核心基础] 全局暗黑模式与布局
        ========================================================================== */
     html.dark, html.dark body, html.dark #root, html.dark #app,
@@ -198,6 +213,7 @@
         border: none !important;
     }
 
+    /* 输入框基础样式 (Dark Mode) */
     html.dark .bp4-input, html.dark textarea, html.dark select,
     html.dark .bp4-dialog .bp4-input {
         background-color: ${c.bgHover} !important;
@@ -205,12 +221,25 @@
         border: 1px solid ${c.border} !important;
         box-shadow: none !important;
     }
+    
+    /* [暗黑模式] 输入框聚焦样式 (PR #508 Violet Style) */
+    /* 注意：由于使用了 html.dark 前缀，优先级高于上方的全局样式，因此暗黑模式下仍为紫色 */
+    html.dark .bp4-input:focus, 
+    html.dark .bp4-input.bp4-active,
+    html.dark textarea:focus,
+    html.dark select:focus,
+    html.dark .bp4-dialog .bp4-input:focus {
+        border-color: #8b5cf6 !important; /* Violet-500 */
+        box-shadow: inset 0 0 0 1px #8b5cf6, 0 0 0 2px rgba(139, 92, 246, 0.3) !important;
+        outline: none !important;
+    }
+
     html.dark .bp4-input::placeholder { color: #666 !important; }
 
     html.dark .bp4-tab { color: ${c.textSub} !important; }
     html.dark .bp4-tab[aria-selected="true"] { color: ${c.primary} !important; }
 
-    /* 2.3 浮层与菜单 (终极修复合并版) */
+    /* 2.3 浮层与菜单 */
     html.dark .bp4-portal .bp4-popover2-content,
     html.dark .bp4-portal .bp4-menu,
     html.dark .bp4-select-popover .bp4-popover2-content,
@@ -378,10 +407,9 @@
         box-shadow: inset 0 0 0 2px #3f3f46 !important;
         color: #52525b !important;                                /* zinc-600 */
     }
-    /* 头像中的默认文字颜色 (如 "Temp") */
+    /* 头像中的默认文字颜色 */
     html.dark .text-slate-300 { color: #52525b !important; }      /* zinc-600 */
     
-    /* 普通旧版干员 Item 样式 (兼容) */
     .prts-op-item, .prts-op-text {
         position: relative; width: 42px; height: 42px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         transition: transform 0.2s, box-shadow 0.2s; box-sizing: border-box;
