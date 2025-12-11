@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-2.7.2-blue)]()
+[![Version](https://img.shields.io/badge/version-2.7.4-blue)]()
 [![License](https://img.shields.io/badge/license-GPL--3.0-red)](LICENSE)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Supported-green)]()
 [![Greasy Fork](https://img.shields.io/badge/GreasyFork-发布页-orange)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)

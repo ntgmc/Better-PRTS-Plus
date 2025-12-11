@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.7.3
+// @version      2.7.4
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
@@ -211,7 +211,6 @@
     html.dark .bp4-tab[aria-selected="true"] { color: ${c.primary} !important; }
 
     /* 2.3 浮层与菜单 (终极修复合并版) */
-    /* 覆盖所有通过 Portal 生成的弹出层 (Select, Suggest, ContextMenu) */
     html.dark .bp4-portal .bp4-popover2-content,
     html.dark .bp4-portal .bp4-menu,
     html.dark .bp4-select-popover .bp4-popover2-content,
@@ -224,7 +223,6 @@
     }
     html.dark .bp4-popover2-content * { color: #e0e0e0; }
 
-    /* 菜单项交互 */
     html.dark .bp4-menu-item { color: ${c.textMain} !important; background-color: transparent !important; }
     html.dark .bp4-menu-item:hover,
     html.dark .bp4-menu-item.bp4-active,
@@ -238,23 +236,19 @@
         background-color: transparent !important;
     }
 
-    /* 修复弹窗箭头颜色 */
     html.dark .bp4-popover2-arrow-fill { fill: #232326 !important; }
     html.dark .bp4-popover2-arrow-border { fill: #3f3f46 !important; }
 
     /* ==========================================================================
        3. [通用工具] 颜色修正与第三方内容
        ========================================================================== */
-    /* 3.1 文字与标题颜色 */
     html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5,
     html.dark .bp4-heading, html.dark strong { color: #fff !important; }
     
     html.dark .text-gray-700, html.dark .text-zinc-600, 
     html.dark .text-slate-900, html.dark .text-gray-800 { color: ${c.textMain} !important; }
-    
     html.dark .text-gray-500, html.dark .text-zinc-500 { color: ${c.textSub} !important; }
 
-    /* 3.2 边框颜色修正 */
     html.dark .bp4-card.border-l-4 { border-left-width: 4px !important; }
     html.dark .border-sky-700 { border-left-color: #0369a1 !important; }
     html.dark .border-pink-700 { border-left-color: #be185d !important; }
@@ -263,16 +257,13 @@
     html.dark .border-emerald-700 { border-left-color: #047857 !important; }
     html.dark .border-yellow-700 { border-left-color: #a16207 !important; }
 
-    /* 3.3 Tags 与 Markdown */
     html.dark .bp4-tag { background-color: #333 !important; color: #ccc !important; border: 1px solid #444 !important; }
     html.dark .bp4-tag[class*="bg-red-"], html.dark .bp4-tag.bg-red-400 {
         background-color: ${c.tagRedBg} !important;
         color: ${c.tagRedText} !important;
         border-color: ${c.tagRedBorder} !important;
     }
-    html.dark .bg-orange-200 { background-color: #4a3020 !important; border-color: #6d4020 !important; }
     
-    /* 隐藏特定 Tag */
     .bp4-tag[data-op-extracted="true"] { display: none !important; }
 
     html.dark .markdown-body { color: ${c.textMain} !important; background: transparent !important; }
@@ -361,6 +352,36 @@
     .prts-op-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; align-items: center; }
     .prts-op-grid .bp4-popover2-target { display: inline-flex !important; margin: 0 !important; padding: 0 !important; vertical-align: top !important; height: 42px !important; }
 
+    /* --- [PR #508 Avatar 适配: 稀有度边框与背景] --- */
+    /* 6星: bg-orange-200 ring-orange-300 */
+    html.dark .bg-orange-200.ring-orange-300 {
+        background-color: rgba(234, 88, 12, 0.2) !important;     /* orange-600 / 0.2 */
+        --tw-ring-color: rgba(249, 115, 22, 0.6) !important;      /* orange-500 / 0.6 */
+        box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important;
+    }
+    /* 5星: bg-yellow-100 ring-yellow-200 */
+    html.dark .bg-yellow-100.ring-yellow-200 {
+        background-color: rgba(234, 179, 8, 0.2) !important;      /* yellow-500 / 0.2 */
+        --tw-ring-color: rgba(234, 179, 8, 0.6) !important;       /* yellow-500 / 0.6 */
+        box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important;
+    }
+    /* 4星: bg-purple-100 ring-purple-200 */
+    html.dark .bg-purple-100.ring-purple-200 {
+        background-color: rgba(147, 51, 234, 0.2) !important;     /* purple-600 / 0.2 */
+        --tw-ring-color: rgba(168, 85, 247, 0.6) !important;      /* purple-500 / 0.6 */
+        box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important;
+    }
+    /* 低星: bg-slate-100 ring-slate-200 */
+    html.dark .bg-slate-100.ring-slate-200 {
+        background-color: #2d2d30 !important;
+        --tw-ring-color: #3f3f46 !important;                      /* zinc-700 */
+        box-shadow: inset 0 0 0 2px #3f3f46 !important;
+        color: #52525b !important;                                /* zinc-600 */
+    }
+    /* 头像中的默认文字颜色 (如 "Temp") */
+    html.dark .text-slate-300 { color: #52525b !important; }      /* zinc-600 */
+    
+    /* 普通旧版干员 Item 样式 (兼容) */
     .prts-op-item, .prts-op-text {
         position: relative; width: 42px; height: 42px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
         transition: transform 0.2s, box-shadow 0.2s; box-sizing: border-box;
