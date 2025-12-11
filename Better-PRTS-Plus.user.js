@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.7.2
+// @version      2.7.3
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
@@ -122,228 +122,384 @@
 
     // [样式] CSS 样式定义
     const mergedStyles = `
-        /* --- [暗黑模式核心: 背景与文字] --- */
-        html.dark, html.dark body, html.dark #root, html.dark #app, html.dark .bg-zinc-50, html.dark .bg-slate-50, html.dark .bg-gray-50, html.dark .bg-white, html.dark .bg-zinc-100, html.dark .bg-slate-100, html.dark .bg-gray-100 { background-color: ${c.bgDeep} !important; color: ${c.textMain} !important; }
-    
-        /* --- [导航栏、抽屉、弹窗] --- */
-        html.dark .bp4-navbar { background-color: ${c.bgCard} !important; border-bottom: 1px solid ${c.border} !important; box-shadow: none !important; }
-        html.dark .bp4-drawer, html.dark .bp4-drawer > section, html.dark .bp4-overlay-content, html.dark .bp4-dialog { background-color: ${c.bgCard} !important; color: ${c.textMain} !important; box-shadow: 0 0 0 1px ${c.border}, 0 4px 8px rgba(0,0,0,0.5) !important; }
-        html.dark .bp4-drawer .bg-slate-100, html.dark .bp4-drawer header, html.dark .bp4-dialog-header { background-color: ${c.bgCard} !important; border-bottom: 1px solid ${c.border} !important; color: ${c.textMain} !important; }
-        html.dark .bp4-dialog-footer, html.dark .bp4-dialog-footer-fixed { background-color: ${c.bgCard} !important; border-top: 1px solid ${c.border} !important; color: ${c.textMain} !important; }
-        html.dark .bp4-dialog-header .bp4-heading { color: #fff !important; }
-        html.dark .bp4-dialog-close-button .bp4-icon { color: ${c.textSub} !important; }
-    
-        /* --- [组件: 卡片、菜单、输入框、按钮] --- */
-        html.dark .bp4-card, html.dark .card-container { background-color: ${c.bgCard} !important; border: 1px solid ${c.border} !important; box-shadow: none !important; color: ${c.textMain} !important; }
-        html.dark .bp4-menu-item { color: ${c.textMain} !important; }
-        html.dark .bp4-menu-item:hover, html.dark .bp4-menu-item.bp4-active, html.dark .bp4-menu-item.bp4-intent-primary.bp4-active { background-color: ${c.primary} !important; color: #fff !important; }
-        html.dark .bp4-menu-item.bp4-disabled { color: ${c.textSub} !important; background-color: transparent !important; }
-        html.dark .bp4-button { background-color: ${c.bgHover} !important; background-image: none !important; border: 1px solid ${c.border} !important; color: ${c.textMain} !important; box-shadow: none !important; }
-        html.dark .bp4-button:hover { background-color: #3e3e42 !important; }
-        html.dark .bp4-button.bp4-intent-primary { background-color: ${c.primary} !important; color: #fff !important; border: none !important; }
-        html.dark .bp4-input, html.dark textarea, html.dark select, html.dark .bp4-dialog .bp4-input { background-color: ${c.bgHover} !important; color: #fff !important; border: 1px solid ${c.border} !important; box-shadow: none !important; }
-        html.dark .bp4-input::placeholder { color: #666 !important; }
-    
-        /* --- [颜色修正: 边框、文字、Tab] --- */
-        html.dark .bp4-card.border-l-4 { border-left-width: 4px !important; }
-        html.dark .border-sky-700 { border-left-color: #0369a1 !important; }
-        html.dark .border-pink-700 { border-left-color: #be185d !important; }
-        html.dark .border-violet-700 { border-left-color: #6d28d9 !important; }
-        html.dark .border-red-700 { border-left-color: #b91c1c !important; }
-        html.dark .border-emerald-700 { border-left-color: #047857 !important; }
-        html.dark .border-yellow-700 { border-left-color: #a16207 !important; }
-        html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5, html.dark .bp4-heading, html.dark strong { color: #fff !important; }
-        html.dark .text-gray-700, html.dark .text-zinc-600, html.dark .text-slate-900, html.dark .text-gray-800 { color: ${c.textMain} !important; }
-        html.dark .text-gray-500, html.dark .text-zinc-500 { color: ${c.textSub} !important; }
-        html.dark .bp4-tab { color: ${c.textSub} !important; }
-        html.dark .bp4-tab[aria-selected="true"] { color: ${c.primary} !important; }
-    
-        /* --- [特殊修复: Autofill、Tag、Markdown] --- */
-        html.dark input:-webkit-autofill, html.dark input:-webkit-autofill:hover, html.dark input:-webkit-autofill:focus, html.dark input:-webkit-autofill:active { -webkit-box-shadow: 0 0 0 30px ${c.bgHover} inset !important; -webkit-text-fill-color: #fff !important; caret-color: #fff !important; transition: background-color 5000s ease-in-out 0s; }
-        html.dark .bp4-tag { background-color: #333 !important; color: #ccc !important; border: 1px solid #444 !important; }
-        html.dark .bp4-tag[class*="bg-red-"], html.dark .bp4-tag.bg-red-400 { background-color: ${c.tagRedBg} !important; color: ${c.tagRedText} !important; border-color: ${c.tagRedBorder} !important; }
-        html.dark .bg-orange-200 { background-color: #4a3020 !important; border-color: #6d4020 !important; }
-        html.dark .markdown-body { color: ${c.textMain} !important; background: transparent !important; }
-        html.dark .markdown-body pre, html.dark .markdown-body code { background-color: ${c.bgHover} !important; color: ${c.textMain} !important; }
-        html.dark .markdown-body table tr:nth-child(2n) { background-color: rgba(255, 255, 255, 0.05) !important; }
-        html.dark .markdown-body a { color: ${c.primary} !important; }
-    
-        /* --- [V8.1 描述容器: 悬停层级与展开] --- */
-        .prts-desc-wrapper { position: relative; height: 24px; margin: 2px 0; width: 100%; z-index: 10; }
-        .prts-desc-wrapper:hover { z-index: 100; }
-        .prts-desc-content { width: 100%; height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: #6b7280; line-height: 24px; border-radius: 4px; background-color: transparent; }
-        .prts-desc-wrapper:hover .prts-desc-content { position: absolute; top: -4px; left: -8px; width: calc(100% + 16px); height: auto; white-space: normal; overflow: visible; background-color: #ffffff; color: #374151; padding: 4px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); border: 1px solid #e5e7eb; }
-        html.dark .prts-desc-content { color: #9ca3af; }
-        html.dark .prts-desc-wrapper:hover .prts-desc-content { background-color: #232326; color: #e5e7eb; border-color: #3f3f46; box-shadow: 0 4px 16px rgba(0,0,0,0.6); }
-    
-        /* --- [视频链接与筛选栏] --- */
-        .prts-video-box { margin-top: 2px; margin-bottom: 6px; display: flex; align-items: center; position: relative; z-index: 1; }
-        .prts-bili-link { display: inline-flex !important; align-items: center; color: #94a3b8 !important; font-size: 12px !important; font-weight: normal !important; text-decoration: none !important; padding: 2px 0; background: transparent !important; border: none !important; transition: color 0.2s; cursor: pointer; }
-        .prts-bili-link:hover { color: #fb7299 !important; text-decoration: underline !important; }
-        html.dark .prts-bili-link { color: #52525b !important; }
-        html.dark .prts-bili-link:hover { color: #fb7299 !important; }
-        .prts-bili-link .bp4-icon { margin-right: 4px; font-size: 11px; }
-    
-        /* --- [V10.2 原生风格筛选按钮] --- */
-        #prts-filter-bar { display: flex; align-items: center; flex-wrap: wrap; width: 100%; margin-top: 8px; margin-bottom: 12px; padding-left: 2px; }
-        .prts-btn { background: none !important; background-color: transparent !important; border: none !important; box-shadow: none !important; cursor: pointer !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; padding: 6px 12px !important; font-size: 14px !important; color: #5c7080 !important; border-radius: 3px !important; min-height: 30px !important; line-height: 1 !important; font-weight: normal !important; margin-right: 4px !important; transition: background-color 0.1s cubic-bezier(0.4, 1, 0.75, 0.9) !important; }
-        .prts-btn:hover { background-color: rgba(167, 182, 194, 0.3) !important; color: #1c2127 !important; text-decoration: none !important; }
-        .prts-btn.prts-active { background-color: rgba(167, 182, 194, 0.3) !important; color: #2563eb !important; font-weight: 600 !important; }
-        html.dark .prts-btn { color: #a7b6c2 !important; }
-        html.dark .prts-btn:hover, html.dark .prts-btn.prts-active { background-color: rgba(138, 155, 168, 0.15) !important; color: #f5f8fa !important; }
-        html.dark .prts-btn.prts-active { color: #60a5fa !important; }
-        .prts-btn .bp4-icon { margin-right: 7px !important; color: #5c7080 !important; fill: currentColor !important; }
-        html.dark .prts-btn .bp4-icon { color: #a7b6c2 !important; }
-        .prts-btn.prts-active .bp4-icon { color: #2563eb !important; }
-        html.dark .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
-        .prts-divider { width: 1px; height: 16px; background-color: rgba(16, 22, 26, 0.15); margin: 0 8px; display: inline-block; }
-        html.dark .prts-divider { background-color: rgba(255, 255, 255, 0.15); }
-    
-        /* --- [状态标签与卡片置灰] --- */
-        .prts-status-label { margin-top: 12px !important; padding-top: 8px !important; border-top: 1px dashed #e5e7eb !important; font-size: 13px !important; font-weight: 700 !important; display: flex !important; align-items: center !important; line-height: 1.5 !important; }
-        html.dark .prts-status-label { border-top-color: #444 !important; }
-        .prts-label-support { color: #d97706 !important; }
-        html.dark .prts-label-support { color: #ff9d2e !important; }
-        .prts-label-missing { color: #dc2626 !important; }
-        html.dark .prts-label-missing { color: #f87171 !important; }
-        .prts-card-gray .bp4-card { opacity: 0.4 !important; filter: grayscale(0.9) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; background-color: #f3f4f6 !important; }
-        html.dark .prts-card-gray .bp4-card { background-color: #1a1a1a !important; }
-        .prts-card-gray:hover .bp4-card { opacity: 0.95 !important; filter: grayscale(0) !important; }
-    
-        /* --- [V6.1 关卡徽章与干员网格] --- */
-        .prts-level-badge { display: inline-flex; align-items: center; justify-content: center; background-color: #3b82f6; color: #ffffff !important; padding: 2px 8px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 700; font-size: 0.95em; margin-right: 8px; border: 1px solid #2563eb; vertical-align: middle; line-height: 1.2; flex-shrink: 0; box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2); }
-        html.dark .prts-level-badge { background-color: #1e3a8a; border-color: #1e40af; color: #e0e7ff !important; box-shadow: none; }
-        .prts-op-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; align-items: center; }
-        .prts-op-grid .bp4-popover2-target { display: inline-flex !important; margin: 0 !important; padding: 0 !important; vertical-align: top !important; height: 42px !important; }
-    
-        /* --- [干员头像/文字容器] --- */
-        .prts-op-item, .prts-op-text { position: relative; width: 42px; height: 42px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; box-sizing: border-box; }
-        .prts-op-item:hover, .prts-op-text:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 50; }
-        .prts-op-item { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-        html.dark .prts-op-item { background-color: #1f2937; border-color: #374151; }
-        .prts-op-item:hover { border-color: #3b82f6; }
-        html.dark .prts-op-item:hover { border-color: #60a5fa; }
-        .prts-op-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
-        .prts-op-text { display: flex; align-items: center; justify-content: center; background-color: #f1f5f9; color: #475569; border: 1px dashed #94a3b8; border-radius: 4px; font-size: 12px; font-weight: bold; text-align: center; line-height: 1.1; padding: 2px; word-break: break-all; }
-        .prts-op-text:hover { border-style: solid; border-color: #3b82f6; background-color: #fff; }
-        html.dark .prts-op-text { background-color: #27272a; color: #d1d5db; border-color: #52525b; }
-        html.dark .prts-op-text:hover { background-color: #27272a; border-color: #60a5fa; }
-    
-        /* --- [原生 Tooltip 模拟] --- */
-        [data-prts-tooltip]:hover::after { content: attr(data-prts-tooltip); position: absolute; bottom: 115%; left: 50%; transform: translateX(-50%); background-color: #30404d; color: #f5f8fa; padding: 5px 8px; font-size: 12px; border-radius: 3px; white-space: nowrap; pointer-events: none; box-shadow: 0 0 0 1px rgba(16,22,26,.1), 0 2px 4px rgba(16,22,26,.2), 0 8px 24px rgba(16,22,26,.2); z-index: 100; }
-        [data-prts-tooltip]:hover::before { content: ""; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); border-width: 5px; border-style: solid; border-color: #30404d transparent transparent transparent; z-index: 100; }
-        html.dark [data-prts-tooltip]:hover::after { background-color: #202b33; }
-        html.dark [data-prts-tooltip]:hover::before { border-color: #202b33 transparent transparent transparent; }
-    
-        /* --- [V11.5 技能角标] --- */
-        .prts-op-skill, .prts-popover-skill { position: absolute; bottom: 0; right: 0; z-index: 10; font-size: 11px !important; font-weight: 800 !important; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.1; text-align: center; padding: 1px 4px; min-width: 14px; border-top-left-radius: 4px; background-color: #18181b !important; color: #f3f4f6 !important; border-top: 1px solid rgba(255, 255, 255, 0.3); border-left: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); pointer-events: none; }
-        html.dark .bp4-popover2-content .prts-popover-skill, html.dark .prts-popover-skill { background-color: #18181b !important; color: #f3f4f6 !important; border-color: rgba(255, 255, 255, 0.3) !important; }
-        .bp4-popover2-content .prts-popover-skill { background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb; }
-    
-        /* --- [V5.0 Tooltip/气泡] --- */
-        html.dark .bp4-popover2-content { background-color: #262626 !important; color: #ffffff !important; border: 1px solid #404040 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
-        html.dark .bp4-popover2-content, html.dark .bp4-popover2-content * { color: #ffffff !important; }
-        html.dark .bp4-popover2-arrow-fill { fill: #262626 !important; }
-        html.dark .bp4-popover2-arrow-border { fill: #404040 !important; }
-        .bp4-tag[data-op-extracted="true"] { display: none !important; }
-    
-        /* --- [V6.3 侧边栏与公告] --- */
-        .prts-sidebar-collapsed { max-height: 48px !important; overflow: hidden !important; cursor: pointer !important; opacity: 0.9; }
-        .prts-sidebar-header-icon { display: flex; align-items: center; justify-content: space-between; }
-        .prts-sidebar-header-icon::after { content: "▼"; font-size: 0.8em; color: #9ca3af; transition: transform 0.3s; }
-        .prts-sidebar-expanded .prts-sidebar-header-icon::after { transform: rotate(180deg); }
-        .prts-notice-btn { cursor: pointer !important; border-left: 4px solid #3b82f6 !important; transition: transform 0.2s, box-shadow 0.2s !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-height: 48px !important; padding: 0 16px !important; }
-        .prts-notice-btn:hover { transform: translateX(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; }
-        .prts-notice-btn > div:not(.bp4-heading), .prts-notice-btn ul { display: none !important; }
-        .prts-notice-btn h4.bp4-heading { display: flex !important; align-items: center !important; margin: 0 !important; width: 100% !important; opacity: 1 !important; visibility: visible !important; color: #1f2937 !important; }
-        html.dark .prts-notice-btn h4.bp4-heading { color: #f3f4f6 !important; }
-        .prts-dialog-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-weight: bold; margin-right: 8px; color: #fff; vertical-align: middle; }
-        .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; } .prts-tag-event { background-color: #3b82f6; } .prts-tag-note { background-color: #64748b; }
-    
-        /* --- [V9.4 悬浮球 & 控制面板] --- */
-        #prts-float-container { position: fixed; z-index: 9999; display: flex; align-items: center; opacity: 0.6; user-select: none; transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-        #prts-float-container:hover, #prts-float-container.prts-float-open { opacity: 1; }
-        #prts-float-container.is-dragging { opacity: 1; transition: none !important; }
-        #prts-float-container.is-snapping { transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-        #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 12px)); }
-        #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 12px)); }
-        .prts-float-btn { width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none; border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2; }
-        .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
-        #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
-        html.dark .prts-float-btn { background-color: #232326; border-color: #3f3f46; color: #e5e7eb; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
-        .prts-settings-panel { position: absolute; top: 0; width: 260px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 1; visibility: hidden; opacity: 0; pointer-events: none; transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1); right: 55px; left: auto; transform: translateX(20px) scale(0.95); transform-origin: top right; }
-        #prts-float-container.snap-left .prts-settings-panel { left: 55px; right: auto; transform: translateX(-20px) scale(0.95); transform-origin: top left; }
-        #prts-float-container.prts-float-open .prts-settings-panel { visibility: visible; opacity: 1; transform: translateX(0) scale(1); pointer-events: auto; }
-        html.dark .prts-settings-panel { background: #18181c; border-color: #3f3f46; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
-        .prts-panel-title { font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #1f2937; display: flex; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f3f4f6; }
-        html.dark .prts-panel-title { color: #f3f4f6; border-color: #3f3f46; }
-        .prts-panel-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; color: #4b5563; }
-        html.dark .prts-panel-item { color: #d1d5db; }
-        .prts-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
-        .prts-switch input { opacity: 0; width: 0; height: 0; }
-        .prts-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
-        .prts-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .prts-slider { background-color: #3b82f6; }
-        input:checked + .prts-slider:before { transform: translateX(16px); }
-        html.dark .prts-slider { background-color: #4b5563; }
-        html.dark input:checked + .prts-slider { background-color: #2563eb; }
-    
-        /* --- [V11.3 弹窗网格] --- */
-        .prts-popover-grid { display: flex; flex-wrap: wrap; gap: 6px; max-width: 320px; padding: 4px; }
-        .prts-popover-item { position: relative; width: 48px; height: 48px; background-color: #1f2937; border: 1px solid #e5e7eb; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
-        html.dark .prts-popover-item { border-color: #4b5563; }
-        .prts-popover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
-        .prts-popover-skill { position: absolute; bottom: 0; right: 0; background: rgba(0,0,0,0.7); color: #fff; font-size: 10px; padding: 1px 4px; border-top-left-radius: 4px; line-height: 1.2; }
-        
-        /* --- [V12.7 终极修复：通用下拉菜单/Select/Minimal 暗黑适配] --- */
+    /* ==========================================================================
+       1. [核心基础] 全局暗黑模式与布局
+       ========================================================================== */
+    html.dark, html.dark body, html.dark #root, html.dark #app,
+    html.dark .bg-zinc-50, html.dark .bg-slate-50, html.dark .bg-gray-50, html.dark .bg-white,
+    html.dark .bg-zinc-100, html.dark .bg-slate-100, html.dark .bg-gray-100 {
+        background-color: ${c.bgDeep} !important;
+        color: ${c.textMain} !important;
+    }
 
-        /* 1. 覆盖所有通过 Portal 生成的弹出层内容 */
-        /* 涵盖 Select, Suggest, Minimal, ContextMenu 等所有类型 */
-        html.dark .bp4-portal .bp4-popover2-content,
-        html.dark .bp4-portal .bp4-menu {
-            background-color: #232326 !important; /* 强制深色卡片背景 */
-            color: #e0e0e0 !important;            /* 强制浅色文字 */
-            border: 1px solid #3f3f46 !important; /* 深灰边框 */
-            box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important; /* 深色投影 */
-        }
+    /* 滚动条与自动填充修复 */
+    html.dark input:-webkit-autofill,
+    html.dark input:-webkit-autofill:hover,
+    html.dark input:-webkit-autofill:focus,
+    html.dark input:-webkit-autofill:active {
+        -webkit-box-shadow: 0 0 0 30px ${c.bgHover} inset !important;
+        -webkit-text-fill-color: #fff !important;
+        caret-color: #fff !important;
+        transition: background-color 5000s ease-in-out 0s;
+    }
 
-        /* 2. 专门针对 Select 下拉框 (listbox-xx) 的容器修复 */
-        html.dark .bp4-select-popover .bp4-popover2-content {
-            background-color: #232326 !important;
-            color: #e0e0e0 !important;
-        }
+    /* ==========================================================================
+       2. [Blueprint 组件] 覆盖框架默认样式
+       ========================================================================== */
+    /* 2.1 容器：导航、抽屉、弹窗、卡片 */
+    html.dark .bp4-navbar {
+        background-color: ${c.bgCard} !important;
+        border-bottom: 1px solid ${c.border} !important;
+        box-shadow: none !important;
+    }
+    
+    html.dark .bp4-card, html.dark .card-container {
+        background-color: ${c.bgCard} !important;
+        border: 1px solid ${c.border} !important;
+        box-shadow: none !important;
+        color: ${c.textMain} !important;
+    }
 
-        /* 3. 专门针对 Minimal (极简) 弹窗的修复 */
-        /* 您提到的 "bp4-minimal ... !p-0.overflow-hidden" 这种结构 */
-        html.dark .bp4-popover2.bp4-minimal .bp4-popover2-content {
-            background-color: #232326 !important;
-            border: 1px solid #3f3f46 !important;
-        }
+    html.dark .bp4-drawer, html.dark .bp4-drawer > section, 
+    html.dark .bp4-overlay-content, html.dark .bp4-dialog {
+        background-color: ${c.bgCard} !important;
+        color: ${c.textMain} !important;
+        box-shadow: 0 0 0 1px ${c.border}, 0 4px 8px rgba(0,0,0,0.5) !important;
+    }
 
-        /* 4. 菜单项交互状态 (Hover/Active/Selected) */
-        html.dark .bp4-menu-item {
-            background-color: transparent !important;
-            color: #e0e0e0 !important;
-        }
-        
-        /* 鼠标悬停 或 选中项 */
-        html.dark .bp4-menu-item:hover,
-        html.dark .bp4-menu-item.bp4-active,
-        html.dark .bp4-menu-item.bp4-selected,
-        html.dark .bp4-menu-item.bp4-intent-primary.bp4-active {
-            background-color: #3b82f6 !important; /* 罗德岛蓝高亮 */
-            color: #ffffff !important;            /* 白字 */
-        }
+    html.dark .bp4-drawer header, html.dark .bp4-dialog-header,
+    html.dark .bp4-drawer .bg-slate-100 {
+        background-color: ${c.bgCard} !important;
+        border-bottom: 1px solid ${c.border} !important;
+        color: ${c.textMain} !important;
+    }
 
-        /* 5. 修复弹窗连接处的小三角 (Arrow) */
-        /* 让它和背景色融为一体 */
-        html.dark .bp4-popover2-arrow-fill {
-            fill: #232326 !important;
-        }
-        html.dark .bp4-popover2-arrow-border {
-            fill: #3f3f46 !important;
-        }
-    `;
+    html.dark .bp4-dialog-footer, html.dark .bp4-dialog-footer-fixed {
+        background-color: ${c.bgCard} !important;
+        border-top: 1px solid ${c.border} !important;
+        color: ${c.textMain} !important;
+    }
+
+    html.dark .bp4-dialog-header .bp4-heading { color: #fff !important; }
+    html.dark .bp4-dialog-close-button .bp4-icon { color: ${c.textSub} !important; }
+
+    /* 2.2 交互：按钮、输入框、Tab */
+    html.dark .bp4-button {
+        background-color: ${c.bgHover} !important;
+        background-image: none !important;
+        border: 1px solid ${c.border} !important;
+        color: ${c.textMain} !important;
+        box-shadow: none !important;
+    }
+    html.dark .bp4-button:hover { background-color: #3e3e42 !important; }
+    html.dark .bp4-button.bp4-intent-primary {
+        background-color: ${c.primary} !important;
+        color: #fff !important;
+        border: none !important;
+    }
+
+    html.dark .bp4-input, html.dark textarea, html.dark select,
+    html.dark .bp4-dialog .bp4-input {
+        background-color: ${c.bgHover} !important;
+        color: #fff !important;
+        border: 1px solid ${c.border} !important;
+        box-shadow: none !important;
+    }
+    html.dark .bp4-input::placeholder { color: #666 !important; }
+
+    html.dark .bp4-tab { color: ${c.textSub} !important; }
+    html.dark .bp4-tab[aria-selected="true"] { color: ${c.primary} !important; }
+
+    /* 2.3 浮层与菜单 (终极修复合并版) */
+    /* 覆盖所有通过 Portal 生成的弹出层 (Select, Suggest, ContextMenu) */
+    html.dark .bp4-portal .bp4-popover2-content,
+    html.dark .bp4-portal .bp4-menu,
+    html.dark .bp4-select-popover .bp4-popover2-content,
+    html.dark .bp4-popover2.bp4-minimal .bp4-popover2-content,
+    html.dark .bp4-popover2-content {
+        background-color: #232326 !important;
+        color: #e0e0e0 !important;
+        border: 1px solid #3f3f46 !important;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
+    }
+    html.dark .bp4-popover2-content * { color: #e0e0e0; }
+
+    /* 菜单项交互 */
+    html.dark .bp4-menu-item { color: ${c.textMain} !important; background-color: transparent !important; }
+    html.dark .bp4-menu-item:hover,
+    html.dark .bp4-menu-item.bp4-active,
+    html.dark .bp4-menu-item.bp4-selected,
+    html.dark .bp4-menu-item.bp4-intent-primary.bp4-active {
+        background-color: ${c.primary} !important;
+        color: #fff !important;
+    }
+    html.dark .bp4-menu-item.bp4-disabled {
+        color: ${c.textSub} !important;
+        background-color: transparent !important;
+    }
+
+    /* 修复弹窗箭头颜色 */
+    html.dark .bp4-popover2-arrow-fill { fill: #232326 !important; }
+    html.dark .bp4-popover2-arrow-border { fill: #3f3f46 !important; }
+
+    /* ==========================================================================
+       3. [通用工具] 颜色修正与第三方内容
+       ========================================================================== */
+    /* 3.1 文字与标题颜色 */
+    html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5,
+    html.dark .bp4-heading, html.dark strong { color: #fff !important; }
+    
+    html.dark .text-gray-700, html.dark .text-zinc-600, 
+    html.dark .text-slate-900, html.dark .text-gray-800 { color: ${c.textMain} !important; }
+    
+    html.dark .text-gray-500, html.dark .text-zinc-500 { color: ${c.textSub} !important; }
+
+    /* 3.2 边框颜色修正 */
+    html.dark .bp4-card.border-l-4 { border-left-width: 4px !important; }
+    html.dark .border-sky-700 { border-left-color: #0369a1 !important; }
+    html.dark .border-pink-700 { border-left-color: #be185d !important; }
+    html.dark .border-violet-700 { border-left-color: #6d28d9 !important; }
+    html.dark .border-red-700 { border-left-color: #b91c1c !important; }
+    html.dark .border-emerald-700 { border-left-color: #047857 !important; }
+    html.dark .border-yellow-700 { border-left-color: #a16207 !important; }
+
+    /* 3.3 Tags 与 Markdown */
+    html.dark .bp4-tag { background-color: #333 !important; color: #ccc !important; border: 1px solid #444 !important; }
+    html.dark .bp4-tag[class*="bg-red-"], html.dark .bp4-tag.bg-red-400 {
+        background-color: ${c.tagRedBg} !important;
+        color: ${c.tagRedText} !important;
+        border-color: ${c.tagRedBorder} !important;
+    }
+    html.dark .bg-orange-200 { background-color: #4a3020 !important; border-color: #6d4020 !important; }
+    
+    /* 隐藏特定 Tag */
+    .bp4-tag[data-op-extracted="true"] { display: none !important; }
+
+    html.dark .markdown-body { color: ${c.textMain} !important; background: transparent !important; }
+    html.dark .markdown-body pre, html.dark .markdown-body code { background-color: ${c.bgHover} !important; color: ${c.textMain} !important; }
+    html.dark .markdown-body table tr:nth-child(2n) { background-color: rgba(255, 255, 255, 0.05) !important; }
+    html.dark .markdown-body a { color: ${c.primary} !important; }
+
+    /* ==========================================================================
+       4. [PRTS 业务模块] 专有组件样式
+       ========================================================================== */
+    
+    /* 4.1 描述容器 (Hover 展开) */
+    .prts-desc-wrapper { position: relative; height: 24px; margin: 2px 0; width: 100%; z-index: 10; }
+    .prts-desc-wrapper:hover { z-index: 100; }
+    .prts-desc-content {
+        width: 100%; height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        font-size: 13px; color: #6b7280; line-height: 24px; border-radius: 4px; background-color: transparent;
+    }
+    .prts-desc-wrapper:hover .prts-desc-content {
+        position: absolute; top: -4px; left: -8px; width: calc(100% + 16px); height: auto;
+        white-space: normal; overflow: visible; background-color: #ffffff; color: #374151;
+        padding: 4px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); border: 1px solid #e5e7eb;
+    }
+    html.dark .prts-desc-content { color: #9ca3af; }
+    html.dark .prts-desc-wrapper:hover .prts-desc-content {
+        background-color: #232326; color: #e5e7eb; border-color: #3f3f46;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    }
+
+    /* 4.2 视频链接 */
+    .prts-video-box { margin-top: 2px; margin-bottom: 6px; display: flex; align-items: center; position: relative; z-index: 1; }
+    .prts-bili-link {
+        display: inline-flex !important; align-items: center; color: #94a3b8 !important;
+        font-size: 12px !important; font-weight: normal !important; text-decoration: none !important;
+        padding: 2px 0; background: transparent !important; border: none !important; transition: color 0.2s; cursor: pointer;
+    }
+    .prts-bili-link:hover { color: #fb7299 !important; text-decoration: underline !important; }
+    html.dark .prts-bili-link { color: #52525b !important; }
+    html.dark .prts-bili-link:hover { color: #fb7299 !important; }
+    .prts-bili-link .bp4-icon { margin-right: 4px; font-size: 11px; }
+
+    /* 4.3 筛选栏与按钮 */
+    #prts-filter-bar { display: flex; align-items: center; flex-wrap: wrap; width: 100%; margin-top: 8px; margin-bottom: 12px; padding-left: 2px; }
+    .prts-btn {
+        background: none !important; background-color: transparent !important; border: none !important;
+        box-shadow: none !important; cursor: pointer !important; display: inline-flex !important;
+        align-items: center !important; justify-content: center !important; padding: 6px 12px !important;
+        font-size: 14px !important; color: #5c7080 !important; border-radius: 3px !important;
+        min-height: 30px !important; line-height: 1 !important; font-weight: normal !important;
+        margin-right: 4px !important; transition: background-color 0.1s cubic-bezier(0.4, 1, 0.75, 0.9) !important;
+    }
+    .prts-btn:hover { background-color: rgba(167, 182, 194, 0.3) !important; color: #1c2127 !important; text-decoration: none !important; }
+    .prts-btn.prts-active { background-color: rgba(167, 182, 194, 0.3) !important; color: #2563eb !important; font-weight: 600 !important; }
+    .prts-btn .bp4-icon { margin-right: 7px !important; color: #5c7080 !important; fill: currentColor !important; }
+    .prts-btn.prts-active .bp4-icon { color: #2563eb !important; }
+
+    html.dark .prts-btn { color: #a7b6c2 !important; }
+    html.dark .prts-btn:hover, html.dark .prts-btn.prts-active {
+        background-color: rgba(138, 155, 168, 0.15) !important; color: #f5f8fa !important;
+    }
+    html.dark .prts-btn.prts-active { color: #60a5fa !important; }
+    html.dark .prts-btn .bp4-icon { color: #a7b6c2 !important; }
+    html.dark .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
+
+    .prts-divider { width: 1px; height: 16px; background-color: rgba(16, 22, 26, 0.15); margin: 0 8px; display: inline-block; }
+    html.dark .prts-divider { background-color: rgba(255, 255, 255, 0.15); }
+
+    /* 4.4 状态标签与卡片置灰 */
+    .prts-status-label {
+        margin-top: 12px !important; padding-top: 8px !important; border-top: 1px dashed #e5e7eb !important;
+        font-size: 13px !important; font-weight: 700 !important; display: flex !important; align-items: center !important; line-height: 1.5 !important;
+    }
+    html.dark .prts-status-label { border-top-color: #444 !important; }
+    .prts-label-support { color: #d97706 !important; }
+    html.dark .prts-label-support { color: #ff9d2e !important; }
+    .prts-label-missing { color: #dc2626 !important; }
+    html.dark .prts-label-missing { color: #f87171 !important; }
+    
+    .prts-card-gray .bp4-card {
+        opacity: 0.4 !important; filter: grayscale(0.9) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; background-color: #f3f4f6 !important;
+    }
+    html.dark .prts-card-gray .bp4-card { background-color: #1a1a1a !important; }
+    .prts-card-gray:hover .bp4-card { opacity: 0.95 !important; filter: grayscale(0) !important; }
+
+    /* 4.5 干员显示 (Grid, Items, Avatar, Badges) */
+    .prts-op-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; align-items: center; }
+    .prts-op-grid .bp4-popover2-target { display: inline-flex !important; margin: 0 !important; padding: 0 !important; vertical-align: top !important; height: 42px !important; }
+
+    .prts-op-item, .prts-op-text {
+        position: relative; width: 42px; height: 42px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        transition: transform 0.2s, box-shadow 0.2s; box-sizing: border-box;
+    }
+    .prts-op-item:hover, .prts-op-text:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 50; }
+    
+    .prts-op-item { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+    html.dark .prts-op-item { background-color: #1f2937; border-color: #374151; }
+    .prts-op-item:hover { border-color: #3b82f6; }
+    html.dark .prts-op-item:hover { border-color: #60a5fa; }
+    
+    .prts-op-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
+    
+    .prts-op-text {
+        display: flex; align-items: center; justify-content: center; background-color: #f1f5f9; color: #475569;
+        border: 1px dashed #94a3b8; border-radius: 4px; font-size: 12px; font-weight: bold; text-align: center;
+        line-height: 1.1; padding: 2px; word-break: break-all;
+    }
+    .prts-op-text:hover { border-style: solid; border-color: #3b82f6; background-color: #fff; }
+    html.dark .prts-op-text { background-color: #27272a; color: #d1d5db; border-color: #52525b; }
+    html.dark .prts-op-text:hover { background-color: #27272a; border-color: #60a5fa; }
+
+    /* 关卡徽章 */
+    .prts-level-badge {
+        display: inline-flex; align-items: center; justify-content: center; background-color: #3b82f6;
+        color: #ffffff !important; padding: 2px 8px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace;
+        font-weight: 700; font-size: 0.95em; margin-right: 8px; border: 1px solid #2563eb; vertical-align: middle;
+        line-height: 1.2; flex-shrink: 0; box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
+    }
+    html.dark .prts-level-badge {
+        background-color: #1e3a8a; border-color: #1e40af; color: #e0e7ff !important; box-shadow: none;
+    }
+
+    /* 技能角标与 Grid Popover */
+    .prts-popover-grid { display: flex; flex-wrap: wrap; gap: 6px; max-width: 320px; padding: 4px; }
+    .prts-popover-item {
+        position: relative; width: 48px; height: 48px; background-color: #1f2937;
+        border: 1px solid #e5e7eb; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    }
+    html.dark .prts-popover-item { border-color: #4b5563; }
+    .prts-popover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
+
+    .prts-op-skill, .prts-popover-skill {
+        position: absolute; bottom: 0; right: 0; z-index: 10; font-size: 11px !important; font-weight: 800 !important;
+        font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.1; text-align: center;
+        padding: 1px 4px; min-width: 14px; border-top-left-radius: 4px; 
+        background-color: #18181b !important; color: #f3f4f6 !important;
+        border-top: 1px solid rgba(255, 255, 255, 0.3); border-left: 1px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); pointer-events: none;
+    }
+    /* 浅色模式下的 Popover 技能角标样式修正 */
+    .bp4-popover2-content .prts-popover-skill {
+        background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb;
+    }
+    /* 深色模式强制覆盖 */
+    html.dark .bp4-popover2-content .prts-popover-skill, 
+    html.dark .prts-popover-skill {
+        background-color: #18181b !important; color: #f3f4f6 !important; border-color: rgba(255, 255, 255, 0.3) !important;
+    }
+
+    /* 4.6 模拟 Tooltip */
+    [data-prts-tooltip]:hover::after {
+        content: attr(data-prts-tooltip); position: absolute; bottom: 115%; left: 50%; transform: translateX(-50%);
+        background-color: #30404d; color: #f5f8fa; padding: 5px 8px; font-size: 12px; border-radius: 3px;
+        white-space: nowrap; pointer-events: none; box-shadow: 0 0 0 1px rgba(16,22,26,.1), 0 2px 4px rgba(16,22,26,.2), 0 8px 24px rgba(16,22,26,.2); z-index: 100;
+    }
+    [data-prts-tooltip]:hover::before {
+        content: ""; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
+        border-width: 5px; border-style: solid; border-color: #30404d transparent transparent transparent; z-index: 100;
+    }
+    html.dark [data-prts-tooltip]:hover::after { background-color: #202b33; }
+    html.dark [data-prts-tooltip]:hover::before { border-color: #202b33 transparent transparent transparent; }
+
+    /* 4.7 侧边栏与公告 */
+    .prts-sidebar-collapsed { max-height: 48px !important; overflow: hidden !important; cursor: pointer !important; opacity: 0.9; }
+    .prts-sidebar-header-icon { display: flex; align-items: center; justify-content: space-between; }
+    .prts-sidebar-header-icon::after { content: "▼"; font-size: 0.8em; color: #9ca3af; transition: transform 0.3s; }
+    .prts-sidebar-expanded .prts-sidebar-header-icon::after { transform: rotate(180deg); }
+    
+    .prts-notice-btn {
+        cursor: pointer !important; border-left: 4px solid #3b82f6 !important;
+        transition: transform 0.2s, box-shadow 0.2s !important; display: flex !important;
+        flex-direction: column !important; justify-content: center !important; min-height: 48px !important; padding: 0 16px !important;
+    }
+    .prts-notice-btn:hover { transform: translateX(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; }
+    .prts-notice-btn > div:not(.bp4-heading), .prts-notice-btn ul { display: none !important; }
+    .prts-notice-btn h4.bp4-heading {
+        display: flex !important; align-items: center !important; margin: 0 !important;
+        width: 100% !important; opacity: 1 !important; visibility: visible !important; color: #1f2937 !important;
+    }
+    html.dark .prts-notice-btn h4.bp4-heading { color: #f3f4f6 !important; }
+    
+    .prts-dialog-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-weight: bold; margin-right: 8px; color: #fff; vertical-align: middle; }
+    .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; }
+    .prts-tag-event { background-color: #3b82f6; } .prts-tag-note { background-color: #64748b; }
+
+    /* 4.8 悬浮球 & 控制面板 */
+    #prts-float-container {
+        position: fixed; z-index: 9999; display: flex; align-items: center; opacity: 0.6; user-select: none;
+        transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    #prts-float-container:hover, #prts-float-container.prts-float-open { opacity: 1; }
+    #prts-float-container.is-dragging { opacity: 1; transition: none !important; }
+    #prts-float-container.is-snapping { transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+    #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 12px)); }
+    #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 12px)); }
+    
+    .prts-float-btn {
+        width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none;
+        border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex;
+        align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2;
+    }
+    .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
+    #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
+    html.dark .prts-float-btn { background-color: #232326; border-color: #3f3f46; color: #e5e7eb; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
+    
+    .prts-settings-panel {
+        position: absolute; top: 0; width: 260px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
+        padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 1; visibility: hidden; opacity: 0; pointer-events: none;
+        transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1); right: 55px; left: auto; transform: translateX(20px) scale(0.95); transform-origin: top right;
+    }
+    #prts-float-container.snap-left .prts-settings-panel { left: 55px; right: auto; transform: translateX(-20px) scale(0.95); transform-origin: top left; }
+    #prts-float-container.prts-float-open .prts-settings-panel { visibility: visible; opacity: 1; transform: translateX(0) scale(1); pointer-events: auto; }
+    html.dark .prts-settings-panel { background: #18181c; border-color: #3f3f46; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
+    
+    .prts-panel-title { font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #1f2937; display: flex; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f3f4f6; }
+    html.dark .prts-panel-title { color: #f3f4f6; border-color: #3f3f46; }
+    .prts-panel-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; color: #4b5563; }
+    html.dark .prts-panel-item { color: #d1d5db; }
+    
+    .prts-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
+    .prts-switch input { opacity: 0; width: 0; height: 0; }
+    .prts-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+    .prts-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .prts-slider { background-color: #3b82f6; }
+    input:checked + .prts-slider:before { transform: translateX(16px); }
+    html.dark .prts-slider { background-color: #4b5563; }
+    html.dark input:checked + .prts-slider { background-color: #2563eb; }
+`;
 
     GM_addStyle(mergedStyles);
 
