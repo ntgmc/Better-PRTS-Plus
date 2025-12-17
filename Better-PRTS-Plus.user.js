@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.7.5
+// @version      2.7.6
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
@@ -212,6 +212,16 @@
         color: #fff !important;
         border: none !important;
     }
+    
+    html.dark .bp4-button.bp4-minimal.bp4-active.\\!text-inherit {
+    color: rgb(3 105 161 / var(--tw-bg-opacity)) !important;
+
+    .bp4-icon,
+    svg {
+      fill: currentColor !important;
+      color: inherit !important;
+    }
+  }
 
     /* 输入框基础样式 (Dark Mode) */
     html.dark .bp4-input, html.dark textarea, html.dark select,
