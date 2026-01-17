@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.7.6
-// @description  [整合版] 集成完美作业筛选、深度暗黑模式及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
+// @version      2.8.0
+// @description  [整合版] 集成完美作业筛选、及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
 // @icon         https://zoot.plus/favicon.ico
@@ -53,7 +53,6 @@
  * 5. 初始化与监听：MutationObserver 统一管理与入口函数。
  *
  * 版本号标识说明：
- * [V3.0] 暗黑模式核心
  * [V5.0] Tooltip/气泡交互
  * [V6.0] 卡片/列表视觉优化
  * [V8.0] 文本清洗与链接优化
@@ -72,21 +71,6 @@
 
     const OPS_STORAGE_KEY = 'prts_plus_user_ops';
     const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 可选值: 'GRAY' | 'HIDE'
-    const DARK_MODE_KEY = 'prts_plus_dark_mode_v3';
-
-    // [V3.0 样式配置] 罗德岛配色定义
-    const c = {
-        bgDeep: '#18181c',      // 全局深底
-        bgCard: '#232326',      // 卡片/弹窗
-        bgHover: '#2d2d30',     // 悬浮/输入框背景
-        border: '#38383b',      // 边框
-        textMain: '#e0e0e0',    // 主字
-        textSub: '#9ca3af',     // 辅字
-        primary: '#5c8ae6',     // 罗德岛蓝
-        tagRedBg: '#4a1e1e',    // 突袭-暗红背景
-        tagRedText: '#fca5a5',  // 突袭-亮粉红文字
-        tagRedBorder: '#7f1d1d' // 突袭-深红边框
-    };
 
     // [V9.4 设置配置] 功能开关默认状态
     const CONFIG = {
@@ -103,7 +87,6 @@
     let isProcessingFilter = false;
     let rafId = null;
     let filterDebounceTimer = null;
-    let isDarkMode = localStorage.getItem(DARK_MODE_KEY) === null ? true : (localStorage.getItem(DARK_MODE_KEY) === 'true');
 
     // =========================================================================
     //                            MODULE 2: 数据与样式
@@ -137,178 +120,6 @@
         outline: none !important;
     }
 
-    /* ==========================================================================
-       1. [核心基础] 全局暗黑模式与布局
-       ========================================================================== */
-    html.dark, html.dark body, html.dark #root, html.dark #app,
-    html.dark .bg-zinc-50, html.dark .bg-slate-50, html.dark .bg-gray-50, html.dark .bg-white,
-    html.dark .bg-zinc-100, html.dark .bg-slate-100, html.dark .bg-gray-100 {
-        background-color: ${c.bgDeep} !important;
-        color: ${c.textMain} !important;
-    }
-
-    /* 滚动条与自动填充修复 */
-    html.dark input:-webkit-autofill,
-    html.dark input:-webkit-autofill:hover,
-    html.dark input:-webkit-autofill:focus,
-    html.dark input:-webkit-autofill:active {
-        -webkit-box-shadow: 0 0 0 30px ${c.bgHover} inset !important;
-        -webkit-text-fill-color: #fff !important;
-        caret-color: #fff !important;
-        transition: background-color 5000s ease-in-out 0s;
-    }
-
-    /* ==========================================================================
-       2. [Blueprint 组件] 覆盖框架默认样式
-       ========================================================================== */
-    /* 2.1 容器：导航、抽屉、弹窗、卡片 */
-    html.dark .bp4-navbar {
-        background-color: ${c.bgCard} !important;
-        border-bottom: 1px solid ${c.border} !important;
-        box-shadow: none !important;
-    }
-    
-    html.dark .bp4-card, html.dark .card-container {
-        background-color: ${c.bgCard} !important;
-        border: 1px solid ${c.border} !important;
-        box-shadow: none !important;
-        color: ${c.textMain} !important;
-    }
-
-    html.dark .bp4-drawer, html.dark .bp4-drawer > section, 
-    html.dark .bp4-overlay-content, html.dark .bp4-dialog {
-        background-color: ${c.bgCard} !important;
-        color: ${c.textMain} !important;
-        box-shadow: 0 0 0 1px ${c.border}, 0 4px 8px rgba(0,0,0,0.5) !important;
-    }
-
-    html.dark .bp4-drawer header, html.dark .bp4-dialog-header,
-    html.dark .bp4-drawer .bg-slate-100 {
-        background-color: ${c.bgCard} !important;
-        border-bottom: 1px solid ${c.border} !important;
-        color: ${c.textMain} !important;
-    }
-
-    html.dark .bp4-dialog-footer, html.dark .bp4-dialog-footer-fixed {
-        background-color: ${c.bgCard} !important;
-        border-top: 1px solid ${c.border} !important;
-        color: ${c.textMain} !important;
-    }
-
-    html.dark .bp4-dialog-header .bp4-heading { color: #fff !important; }
-    html.dark .bp4-dialog-close-button .bp4-icon { color: ${c.textSub} !important; }
-
-    /* 2.2 交互：按钮、输入框、Tab */
-    html.dark .bp4-button {
-        background-color: ${c.bgHover} !important;
-        background-image: none !important;
-        border: 1px solid ${c.border} !important;
-        color: ${c.textMain} !important;
-        box-shadow: none !important;
-    }
-    html.dark .bp4-button:hover { background-color: #3e3e42 !important; }
-    html.dark .bp4-button.bp4-intent-primary {
-        background-color: ${c.primary} !important;
-        color: #fff !important;
-        border: none !important;
-    }
-    
-    html.dark .bp4-button.bp4-minimal.bp4-active.\\!text-inherit {
-    color: rgb(3 105 161 / var(--tw-bg-opacity)) !important;
-
-    .bp4-icon,
-    svg {
-      fill: currentColor !important;
-      color: inherit !important;
-    }
-  }
-
-    /* 输入框基础样式 (Dark Mode) */
-    html.dark .bp4-input, html.dark textarea, html.dark select,
-    html.dark .bp4-dialog .bp4-input {
-        background-color: ${c.bgHover} !important;
-        color: #fff !important;
-        border: 1px solid ${c.border} !important;
-        box-shadow: none !important;
-    }
-    
-    /* [暗黑模式] 输入框聚焦样式 (PR #508 Violet Style) */
-    /* 注意：由于使用了 html.dark 前缀，优先级高于上方的全局样式，因此暗黑模式下仍为紫色 */
-    html.dark .bp4-input:focus, 
-    html.dark .bp4-input.bp4-active,
-    html.dark textarea:focus,
-    html.dark select:focus,
-    html.dark .bp4-dialog .bp4-input:focus {
-        border-color: #8b5cf6 !important; /* Violet-500 */
-        box-shadow: inset 0 0 0 1px #8b5cf6, 0 0 0 2px rgba(139, 92, 246, 0.3) !important;
-        outline: none !important;
-    }
-
-    html.dark .bp4-input::placeholder { color: #666 !important; }
-
-    html.dark .bp4-tab { color: ${c.textSub} !important; }
-    html.dark .bp4-tab[aria-selected="true"] { color: ${c.primary} !important; }
-
-    /* 2.3 浮层与菜单 */
-    html.dark .bp4-portal .bp4-popover2-content,
-    html.dark .bp4-portal .bp4-menu,
-    html.dark .bp4-select-popover .bp4-popover2-content,
-    html.dark .bp4-popover2.bp4-minimal .bp4-popover2-content,
-    html.dark .bp4-popover2-content {
-        background-color: #232326 !important;
-        color: #e0e0e0 !important;
-        border: 1px solid #3f3f46 !important;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.6) !important;
-    }
-    html.dark .bp4-popover2-content * { color: #e0e0e0; }
-
-    html.dark .bp4-menu-item { color: ${c.textMain} !important; background-color: transparent !important; }
-    html.dark .bp4-menu-item:hover,
-    html.dark .bp4-menu-item.bp4-active,
-    html.dark .bp4-menu-item.bp4-selected,
-    html.dark .bp4-menu-item.bp4-intent-primary.bp4-active {
-        background-color: ${c.primary} !important;
-        color: #fff !important;
-    }
-    html.dark .bp4-menu-item.bp4-disabled {
-        color: ${c.textSub} !important;
-        background-color: transparent !important;
-    }
-
-    html.dark .bp4-popover2-arrow-fill { fill: #232326 !important; }
-    html.dark .bp4-popover2-arrow-border { fill: #3f3f46 !important; }
-
-    /* ==========================================================================
-       3. [通用工具] 颜色修正与第三方内容
-       ========================================================================== */
-    html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark h5,
-    html.dark .bp4-heading, html.dark strong { color: #fff !important; }
-    
-    html.dark .text-gray-700, html.dark .text-zinc-600, 
-    html.dark .text-slate-900, html.dark .text-gray-800 { color: ${c.textMain} !important; }
-    html.dark .text-gray-500, html.dark .text-zinc-500 { color: ${c.textSub} !important; }
-
-    html.dark .bp4-card.border-l-4 { border-left-width: 4px !important; }
-    html.dark .border-sky-700 { border-left-color: #0369a1 !important; }
-    html.dark .border-pink-700 { border-left-color: #be185d !important; }
-    html.dark .border-violet-700 { border-left-color: #6d28d9 !important; }
-    html.dark .border-red-700 { border-left-color: #b91c1c !important; }
-    html.dark .border-emerald-700 { border-left-color: #047857 !important; }
-    html.dark .border-yellow-700 { border-left-color: #a16207 !important; }
-
-    html.dark .bp4-tag { background-color: #333 !important; color: #ccc !important; border: 1px solid #444 !important; }
-    html.dark .bp4-tag[class*="bg-red-"], html.dark .bp4-tag.bg-red-400 {
-        background-color: ${c.tagRedBg} !important;
-        color: ${c.tagRedText} !important;
-        border-color: ${c.tagRedBorder} !important;
-    }
-    
-    .bp4-tag[data-op-extracted="true"] { display: none !important; }
-
-    html.dark .markdown-body { color: ${c.textMain} !important; background: transparent !important; }
-    html.dark .markdown-body pre, html.dark .markdown-body code { background-color: ${c.bgHover} !important; color: ${c.textMain} !important; }
-    html.dark .markdown-body table tr:nth-child(2n) { background-color: rgba(255, 255, 255, 0.05) !important; }
-    html.dark .markdown-body a { color: ${c.primary} !important; }
 
     /* ==========================================================================
        4. [PRTS 业务模块] 专有组件样式
@@ -326,11 +137,6 @@
         white-space: normal; overflow: visible; background-color: #ffffff; color: #374151;
         padding: 4px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); border: 1px solid #e5e7eb;
     }
-    html.dark .prts-desc-content { color: #9ca3af; }
-    html.dark .prts-desc-wrapper:hover .prts-desc-content {
-        background-color: #232326; color: #e5e7eb; border-color: #3f3f46;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.6);
-    }
 
     /* 4.2 视频链接 */
     .prts-video-box { margin-top: 2px; margin-bottom: 6px; display: flex; align-items: center; position: relative; z-index: 1; }
@@ -340,8 +146,6 @@
         padding: 2px 0; background: transparent !important; border: none !important; transition: color 0.2s; cursor: pointer;
     }
     .prts-bili-link:hover { color: #fb7299 !important; text-decoration: underline !important; }
-    html.dark .prts-bili-link { color: #52525b !important; }
-    html.dark .prts-bili-link:hover { color: #fb7299 !important; }
     .prts-bili-link .bp4-icon { margin-right: 4px; font-size: 11px; }
 
     /* 4.3 筛选栏与按钮 */
@@ -359,66 +163,24 @@
     .prts-btn .bp4-icon { margin-right: 7px !important; color: #5c7080 !important; fill: currentColor !important; }
     .prts-btn.prts-active .bp4-icon { color: #2563eb !important; }
 
-    html.dark .prts-btn { color: #a7b6c2 !important; }
-    html.dark .prts-btn:hover, html.dark .prts-btn.prts-active {
-        background-color: rgba(138, 155, 168, 0.15) !important; color: #f5f8fa !important;
-    }
-    html.dark .prts-btn.prts-active { color: #60a5fa !important; }
-    html.dark .prts-btn .bp4-icon { color: #a7b6c2 !important; }
-    html.dark .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
-
     .prts-divider { width: 1px; height: 16px; background-color: rgba(16, 22, 26, 0.15); margin: 0 8px; display: inline-block; }
-    html.dark .prts-divider { background-color: rgba(255, 255, 255, 0.15); }
 
     /* 4.4 状态标签与卡片置灰 */
     .prts-status-label {
         margin-top: 12px !important; padding-top: 8px !important; border-top: 1px dashed #e5e7eb !important;
         font-size: 13px !important; font-weight: 700 !important; display: flex !important; align-items: center !important; line-height: 1.5 !important;
     }
-    html.dark .prts-status-label { border-top-color: #444 !important; }
     .prts-label-support { color: #d97706 !important; }
-    html.dark .prts-label-support { color: #ff9d2e !important; }
     .prts-label-missing { color: #dc2626 !important; }
-    html.dark .prts-label-missing { color: #f87171 !important; }
     
     .prts-card-gray .bp4-card {
         opacity: 0.4 !important; filter: grayscale(0.9) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; background-color: #f3f4f6 !important;
     }
-    html.dark .prts-card-gray .bp4-card { background-color: #1a1a1a !important; }
     .prts-card-gray:hover .bp4-card { opacity: 0.95 !important; filter: grayscale(0) !important; }
 
     /* 4.5 干员显示 (Grid, Items, Avatar, Badges) */
     .prts-op-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; align-items: center; }
     .prts-op-grid .bp4-popover2-target { display: inline-flex !important; margin: 0 !important; padding: 0 !important; vertical-align: top !important; height: 42px !important; }
-
-    /* --- [PR #508 Avatar 适配: 稀有度边框与背景] --- */
-    /* 6星: bg-orange-200 ring-orange-300 */
-    html.dark .bg-orange-200.ring-orange-300 {
-        background-color: rgba(234, 88, 12, 0.2) !important;     /* orange-600 / 0.2 */
-        --tw-ring-color: rgba(249, 115, 22, 0.6) !important;      /* orange-500 / 0.6 */
-        box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important;
-    }
-    /* 5星: bg-yellow-100 ring-yellow-200 */
-    html.dark .bg-yellow-100.ring-yellow-200 {
-        background-color: rgba(234, 179, 8, 0.2) !important;      /* yellow-500 / 0.2 */
-        --tw-ring-color: rgba(234, 179, 8, 0.6) !important;       /* yellow-500 / 0.6 */
-        box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important;
-    }
-    /* 4星: bg-purple-100 ring-purple-200 */
-    html.dark .bg-purple-100.ring-purple-200 {
-        background-color: rgba(147, 51, 234, 0.2) !important;     /* purple-600 / 0.2 */
-        --tw-ring-color: rgba(168, 85, 247, 0.6) !important;      /* purple-500 / 0.6 */
-        box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important;
-    }
-    /* 低星: bg-slate-100 ring-slate-200 */
-    html.dark .bg-slate-100.ring-slate-200 {
-        background-color: #2d2d30 !important;
-        --tw-ring-color: #3f3f46 !important;                      /* zinc-700 */
-        box-shadow: inset 0 0 0 2px #3f3f46 !important;
-        color: #52525b !important;                                /* zinc-600 */
-    }
-    /* 头像中的默认文字颜色 */
-    html.dark .text-slate-300 { color: #52525b !important; }      /* zinc-600 */
     
     .prts-op-item, .prts-op-text {
         position: relative; width: 42px; height: 42px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);
@@ -427,9 +189,7 @@
     .prts-op-item:hover, .prts-op-text:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 50; }
     
     .prts-op-item { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-    html.dark .prts-op-item { background-color: #1f2937; border-color: #374151; }
     .prts-op-item:hover { border-color: #3b82f6; }
-    html.dark .prts-op-item:hover { border-color: #60a5fa; }
     
     .prts-op-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
     
@@ -439,8 +199,6 @@
         line-height: 1.1; padding: 2px; word-break: break-all;
     }
     .prts-op-text:hover { border-style: solid; border-color: #3b82f6; background-color: #fff; }
-    html.dark .prts-op-text { background-color: #27272a; color: #d1d5db; border-color: #52525b; }
-    html.dark .prts-op-text:hover { background-color: #27272a; border-color: #60a5fa; }
 
     /* 关卡徽章 */
     .prts-level-badge {
@@ -449,9 +207,6 @@
         font-weight: 700; font-size: 0.95em; margin-right: 8px; border: 1px solid #2563eb; vertical-align: middle;
         line-height: 1.2; flex-shrink: 0; box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2);
     }
-    html.dark .prts-level-badge {
-        background-color: #1e3a8a; border-color: #1e40af; color: #e0e7ff !important; box-shadow: none;
-    }
 
     /* 技能角标与 Grid Popover */
     .prts-popover-grid { display: flex; flex-wrap: wrap; gap: 6px; max-width: 320px; padding: 4px; }
@@ -459,7 +214,6 @@
         position: relative; width: 48px; height: 48px; background-color: #1f2937;
         border: 1px solid #e5e7eb; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
-    html.dark .prts-popover-item { border-color: #4b5563; }
     .prts-popover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
 
     .prts-op-skill, .prts-popover-skill {
@@ -474,11 +228,6 @@
     .bp4-popover2-content .prts-popover-skill {
         background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb;
     }
-    /* 深色模式强制覆盖 */
-    html.dark .bp4-popover2-content .prts-popover-skill, 
-    html.dark .prts-popover-skill {
-        background-color: #18181b !important; color: #f3f4f6 !important; border-color: rgba(255, 255, 255, 0.3) !important;
-    }
 
     /* 4.6 模拟 Tooltip */
     [data-prts-tooltip]:hover::after {
@@ -490,8 +239,6 @@
         content: ""; position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%);
         border-width: 5px; border-style: solid; border-color: #30404d transparent transparent transparent; z-index: 100;
     }
-    html.dark [data-prts-tooltip]:hover::after { background-color: #202b33; }
-    html.dark [data-prts-tooltip]:hover::before { border-color: #202b33 transparent transparent transparent; }
 
     /* 4.7 侧边栏与公告 */
     .prts-sidebar-collapsed { max-height: 48px !important; overflow: hidden !important; cursor: pointer !important; opacity: 0.9; }
@@ -510,7 +257,6 @@
         display: flex !important; align-items: center !important; margin: 0 !important;
         width: 100% !important; opacity: 1 !important; visibility: visible !important; color: #1f2937 !important;
     }
-    html.dark .prts-notice-btn h4.bp4-heading { color: #f3f4f6 !important; }
     
     .prts-dialog-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-weight: bold; margin-right: 8px; color: #fff; vertical-align: middle; }
     .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; }
@@ -534,7 +280,6 @@
     }
     .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
     #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
-    html.dark .prts-float-btn { background-color: #232326; border-color: #3f3f46; color: #e5e7eb; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
     
     .prts-settings-panel {
         position: absolute; top: 0; width: 260px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px;
@@ -543,12 +288,9 @@
     }
     #prts-float-container.snap-left .prts-settings-panel { left: 55px; right: auto; transform: translateX(-20px) scale(0.95); transform-origin: top left; }
     #prts-float-container.prts-float-open .prts-settings-panel { visibility: visible; opacity: 1; transform: translateX(0) scale(1); pointer-events: auto; }
-    html.dark .prts-settings-panel { background: #18181c; border-color: #3f3f46; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
     
     .prts-panel-title { font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #1f2937; display: flex; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f3f4f6; }
-    html.dark .prts-panel-title { color: #f3f4f6; border-color: #3f3f46; }
     .prts-panel-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; color: #4b5563; }
-    html.dark .prts-panel-item { color: #d1d5db; }
     
     .prts-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
     .prts-switch input { opacity: 0; width: 0; height: 0; }
@@ -556,8 +298,6 @@
     .prts-slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
     input:checked + .prts-slider { background-color: #3b82f6; }
     input:checked + .prts-slider:before { transform: translateX(16px); }
-    html.dark .prts-slider { background-color: #4b5563; }
-    html.dark input:checked + .prts-slider { background-color: #2563eb; }
 `;
 
     GM_addStyle(mergedStyles);
@@ -565,44 +305,6 @@
     // =========================================================================
     //                            MODULE 3: 核心逻辑 - 暗黑模式 & 工具
     // =========================================================================
-
-    /**
-     * [V3.0 暗黑模式] 应用样式类名
-     * @param {boolean} enable 是否启用
-     */
-    function applyDarkMode(enable) {
-        const html = document.documentElement;
-        if (enable) {
-            html.classList.add('dark');
-        } else {
-            html.classList.remove('dark');
-        }
-        updateDarkModeButtonIcon(enable);
-    }
-
-    /**
-     * [V3.0 暗黑模式] 切换开关逻辑
-     */
-    function toggleDarkMode() {
-        isDarkMode = !isDarkMode;
-        localStorage.setItem(DARK_MODE_KEY, isDarkMode);
-        applyDarkMode(isDarkMode);
-    }
-
-    /**
-     * [V3.0 暗黑模式] 更新按钮图标状态
-     */
-    function updateDarkModeButtonIcon(isDark) {
-        const btn = document.getElementById('prts-mode-toggle');
-        if (!btn) return;
-
-        const moonSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>`;
-        const sunSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>`;
-
-        btn.innerHTML = isDark ? moonSvg : sunSvg;
-        btn.title = isDark ? "关闭暗黑模式" : "开启暗黑模式";
-        btn.style.color = isDark ? c.primary : '#5f6b7c';
-    }
 
     /**
      * [工具] XPath 元素查找
@@ -1286,9 +988,6 @@
         title.innerHTML = `<span style="margin-right:auto">功能开关</span><span style="font-size:12px;opacity:0.6">刷新生效</span>`;
         panel.appendChild(title);
 
-        panel.appendChild(createSwitch('🌙 暗黑模式', isDarkMode, (val) => {
-            isDarkMode = val; localStorage.setItem(DARK_MODE_KEY, isDarkMode); applyDarkMode(isDarkMode);
-        }));
         panel.appendChild(createSwitch('🖼️ 作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
         }));
@@ -1404,7 +1103,6 @@
     // =========================================================================
 
     function init() {
-        applyDarkMode(isDarkMode);
         loadOwnedOps();
         createFloatingBall();
         injectFilterControls();
@@ -1412,7 +1110,6 @@
         // 全局 DOM 观察者
         const observer = new MutationObserver((mutations) => {
             // 暗黑模式与界面元素守护
-            manageDarkModeButton();
             optimizeSidebar();
             optimizeDialogContent();
 
@@ -1467,7 +1164,6 @@
 
         // 保底定时器
         setInterval(() => {
-            manageDarkModeButton();
             optimizeSidebar();
             optimizeDialogContent();
             createFloatingBall();
