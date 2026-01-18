@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.8.1
+// @version      2.9.0
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式适配及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
 // @author       一只摆烂的42 & Gemini 3 pro
 // @match        https://zoot.plus/*
@@ -18,10 +18,6 @@
 /*
     Better-PRTS-Plus
     Copyright (C) 2023-2026  ntgmc
-
-    Update 2.8.1:
-    - 移除脚本内置的暗黑模式，适配 zoot.plus 原生主题系统 (PR #512)。
-    - 修复脚本组件在原生深色/高对比模式下的显示问题。
 */
 
 (function() {
@@ -142,10 +138,13 @@
         font-size: 13px !important; font-weight: 700 !important; display: flex !important; align-items: center !important; line-height: 1.5 !important;
     }
     body.dark .prts-status-label { border-top-color: #444 !important; }
+    /* 红色警告 (缺人/不可用) - 对应 Tailwind text-red-600 / dark:text-red-500 */
+    .prts-label-missing { color: #dc2626 !important; } 
+    body.dark .prts-label-missing { color: #ef4444 !important; } 
+    
+    /* 琥珀色警告 (需助战) - 对应 Tailwind text-amber-600 / dark:text-amber-500 */
     .prts-label-support { color: #d97706 !important; }
-    body.dark .prts-label-support { color: #ff9d2e !important; }
-    .prts-label-missing { color: #dc2626 !important; }
-    body.dark .prts-label-missing { color: #f87171 !important; }
+    body.dark .prts-label-support { color: #f59e0b !important; }
     
     .prts-card-gray .bp4-card {
         opacity: 0.4 !important; filter: grayscale(0.9) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; background-color: #f3f4f6 !important;
@@ -362,10 +361,40 @@
         const storedData = GM_getValue(OPS_STORAGE_KEY, '[]');
         try {
             const ops = JSON.parse(storedData);
-            ownedOpsSet = new Set(ops.filter(op => op.own === true).map(op => op.name));
+            ownedOpsSet = new Set();
+
+            if (Array.isArray(ops)) {
+                // 情况A: 纯字符串数组 (新版逻辑) ["A", "B"]
+                if (ops.length === 0 || typeof ops[0] === 'string') {
+                    ops.forEach(op => ownedOpsSet.add(op));
+                }
+                // 情况B: 对象数组 (旧版/Maa格式) [{"name":"A", "own":true}]
+                else {
+                    ops.forEach(op => {
+                        if (op.own !== false && op.name) {
+                            ownedOpsSet.add(op.name);
+                        }
+                    });
+                }
+            }
             console.log(`[Better PRTS] 已加载 ${ownedOpsSet.size} 名持有干员`);
         } catch (e) {
             console.error('[Better PRTS] 数据解析失败', e);
+            ownedOpsSet = new Set(); // 出错重置
+        }
+    }
+
+    /**
+     * [V10.1 交互] 更新导入按钮文本 (UI Sync)
+     */
+    function updateImportButtonUI() {
+        const btn = document.getElementById('btn-import');
+        if (!btn) return;
+
+        const count = ownedOpsSet.size;
+        const textSpan = btn.querySelector('.bp4-button-text');
+        if (textSpan) {
+            textSpan.innerText = count > 0 ? `导入干员 (${count})` : '导入干员';
         }
     }
 
@@ -379,18 +408,59 @@
         input.onchange = e => {
             const file = e.target.files[0];
             if (!file) return;
+
+            if (file.size > 2 * 1024 * 1024) {
+                alert('❌ 文件过大，请上传标准格式的干员数据文件');
+                return;
+            }
+
             const reader = new FileReader();
             reader.onload = event => {
                 try {
                     const jsonStr = event.target.result;
-                    const json = JSON.parse(jsonStr);
-                    if (!Array.isArray(json)) throw new Error("非数组格式");
-                    GM_setValue(OPS_STORAGE_KEY, jsonStr);
-                    loadOwnedOps();
-                    alert(`✅ 导入成功！\n共识别 ${json.length} 条数据，持有 ${ownedOpsSet.size} 名干员。`);
-                    if (currentFilterMode !== 'NONE') requestFilterUpdate();
+                    let json;
+                    try {
+                        json = JSON.parse(jsonStr);
+                    } catch (e) {
+                        alert('❌ 文件格式错误：不是有效的 JSON 文件');
+                        return;
+                    }
+
+                    if (!Array.isArray(json)) throw new Error("数据格式非数组");
+
+                    let names = [];
+                    // 逻辑复刻：支持纯字符串数组或 Maa 导出格式对象
+                    if (json.length === 0) {
+                         names = [];
+                    } else if (typeof json[0] === 'string') {
+                        names = json;
+                    } else if (typeof json[0] === 'object' && json[0] !== null && 'name' in json[0]) {
+                        names = json
+                            .filter(op => op?.own !== false && typeof op?.name === 'string')
+                            .map(op => String(op.name).trim())
+                            .filter(name => /^[a-zA-Z0-9\u4e00-\u9fa5\-\(\)\uff08\uff09]+$/.test(name));
+                    }
+
+                    if (names.length > 0) {
+                        const uniqueNames = Array.from(new Set(names));
+
+                        // 1. 持久化存储
+                        GM_setValue(OPS_STORAGE_KEY, JSON.stringify(uniqueNames));
+
+                        // 2. 更新内存状态
+                        ownedOpsSet = new Set(uniqueNames);
+
+                        // 3. [关键修复] 立即调用主渲染函数刷新按钮文字，无需等待定时器
+                        injectFilterControls();
+
+                        alert(`✅ 导入成功！\n共识别 ${uniqueNames.length} 名持有干员。`);
+                        if (currentFilterMode !== 'NONE') requestFilterUpdate();
+                    } else {
+                        alert('⚠️ 未能识别有效的干员数据，请检查文件格式');
+                    }
                 } catch (err) {
-                    alert('❌ 导入失败，请检查文件格式。\n' + err.message);
+                    console.error(err);
+                    alert('❌ 导入过程中发生未知错误: ' + err.message);
                 }
             };
             reader.readAsText(file);
@@ -441,7 +511,7 @@
     }
 
     /**
-     * [V10.3 UI组件] 注入筛选控制栏与Material图标
+     * [V10.3 UI组件] 注入筛选控制栏与 Blueprint 图标
      */
     function injectFilterControls() {
         if (isFilterDisabledPage()) {
@@ -455,59 +525,102 @@
         const searchRow = searchInputGroup.parentElement;
         if (!searchRow) return;
 
+        // 1. 确保容器存在
         let controlBar = document.getElementById('prts-filter-bar');
-        let isNew = false; // 标记是否是新建的
-
+        let isNew = false;
         if (!controlBar) {
             isNew = true;
             controlBar = document.createElement('div');
             controlBar.id = 'prts-filter-bar';
+        }
 
-            const createBpBtn = (text, svgPath, onClick, id) => {
-                const btn = document.createElement('button');
+        // 确保容器在正确的位置
+        if (searchRow.nextSibling !== controlBar) {
+            searchRow.parentNode.insertBefore(controlBar, searchRow.nextSibling);
+        }
+
+        // 2. 图标路径 (BlueprintJS 16x16 Standard Paths)
+        const paths = {
+            // Icon: import (PR: import) - 修正为 16px 适配路径
+            import: 'M11 6h3l-6 6-6-6h3V1h6v5zm-7 8v2h12v-2h-2v1H6v-1H4z',
+            // Icon: eye-open (PR: eye-open)
+            eyeOn: 'M8 3C3 3 0 8 0 8s3 5 8 5 8-5 8-5-3-5-8-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z M8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+            // Icon: eye-off (PR: eye-off)
+            eyeOff: 'M6.41 7.83c-.03.39.07.79.31 1.12.24.34.59.58.98.68.39.1.81.02 1.15-.21.34-.23.59-.57.7-.96.1-.39.02-.8-.21-1.15-.16-.23-.38-.42-.64-.53L6.41 7.83z M2.05 2.64L1.03 3.66l2.54 2.54C2.22 6.75 1.12 7.34 0 8c0 0 4 5.6 8 5.6 1.41 0 2.71-.35 3.85-.96l2.08 2.09 1.02-1.02L2.05 2.64z M8 12c-2.21 0-4-1.79-4-4 0-.2.02-.39.05-.58l5.04 5.04c-1.24.74-3.46.59-1.09-.46z M13.57 11.6c.54-1.06.83-2.24.83-3.6 0 0-4-5.6-8-5.6-.69 0-1.34.09-1.98.25L6.07 4.3C6.68 4.1 7.33 4 8 4c2.21 0 4 1.79 4 4 0 .64-.14 1.24-.38 1.79l1.95 1.81z',
+            // Icon: confirm (PR: confirm / 完美阵容)
+            perfect: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
+            // Icon: people (PR: people / 允许助战)
+            support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm3.2-1.6c0-1.77-1.43-3.2-3.2-3.2-.45 0-.86.1-1.26.26.7.74 1.15 1.72 1.24 2.82.02.21.02.41 0 .62-.1 1.04-.51 1.98-1.16 2.71.37.13.75.19 1.18.19 1.77.01 3.2-1.42 3.2-3.4zM8.8 10.4H2.4c-.88 0-1.6.72-1.6 1.6v2.4h9.6V12c0-.88-.72-1.6-1.6-1.6zm-5.6 2.4h4.8v.8H3.2v-.8zm12-1.6h-4.8c.21 0 .4.03.59.07.67.15 1.29.44 1.81.85.91.71 1.5 1.81 1.57 3.04.01.1.01.18.03.28V12c0-.88-.72-1.6-1.6-1.6z'
+        };
+
+        // 3. 渲染辅助函数
+        const renderButton = (id, text, svgPath, onClick, active = false, disabled = false) => {
+            let btn = document.getElementById(id);
+            // 统一使用 viewBox 0 0 16 16
+            const innerHTML = `
+                <span class="bp4-icon" aria-hidden="true" style="margin-right:6px">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="${svgPath}"></path></svg>
+                </span>
+                <span class="bp4-button-text">${text}</span>
+            `;
+
+            if (!btn) {
+                btn = document.createElement('button');
                 btn.type = "button";
                 btn.className = 'prts-btn';
                 btn.id = id;
-                btn.innerHTML = `
-                    <span class="bp4-icon" aria-hidden="true" style="margin-right:6px">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="${svgPath}"></path></svg>
-                    </span>
-                    <span class="bp4-button-text">${text}</span>
-                `;
                 btn.onclick = onClick;
-                return btn;
-            };
-
-            const createDivider = () => {
-                const div = document.createElement('div');
-                div.className = 'prts-divider';
-                return div;
-            };
-
-            const paths = {
-                import: 'M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z',
-                eyeOn: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z',
-                eyeOff: 'M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-4.01.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46A11.804 11.804 0 0 0 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z',
-                perfect: 'M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z',
-                support: 'M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z'
-            };
-
-            controlBar.append(
-                createBpBtn('导入干员', paths.import, handleImport, 'btn-import'),
-                createBpBtn(displayMode === 'GRAY' ? '置灰模式' : '隐藏模式', displayMode === 'GRAY' ? paths.eyeOn : paths.eyeOff, toggleDisplayMode, 'btn-setting'),
-                createDivider(),
-                createBpBtn('完美阵容', paths.perfect, () => toggleFilter('PERFECT'), 'btn-perfect'),
-                createBpBtn('允许助战', paths.support, () => toggleFilter('SUPPORT'), 'btn-support')
-            );
-        }
-
-        if (searchRow.nextSibling !== controlBar) {
-            searchRow.parentNode.insertBefore(controlBar, searchRow.nextSibling);
-
-            if (currentFilterMode !== 'NONE' || isNew) {
-                updateFilterButtonStyles();
-                requestFilterUpdate();
+                // 不在此处 append，由下方统一排序
             }
+
+            if (btn.innerHTML !== innerHTML) btn.innerHTML = innerHTML;
+
+            if (active && !btn.classList.contains('prts-active')) btn.classList.add('prts-active');
+            if (!active && btn.classList.contains('prts-active')) btn.classList.remove('prts-active');
+
+            if (disabled) {
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+            } else {
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
+            }
+            return btn;
+        };
+
+        // 4. 按严格顺序构建/移动 DOM 节点
+
+        // (1) 导入按钮
+        const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
+        const btnImport = renderButton('btn-import', importText, paths.import, handleImport);
+        controlBar.appendChild(btnImport);
+
+        // (2) 模式切换
+        const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
+        const displayModeIcon = displayMode === 'GRAY' ? paths.eyeOn : paths.eyeOff;
+        const btnSetting = renderButton('btn-setting', displayModeText, displayModeIcon, toggleDisplayMode);
+        controlBar.appendChild(btnSetting);
+
+        // (3) 分割线
+        let divider = document.getElementById('prts-divider-el');
+        if (!divider) {
+            divider = document.createElement('div');
+            divider.className = 'prts-divider';
+            divider.id = 'prts-divider-el';
+        }
+        controlBar.appendChild(divider);
+
+        // (4) 完美阵容
+        const btnPerfect = renderButton('btn-perfect', '完美阵容', paths.perfect, () => toggleFilter('PERFECT'), currentFilterMode === 'PERFECT');
+        controlBar.appendChild(btnPerfect);
+
+        // (5) 允许助战
+        const btnSupport = renderButton('btn-support', '允许助战', paths.support, () => toggleFilter('SUPPORT'), currentFilterMode === 'SUPPORT');
+        controlBar.appendChild(btnSupport);
+
+        // 初始触发
+        if (isNew && currentFilterMode !== 'NONE') {
+            requestFilterUpdate();
         }
     }
 
@@ -738,7 +851,7 @@
     }
 
     /**
-     * [V10.0 筛选核心] 应用筛选逻辑
+     * [V10.4 筛选核心] 应用筛选逻辑
      */
     function applyFilterLogic() {
         if (isFilterDisabledPage()) return;
@@ -752,9 +865,7 @@
                 const cardInner = card.querySelector('.bp4-card');
                 if (!cardInner) return;
 
-                // 视觉优化
                 optimizeCardVisuals(card, cardInner);
-                // 链接清洗
                 cleanBilibiliLinks(cardInner);
 
                 let isUnavailable = false;
@@ -768,6 +879,7 @@
                     tags.forEach(tag => {
                         if (tag.querySelector('h4')) return;
                         const text = tag.innerText.trim();
+                        // 排除非干员标签
                         if (['普通', '突袭', 'Beta'].includes(text) ||
                             text.includes('活动关卡') || text.includes('剿灭') || text.includes('危机合约') ||
                             text.includes('|') || text.startsWith('[') || text.includes('更新') ||
@@ -788,18 +900,25 @@
                         }
                     });
 
+                    // 1. 判定是否“不可用” (用于决定是否置灰)
+                    // 完美模式: 只要缺人就不可用
                     if (currentFilterMode === 'PERFECT') {
                         if (missingCount > 0) isUnavailable = true;
-                    } else if (currentFilterMode === 'SUPPORT') {
+                    }
+                    // 助战模式: 缺人超过1个才不可用
+                    else if (currentFilterMode === 'SUPPORT') {
                         if (missingCount > 1) isUnavailable = true;
                     }
 
-                    if (isUnavailable) {
-                        statusType = 'missing';
-                        statusValue = missingCount;
-                    } else if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
+                    // 2. 判定显示的状态标签 (颜色逻辑)
+                    if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
+                        // 允许助战且正好缺1人 -> 琥珀色提示 (即使作业是“可用”的)
                         statusType = 'support';
                         statusValue = missingOpName;
+                    } else if (missingCount > 0) {
+                        // 其他缺人情况 -> 红色警告
+                        statusType = 'missing';
+                        statusValue = missingCount;
                     }
                 }
 
@@ -818,7 +937,7 @@
                     if (hasGrayClass) card.classList.remove('prts-card-gray');
                 }
 
-                // 更新状态标签
+                // 更新状态标签 UI
                 const existingLabel = cardInner.querySelector('.prts-status-label');
                 if (!statusType) {
                     if (existingLabel) existingLabel.remove();
@@ -828,10 +947,10 @@
                 let newHtml = '';
                 let newClass = 'prts-status-label';
                 if (statusType === 'support') {
-                    newClass += ' prts-label-support';
+                    newClass += ' prts-label-support'; // 琥珀色
                     newHtml = `<span class="bp4-icon" style="margin-right:6px;">🆘</span>需助战: ${statusValue}`;
                 } else {
-                    newClass += ' prts-label-missing';
+                    newClass += ' prts-label-missing'; // 红色
                     newHtml = `<span class="bp4-icon" style="margin-right:6px;">✘</span>缺 ${statusValue} 人`;
                 }
 
