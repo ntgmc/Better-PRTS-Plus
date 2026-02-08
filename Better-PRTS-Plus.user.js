@@ -134,23 +134,24 @@
 
     /* 4. 状态标签与卡片置灰 */
     .prts-status-label {
-        margin-top: 12px !important; padding-top: 8px !important; border-top: 1px dashed #e5e7eb !important;
-        font-size: 13px !important; font-weight: 700 !important; display: flex !important; align-items: center !important; line-height: 1.5 !important;
+        font-size: 13px !important; font-weight: 700 !important; display: flex !important; 
+        align-items: center !important; line-height: 1.5 !important;
+        margin-bottom: 4px !important;
     }
-    body.dark .prts-status-label { border-top-color: #444 !important; }
-    /* 红色警告 (缺人/不可用) - 对应 Tailwind text-red-600 / dark:text-red-500 */
+    
+    /* 颜色对齐 PR #514 */
     .prts-label-missing { color: #dc2626 !important; } 
     body.dark .prts-label-missing { color: #ef4444 !important; } 
     
-    /* 琥珀色警告 (需助战) - 对应 Tailwind text-amber-600 / dark:text-amber-500 */
     .prts-label-support { color: #d97706 !important; }
     body.dark .prts-label-support { color: #f59e0b !important; }
     
     .prts-card-gray .bp4-card {
-        opacity: 0.4 !important; filter: grayscale(0.9) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; background-color: #f3f4f6 !important;
+        opacity: 0.4 !important; 
+        filter: grayscale(1) !important; 
+        transition: opacity 0.2s ease, filter 0.2s ease !important;
     }
-    body.dark .prts-card-gray .bp4-card { background-color: #1a1a1a !important; }
-    .prts-card-gray:hover .bp4-card { opacity: 0.95 !important; filter: grayscale(0) !important; }
+    .prts-card-gray:hover .bp4-card { opacity: 0.9 !important; filter: grayscale(0) !important; }
 
     /* 5. 干员显示 (Grid, Items, Avatar, Badges) */
     .prts-op-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; align-items: center; }
@@ -219,12 +220,31 @@
     }
 
     /* 技能角标与 Grid Popover */
+    .bp4-popover2-content {
+        background-color: #ffffff !important;
+        color: #18181b !important;
+        border: 1px solid #e5e7eb !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+    }
+    body.dark .bp4-popover2-content {
+        background-color: #18181b !important;
+        color: #f3f4f6 !important;
+        border-color: #3f3f46 !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important;
+    }
+    
+    /* Popover 箭头适配 */
+    .bp4-popover2-arrow-fill { fill: #ffffff !important; }
+    body.dark .bp4-popover2-arrow-fill { fill: #18181b !important; }
+    .bp4-popover2-arrow-border { fill: #e5e7eb !important; }
+    body.dark .bp4-popover2-arrow-border { fill: #3f3f46 !important; }
+
     .prts-popover-grid { display: flex; flex-wrap: wrap; gap: 6px; max-width: 320px; padding: 4px; }
     .prts-popover-item {
-        position: relative; width: 48px; height: 48px; background-color: #1f2937;
+        position: relative; width: 48px; height: 48px; background-color: #ffffff;
         border: 1px solid #e5e7eb; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     }
-    body.dark .prts-popover-item { border-color: #4b5563; }
+    body.dark .prts-popover-item { background-color: #1f2937; border-color: #4b5563; }
     .prts-popover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
 
     .prts-op-skill, .prts-popover-skill {
@@ -340,6 +360,85 @@
      */
     function getElementByXPath(path) {
         return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
+    }
+
+    /**
+     * [工具] 获取 React 属性 (对齐 PR #514 逻辑)
+     */
+    function getReactProps(element) {
+        if (!element) return null;
+        const key = Object.keys(element).find(k => k.startsWith('__reactProps$'));
+        return key ? element[key] : null;
+    }
+
+    /**
+     * [V11.0 逻辑核心] 检查作业可用性 (移植自 PR #514)
+     * 采用“最少候选优先”(Least Restricted First) 贪心策略处理干员组
+     */
+    function checkOperationAvailability(operation, ownedOpsSet, filterMode) {
+        if (!ownedOpsSet || ownedOpsSet.size === 0 || filterMode === 'NONE') {
+            return { isAvailable: true, missingCount: 0, missingOps: [] };
+        }
+
+        const { opers: requiredOps = [], groups: requiredGroups = [] } = operation.parsedContent || {};
+        
+        // 兼容性处理：如果是通过 DOM 爬取的 fallback 数据
+        if (operation._isFallback) {
+             const missing = requiredOps
+                .map(op => op.name) // 提取干员名称字符串
+                .filter(name => !ownedOpsSet.has(name));
+             const isAvail = (filterMode === 'PERFECT') ? (missing.length === 0) : (missing.length <= 1);
+             return { isAvailable: isAvail, missingCount: missing.length, missingOps: missing };
+        }
+
+        if (requiredOps.length === 0 && requiredGroups.length === 0) {
+            return { isAvailable: true, missingCount: 0, missingOps: [] };
+        }
+
+        const usedOwnedOps = new Set();
+        const missingDetails = [];
+
+        // 1. 处理固定干员需求
+        requiredOps.forEach(op => {
+            const opName = op.name;
+            if (ownedOpsSet.has(opName)) {
+                usedOwnedOps.add(opName);
+            } else {
+                missingDetails.push(opName);
+            }
+        });
+
+        // 2. 处理干员组需求 (贪心分配)
+        if (requiredGroups.length > 0) {
+            const groupProcessList = requiredGroups.map(group => {
+                const allowedNames = (group.opers || []).map(o => o.name);
+                const candidates = allowedNames.filter(name => ownedOpsSet.has(name));
+                return { name: group.name || '未命名干员组', candidates };
+            });
+
+            // 优先处理“候选人最少”的组
+            groupProcessList.sort((a, b) => a.candidates.length - b.candidates.length);
+
+            groupProcessList.forEach(groupItem => {
+                const validCandidate = groupItem.candidates.find(name => !usedOwnedOps.has(name));
+                if (validCandidate) {
+                    usedOwnedOps.add(validCandidate);
+                } else {
+                    missingDetails.push(`[${groupItem.name}]`);
+                }
+            });
+        }
+
+        const missingCount = missingDetails.length;
+        let isAvailable = true;
+
+        if (filterMode === 'PERFECT' && missingCount > 0) {
+            isAvailable = false;
+        } else if (filterMode === 'SUPPORT' && missingCount > 1) {
+            isAvailable = false;
+        }
+
+        return { isAvailable, missingCount, missingOps: missingDetails };
     }
 
     // =========================================================================
@@ -868,62 +967,37 @@
                 optimizeCardVisuals(card, cardInner);
                 cleanBilibiliLinks(cardInner);
 
-                let isUnavailable = false;
-                let statusType = null;
-                let statusValue = null;
+                // 1. 获取作业数据 (优先从 React Props 获取以支持干员组算法)
+                let operation = null;
+                const liProps = getReactProps(card);
+                const cardProps = getReactProps(cardInner);
+                
+                // 尝试多个可能的路径
+                operation = liProps?.children?.props?.operation || 
+                            cardProps?.children?.[0]?.props?.operation || 
+                            cardProps?.operation;
 
-                if (currentFilterMode !== 'NONE') {
+                // Fallback: 如果拿不到 React 数据，则从 DOM 标签爬取 (Legacy 模式)
+                if (!operation) {
                     const tags = Array.from(card.querySelectorAll('.bp4-tag'));
-                    let requiredOps = [];
-
+                    const requiredOps = [];
                     tags.forEach(tag => {
                         if (tag.querySelector('h4')) return;
                         const text = tag.innerText.trim();
-                        // 排除非干员标签
-                        if (['普通', '突袭', 'Beta'].includes(text) ||
-                            text.includes('活动关卡') || text.includes('剿灭') || text.includes('危机合约') ||
-                            text.includes('|') || text.startsWith('[') || text.includes('更新') ||
-                            text.includes('医疗') || text.includes('奶')) return;
-
-                        const opName = text.split(/\s+/)[0];
-                        if (opName && !['json', '作者'].includes(opName)) {
-                            requiredOps.push(opName);
-                        }
+                        if (['普通', '突袭', 'Beta'].includes(text) || text.includes('活动关卡') || 
+                            text.includes('|') || text.includes('更新') || text.includes('作者')) return;
+                        
+                        const name = text.split(/\s+/)[0];
+                        if (name) requiredOps.push({ name });
                     });
-
-                    let missingCount = 0;
-                    let missingOpName = '';
-                    requiredOps.forEach(op => {
-                        if (!ownedOpsSet.has(op)) {
-                            missingCount++;
-                            if (missingCount === 1) missingOpName = op;
-                        }
-                    });
-
-                    // 1. 判定是否“不可用” (用于决定是否置灰)
-                    // 完美模式: 只要缺人就不可用
-                    if (currentFilterMode === 'PERFECT') {
-                        if (missingCount > 0) isUnavailable = true;
-                    }
-                    // 助战模式: 缺人超过1个才不可用
-                    else if (currentFilterMode === 'SUPPORT') {
-                        if (missingCount > 1) isUnavailable = true;
-                    }
-
-                    // 2. 判定显示的状态标签 (颜色逻辑)
-                    if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
-                        // 允许助战且正好缺1人 -> 琥珀色提示 (即使作业是“可用”的)
-                        statusType = 'support';
-                        statusValue = missingOpName;
-                    } else if (missingCount > 0) {
-                        // 其他缺人情况 -> 红色警告
-                        statusType = 'missing';
-                        statusValue = missingCount;
-                    }
+                    operation = { parsedContent: { opers: requiredOps }, _isFallback: true };
                 }
 
-                // 处理隐藏与置灰
-                if (isUnavailable && displayMode === 'HIDE') {
+                // 2. 计算可用性
+                const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
+
+                // 3. 处理隐藏与置灰
+                if (!isAvailable && displayMode === 'HIDE') {
                     if (card.style.display !== 'none') card.style.display = 'none';
                     return;
                 } else {
@@ -931,27 +1005,32 @@
                 }
 
                 const hasGrayClass = card.classList.contains('prts-card-gray');
-                if (isUnavailable && displayMode === 'GRAY') {
+                if (!isAvailable && displayMode === 'GRAY') {
                     if (!hasGrayClass) card.classList.add('prts-card-gray');
                 } else {
                     if (hasGrayClass) card.classList.remove('prts-card-gray');
                 }
 
-                // 更新状态标签 UI
+                // 4. 更新状态标签 UI (对齐 PR #514 样式)
                 const existingLabel = cardInner.querySelector('.prts-status-label');
-                if (!statusType) {
+                const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1);
+
+                if (!showMissingInfo) {
                     if (existingLabel) existingLabel.remove();
                     return;
                 }
 
                 let newHtml = '';
                 let newClass = 'prts-status-label';
-                if (statusType === 'support') {
-                    newClass += ' prts-label-support'; // 琥珀色
-                    newHtml = `<span class="bp4-icon" style="margin-right:6px;">🆘</span>需助战: ${statusValue}`;
+                
+                if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
+                    newClass += ' prts-label-support';
+                    const name = missingOps[0];
+                    newHtml = `<span class="bp4-icon" style="margin-right:6px">👤</span>需助战: ${name}`;
                 } else {
-                    newClass += ' prts-label-missing'; // 红色
-                    newHtml = `<span class="bp4-icon" style="margin-right:6px;">✘</span>缺 ${statusValue} 人`;
+                    newClass += ' prts-label-missing';
+                    const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
+                    newHtml = `<span class="bp4-icon" style="margin-right:6px">✘</span>缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
                 }
 
                 if (existingLabel) {
@@ -963,7 +1042,16 @@
                     const labelDiv = document.createElement('div');
                     labelDiv.className = newClass;
                     labelDiv.innerHTML = newHtml;
-                    cardInner.appendChild(labelDiv);
+                    
+                    // 对齐 PR #514: 插入到描述内容之前
+                    const descContainer = cardInner.querySelector('.prts-desc-wrapper') || 
+                                         cardInner.querySelector('.grow.text-gray-700') ||
+                                         cardInner.querySelector('.text-gray-700');
+                    if (descContainer) {
+                        cardInner.insertBefore(labelDiv, descContainer);
+                    } else {
+                        cardInner.appendChild(labelDiv);
+                    }
                 }
             });
 
