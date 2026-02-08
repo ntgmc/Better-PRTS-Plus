@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![Version](https://img.shields.io/badge/version-2.9.0-blue)]()
+[![Version](https://img.shields.io/badge/version-2.9.1-blue)]()
 [![License](https://img.shields.io/badge/license-GPL--3.0-red)](LICENSE)
 [![Tampermonkey](https://img.shields.io/badge/Tampermonkey-Supported-green)]()
 [![Greasy Fork](https://img.shields.io/badge/GreasyFork-发布页-orange)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)
@@ -16,10 +16,6 @@
 </div>
 
 ---
-
-## 📸 效果预览
-
-![Image](https://github.com/user-attachments/assets/00640304-eb59-43e4-90ee-584701cec319)
 
 ## ✨ 核心功能
 
