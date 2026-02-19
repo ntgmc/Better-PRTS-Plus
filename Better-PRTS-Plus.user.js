@@ -1,9 +1,9 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.9.1
+// @version      2.9.2
 // @description  [整合版] 集成完美作业筛选、深度暗黑模式适配及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
-// @author       一只摆烂的42 & Gemini 3 pro
+// @author       一只摆烂的42
 // @match        https://zoot.plus/*
 // @icon         https://zoot.plus/favicon.ico
 // @homepage     https://github.com/ntgmc/Better-PRTS-Plus
@@ -899,8 +899,23 @@
         const content = portalNode.querySelector('.bp4-popover2-content');
         if (!content || content.dataset.optimized) return;
 
+        const wrapper = content.closest('.bp4-popover2');
+        if (wrapper && (
+            wrapper.classList.contains('bp4-suggest-popover') || // 排除联想输入框
+            wrapper.classList.contains('bp4-select-popover')     // 排除下拉选择框
+        )) {
+            return;
+        }
+
+        // 针对 /create 页面的额外保护：如果内容包含列表项或链接，通常是功能菜单而非纯文本展示
+        if (window.location.pathname.startsWith('/create')) {
+            if (content.querySelector('ul.bp4-menu, li, a.bp4-menu-item')) return;
+        }
+        // ========================== 修复结束 ==========================
+
         const text = content.innerText.trim();
         const cleanText = text.replace(/^->\s*/, '');
+        // ... (后续原有代码保持不变)
         const firstWord = cleanText.split(/[\s,，]+/)[0];
         const isSingleOperator = OP_ID_MAP[firstWord];
 
