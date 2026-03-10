@@ -2,7 +2,7 @@
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
 // @version      2.10.0
-// @description  [整合版] 集成多账号支持、完美作业筛选、深度暗黑模式适配及干员头像可视化等功能的 zoot.plus 全方位体验增强脚本。
+// @description  [整合版] 集成多账号无缝切换、完美作业筛选(支持干员组)、深度暗黑模式适配及干员头像可视化等全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
 // @icon         https://zoot.plus/favicon.ico
@@ -27,13 +27,11 @@
     //                            MODULE 1: 配置与常量
     // =========================================================================
 
-    // [V12.0 多账号支持] 键值设定
-    const OPS_STORAGE_KEY_OLD = 'prts_plus_user_ops';
-    const OPS_STORAGE_KEY_PREFIX = 'prts_plus_user_ops_';
-    const ACTIVE_ACCOUNT_KEY = 'prts_plus_active_account';
+    // [V12.0/V3.1.0 数据重构] 单一集合存储提升性能，包含向下兼容
+    const ACCOUNTS_DATA_KEY = 'prts_plus_accounts_data';
     const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 可选值: 'GRAY' | 'HIDE'
 
-    //[V9.4 设置配置] 功能开关默认状态
+    // [设置配置] 功能开关默认状态
     const CONFIG = {
         visuals: GM_getValue('prts_cfg_visuals', true), // 干员头像优化
         sidebar: GM_getValue('prts_cfg_sidebar', true), // 侧边栏优化
@@ -42,10 +40,13 @@
     };
 
     // 全局状态变量
-    let activeAccountId = GM_getValue(ACTIVE_ACCOUNT_KEY, 1); // 默认选中账号 1
+    let activeAccountId = 1;
+    let accountsData = { 1:[], 2: [], 3:[] }; // 多账号数据缓存池
+
     let currentFilterMode = 'NONE';
     let displayMode = GM_getValue(DISPLAY_MODE_KEY, 'GRAY');
     let ownedOpsSet = new Set();
+
     let isProcessingFilter = false;
     let rafId = null;
     let filterDebounceTimer = null;
@@ -126,7 +127,7 @@
     body.dark .prts-btn .bp4-icon { color: #a7b6c2 !important; }
     body.dark .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
 
-    /* [V12.0] 多账号悬浮面板小按钮专属样式 */
+    /* [V12.0/3.1.0] 多账号悬浮面板小按钮专属样式 */
     .prts-acc-btn { min-width: 28px !important; padding: 2px 6px !important; border: 1px solid #cbd5e1 !important; margin: 0 !important; border-radius: 4px !important; transition: all 0.2s; }
     .prts-acc-btn.active { background-color: #3b82f6 !important; color: #fff !important; border-color: #3b82f6 !important; }
     body.dark .prts-acc-btn { border-color: #4b5563 !important; color: #d1d5db !important; }
@@ -254,7 +255,7 @@
     GM_addStyle(mergedStyles);
 
     // =========================================================================
-    //                            MODULE 3: 工具函数
+    //                            MODULE 3: 工具函数与核心算法
     // =========================================================================
 
     function getElementByXPath(path) {
@@ -267,6 +268,9 @@
         return key ? element[key] : null;
     }
 
+    /**
+     * [核心算法优化] 干员与干员组的可用性判定（贪心策略）
+     */
     function checkOperationAvailability(operation, ownedOpsSet, filterMode) {
         if (!ownedOpsSet || ownedOpsSet.size === 0 || filterMode === 'NONE') {
             return { isAvailable: true, missingCount: 0, missingOps:[] };
@@ -274,6 +278,7 @@
 
         const { opers: requiredOps = [], groups: requiredGroups =[] } = operation.parsedContent || {};
 
+        // 兼容性回退：处理无法获取React Props的老DOM数据
         if (operation._isFallback) {
              const missing = requiredOps
                 .map(op => op.name)
@@ -283,12 +288,13 @@
         }
 
         if (requiredOps.length === 0 && requiredGroups.length === 0) {
-            return { isAvailable: true, missingCount: 0, missingOps: [] };
+            return { isAvailable: true, missingCount: 0, missingOps:[] };
         }
 
         const usedOwnedOps = new Set();
         const missingDetails =[];
 
+        // 1. 优先满足固定干员
         requiredOps.forEach(op => {
             const opName = op.name;
             if (ownedOpsSet.has(opName)) {
@@ -298,6 +304,7 @@
             }
         });
 
+        // 2. 贪心处理干员组 (按可选名单长度升序处理)
         if (requiredGroups.length > 0) {
             const groupProcessList = requiredGroups.map(group => {
                 const allowedNames = (group.opers ||[]).map(o => o.name);
@@ -330,62 +337,80 @@
     }
 
     // =========================================================================
-    //                            MODULE 4: 业务逻辑 - 筛选与净化
+    //                            MODULE 4: 数据存取与账号管理
     // =========================================================================
 
-    function isFilterDisabledPage() {
-        const path = window.location.pathname;
-        return path.startsWith('/create') || path.startsWith('/editor');
+    /**
+     * 持久化保存所有多账号数据
+     */
+    function saveAccountsData() {
+        GM_setValue(ACCOUNTS_DATA_KEY, JSON.stringify({
+            activeAccountId,
+            accountsData
+        }));
     }
 
     /**
-     * [V12.0 数据管理] 支持多账号数据加载与无缝迁移
+     * 加载干员数据：具备高级的向下兼容与数据迁移能力
      */
     function loadOwnedOps() {
-        // 1. 尝试迁移无前缀的老数据
-        const oldData = GM_getValue(OPS_STORAGE_KEY_OLD);
-        if (oldData) {
-            GM_setValue(OPS_STORAGE_KEY_PREFIX + 1, oldData); // 平滑迁移至账号 1
-            GM_setValue(OPS_STORAGE_KEY_OLD, ''); // 清除老数据标记以防重复迁移
-            console.log(`[Better PRTS] 已将旧版干员数据迁移至账号 1`);
-        }
+        // 尝试加载主存储集合
+        const unifiedStore = GM_getValue(ACCOUNTS_DATA_KEY);
+        let migrated = false;
 
-        // 2. 加载当前活跃账号数据
-        const currentKey = OPS_STORAGE_KEY_PREFIX + activeAccountId;
-        const storedData = GM_getValue(currentKey, '[]');
-        try {
-            const ops = JSON.parse(storedData);
-            ownedOpsSet = new Set();
-
-            if (Array.isArray(ops)) {
-                if (ops.length === 0 || typeof ops[0] === 'string') {
-                    ops.forEach(op => ownedOpsSet.add(op));
-                } else {
-                    ops.forEach(op => {
-                        if (op.own !== false && op.name) {
-                            ownedOpsSet.add(op.name);
-                        }
-                    });
+        if (unifiedStore) {
+            try {
+                const parsed = JSON.parse(unifiedStore);
+                activeAccountId = parsed.activeAccountId || 1;
+                accountsData = parsed.accountsData || { 1: [], 2: [], 3:[] };
+            } catch (e) {
+                console.error('[Better PRTS] 主数据解析失败', e);
+            }
+        } else {
+            // [迁移] 尝试从用户单独定义的 prts_plus_user_ops_N 中恢复
+            for (let i = 1; i <= 3; i++) {
+                const legacyVal = GM_getValue(`prts_plus_user_ops_${i}`);
+                if (legacyVal) {
+                    try { accountsData[i] = JSON.parse(legacyVal); migrated = true; } catch(e){}
                 }
             }
-            console.log(`[Better PRTS] 已加载账号 ${activeAccountId} 的 ${ownedOpsSet.size} 名持有干员`);
-        } catch (e) {
-            console.error('[Better PRTS] 数据解析失败', e);
-            ownedOpsSet = new Set();
+            const activeLegacy = GM_getValue('prts_plus_active_account');
+            if (activeLegacy) activeAccountId = parseInt(activeLegacy) || 1;
+
+            // [迁移] 尝试从最远古的单账号版本恢复到账号 1
+            const veryOldVal = GM_getValue('prts_plus_user_ops');
+            if (veryOldVal && accountsData[1].length === 0) {
+                try {
+                    let ops = JSON.parse(veryOldVal);
+                    if (Array.isArray(ops)) {
+                        if (ops.length > 0 && typeof ops[0] === 'object') {
+                            ops = ops.filter(op => op.own !== false && op.name).map(op => op.name);
+                        }
+                        accountsData[1] = ops;
+                        migrated = true;
+                    }
+                } catch(e){}
+            }
         }
+
+        if (migrated) saveAccountsData(); // 如果发生了任何迁移，立即转储至新结构
+
+        ownedOpsSet = new Set(accountsData[activeAccountId] || []);
+        console.log(`[Better PRTS] 已加载账号 ${activeAccountId} 的 ${ownedOpsSet.size} 名持有干员`);
     }
 
     /**
-     * [V12.0 多账号] 切换账号的核心逻辑
+     * 执行账号切换
      */
     function switchAccount(id) {
         if (id === activeAccountId) return;
+
         activeAccountId = id;
-        GM_setValue(ACTIVE_ACCOUNT_KEY, activeAccountId);
+        saveAccountsData(); // 记忆选中状态
 
-        loadOwnedOps(); // 重载该账号的干员数据
+        ownedOpsSet = new Set(accountsData[activeAccountId] ||[]);
 
-        // 1. 更新悬浮面板 UI 状态
+        // 1. 同步悬浮窗面板内的小按钮状态
         const accBtns = document.querySelectorAll('.prts-acc-btn');
         accBtns.forEach(btn => {
             if (parseInt(btn.dataset.id) === activeAccountId) {
@@ -395,30 +420,31 @@
             }
         });
 
-        // 2. 重新注入主过滤栏以刷新文案
+        // 2. 销毁并重建控制栏以刷新UI文案和导入数量
+        const bar = document.getElementById('prts-filter-bar');
+        if (bar) bar.remove();
         injectFilterControls();
 
-        // 3. 立即重算过滤逻辑
+        // 3. 立刻触发重新筛选运算
         if (currentFilterMode !== 'NONE') {
             requestFilterUpdate();
         }
     }
 
-    // 用于给过滤栏快速点击循环切换账号用
+    // 给主控制栏用的循环切换
     function cycleAccount() {
         let nextId = activeAccountId + 1;
         if (nextId > 3) nextId = 1;
         switchAccount(nextId);
     }
 
-    function updateImportButtonUI() {
-        const btn = document.getElementById('btn-import');
-        if (!btn) return;
-        const count = ownedOpsSet.size;
-        const textSpan = btn.querySelector('.bp4-button-text');
-        if (textSpan) {
-            textSpan.innerText = count > 0 ? `导入干员 (${count})` : '导入干员';
-        }
+    // =========================================================================
+    //                            MODULE 5: 业务逻辑 - 筛选与净化
+    // =========================================================================
+
+    function isFilterDisabledPage() {
+        const path = window.location.pathname;
+        return path.startsWith('/create') || path.startsWith('/editor');
     }
 
     function handleImport() {
@@ -450,7 +476,7 @@
 
                     let names =[];
                     if (json.length === 0) {
-                         names = [];
+                         names =[];
                     } else if (typeof json[0] === 'string') {
                         names = json;
                     } else if (typeof json[0] === 'object' && json[0] !== null && 'name' in json[0]) {
@@ -463,11 +489,14 @@
                     if (names.length > 0) {
                         const uniqueNames = Array.from(new Set(names));
 
-                        // [V12.0] 保存至当前活跃账号
-                        const currentKey = OPS_STORAGE_KEY_PREFIX + activeAccountId;
-                        GM_setValue(currentKey, JSON.stringify(uniqueNames));
-
+                        // 保存至当前活跃账号
+                        accountsData[activeAccountId] = uniqueNames;
+                        saveAccountsData();
                         ownedOpsSet = new Set(uniqueNames);
+
+                        // 销毁并重建控制栏以更新数字
+                        const bar = document.getElementById('prts-filter-bar');
+                        if (bar) bar.remove();
                         injectFilterControls();
 
                         alert(`✅ 账号 ${activeAccountId} 导入成功！\n共识别 ${uniqueNames.length} 名持有干员。`);
@@ -496,7 +525,7 @@
 
     function toggleFilter(mode) {
         if (ownedOpsSet.size === 0) {
-            alert(`请先为账号 ${activeAccountId} 导入干员数据！`);
+            alert(`请先为当前 账号 ${activeAccountId} 导入干员数据！`);
             return;
         }
         currentFilterMode = (currentFilterMode === mode) ? 'NONE' : mode;
@@ -581,9 +610,9 @@
             return btn;
         };
 
-        // 4. 按严格顺序构建 DOM 节点
+        // 顺序生成元素
 
-        // (1) 账号切换器[V12.0 新增]
+        // (1) 账号循环切换按钮
         const btnAccountText = `账号 ${activeAccountId}`;
         const btnAccount = renderButton('btn-account', btnAccountText, paths.user, cycleAccount);
         controlBar.appendChild(btnAccount);
@@ -832,6 +861,9 @@
         }
     }
 
+    /**
+     * [筛选逻辑的核心应用方法] - 包含最优算法注入
+     */
     function applyFilterLogic() {
         if (isFilterDisabledPage()) return;
         isProcessingFilter = true;
@@ -934,7 +966,7 @@
     }
 
     // =========================================================================
-    //                            MODULE 5: 业务逻辑 - 侧边栏与悬浮球
+    //                            MODULE 6: 侧边栏与悬浮球面板
     // =========================================================================
 
     function optimizeSidebar() {
@@ -1065,7 +1097,7 @@
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
         }));
 
-        //[V12.0] 账号切换器独立行
+        //[V12.0/V3.1.0 优美的多账号悬浮面板]
         const accRow = document.createElement('div');
         accRow.className = 'prts-panel-item';
         accRow.style.marginTop = '8px';
@@ -1092,7 +1124,6 @@
         accRow.appendChild(accBtnGroup);
         panel.appendChild(accRow);
 
-        // 统一导入按钮，默认导入到 activeAccountId 账号中
         const importBtn = document.createElement('button');
         importBtn.className = 'prts-btn';
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
@@ -1192,7 +1223,7 @@
     }
 
     // =========================================================================
-    //                            MODULE 6: 初始化与统一监听
+    //                            MODULE 7: 初始化与统一监听
     // =========================================================================
 
     function init() {
@@ -1200,6 +1231,7 @@
         createFloatingBall();
         injectFilterControls();
 
+        // 卡片渲染观察者
         const observer = new MutationObserver((mutations) => {
             optimizeSidebar();
             optimizeDialogContent();
@@ -1250,6 +1282,7 @@
 
         bodyObserver.observe(document.body, { childList: true });
 
+        // 保底同步刷新
         setInterval(() => {
             optimizeSidebar();
             optimizeDialogContent();
