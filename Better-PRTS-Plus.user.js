@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.10.0
+// @version      2.10.1
 // @description  [整合版] 集成多账号无缝切换、完美作业筛选(支持干员组)、深度暗黑模式适配及干员头像可视化等全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
-// @icon         https://zoot.plus/favicon.ico
+// @match        https://prts.plus/*
+// @icon         https://prts.plus/favicon.ico
 // @homepage     https://github.com/ntgmc/Better-PRTS-Plus
 // @supportURL   https://github.com/ntgmc/Better-PRTS-Plus/issues
 // @grant        GM_setValue
