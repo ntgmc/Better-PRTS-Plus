@@ -2,12 +2,12 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-2.10.0-blue.svg?style=flat-square)
+![Version](https://img.shields.io/badge/Version-2.10.1-blue.svg?style=flat-square)
 ![License](https://img.shields.io/badge/License-GPL--3.0-red.svg?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Tampermonkey-green.svg?style=flat-square)
 [![GreasyFork](https://img.shields.io/badge/Release-GreasyFork-orange.svg?style=flat-square)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)
 
-**[整合版] 为 [zoot.plus](https://zoot.plus) 打造的深度增强脚本**
+**[整合版] 为 [prts.plus](https://prts.plus) 打造的深度增强脚本**
 
 集成了多账号无缝切换、完美作业筛选、干员头像可视化及深度暗黑模式适配。
 让你的“抄作业”体验从未如此直观、丝滑。
@@ -83,7 +83,7 @@
 
 ## 🤝 致谢与声明
 
-*   **原站支持**：感谢 [zoot.plus](https://zoot.plus) 提供的优秀作业平台。
+*   **原站支持**：感谢 [prts.plus](https://prts.plus) 提供的优秀作业平台。
 *   **开源协议**：本项目基于 [GPL-3.0 License](LICENSE) 开源。
 *   **作者**：一只摆烂的42 (ntgmc)
 
