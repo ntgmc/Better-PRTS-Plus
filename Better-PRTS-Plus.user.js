@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.10.1
+// @version      2.10.2
 // @description  [整合版] 集成多账号无缝切换、完美作业筛选(支持干员组)、深度暗黑模式适配及干员头像可视化等全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -710,27 +710,45 @@
         const heading = cardInner.querySelector('h4, h5, .bp4-heading');
         const stageCodeSpan = cardInner.querySelector('.flex.whitespace-pre .inline-block.font-bold.my-auto');
 
-        if (stageCodeSpan && heading && !heading.dataset.badgeProcessed) {
-            const rawCode = stageCodeSpan.innerText.trim();
-            const isInternalId = rawCode.includes('_') || (rawCode.length > 5 && /^[a-z]/.test(rawCode));
+        if (heading && !heading.dataset.badgeProcessed) {
+            const titleTextNode = heading.querySelector('.whitespace-nowrap.overflow-hidden.text-ellipsis') || heading;
+            let currentText = titleTextNode.innerText.trim();
 
-            if (!isInternalId) {
-                const titleTextNode = heading.querySelector('.whitespace-nowrap.overflow-hidden.text-ellipsis') || heading;
-                let currentText = titleTextNode.innerText;
+            let badgeText = null;
+            let titleCleanText = currentText;
+
+            const rawCode = stageCodeSpan ? stageCodeSpan.innerText.trim() : "";
+            const isInternalId = rawCode.includes('_') || (rawCode.length > 5 && /^[a-z]+$/.test(rawCode.replace(/\d/g, '')));
+
+            if (rawCode && !isInternalId) {
+                badgeText = rawCode;
                 const escapedCode = rawCode.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                const regex = new RegExp(`^\\s*(\\[|【)?\\s*${escapedCode}\\s*(\\]|】)?\\s*([-|:：\\s]+)?`, 'i');
+                const regex = new RegExp(`^\\s*(?:\\[|【)?\\s*${escapedCode}\\s*(?:\\]|】)?\\s*(?:[-_=:：|]\\s*|\\s+)?`, 'i');
+                titleCleanText = currentText.replace(regex, '');
+            } else {
+                // 完美匹配格式:
+                // [带横杠的标准格式] PA-1, PA-EX-1, 1-7, S4-1
+                // [用户偷懒的不带杠格式] PA5, LE10
+                // 以及匹配前置的各种括号 [PA-1], 【PA-1】
+                const fallbackRegex = /^(?:\[|【)?(([A-Za-z0-9]{1,6}(?:-[A-Za-z0-9]{1,4})*-\d{1,3})|([A-Za-z]{2,5}\d{1,3}))(?:\]|】)?\s*(?:[-_=:：|]\s*|\s+(?!$))?(.*)$/i;
 
-                if (regex.test(currentText)) {
-                    titleTextNode.innerText = currentText.replace(regex, '');
+                const match = currentText.match(fallbackRegex);
+                if (match) {
+                    badgeText = match[1].toUpperCase(); // 提取到的关卡号，并统一转为大写 (如 pa-5 -> PA-5)
+                    titleCleanText = match[4].trim();   // 剥离出真实的标题文本
                 }
+            }
+
+            if (badgeText) {
+                titleTextNode.innerText = titleCleanText;
 
                 const badge = document.createElement('span');
                 badge.className = 'prts-level-badge';
-                badge.innerText = rawCode;
+                badge.innerText = badgeText;
                 heading.insertBefore(badge, heading.firstChild);
-
-                heading.dataset.badgeProcessed = "true";
             }
+
+            heading.dataset.badgeProcessed = "true";
         }
 
         const allDivs = Array.from(cardInner.querySelectorAll('div'));
@@ -763,7 +781,7 @@
                         newItem = document.createElement('div');
                         newItem.className = 'prts-op-item';
                         const img = document.createElement('img');
-                        img.src = `https://zoot.plus/assets/operator-avatars/webp96/${opId}.webp`;
+                        img.src = `/assets/operator-avatars/webp96/${opId}.webp`;
                         img.className = 'prts-op-img';
                         img.loading = "lazy";
                         newItem.appendChild(img);
@@ -844,7 +862,7 @@
                 item.title = `${op.name} ${op.skill ? '(技能 ' + op.skill + ')' : ''}`;
 
                 const img = document.createElement('img');
-                img.src = `https://zoot.plus/assets/operator-avatars/webp96/${op.id}.webp`;
+                img.src = `/assets/operator-avatars/webp96/${op.id}.webp`;
                 img.className = 'prts-popover-img';
 
                 item.appendChild(img);
