@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.10.3
-// @description  [整合版] 集成多账号无缝切换、完美作业筛选(支持干员组)、深度暗黑模式适配及干员头像可视化等全方位增强脚本。
+// @version      2.11.0
+// @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
 // @match        https://prts.plus/*
@@ -258,34 +258,76 @@
     //                            MODULE 3: 工具函数与核心算法
     // =========================================================================
 
-    function getElementByXPath(path) {
-        return document.evaluate(path, document, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null).singleNodeValue;
-    }
-
-    function getReactProps(element) {
+    // 获取 React Fiber 节点
+    function getFiberNode(element) {
         if (!element) return null;
-        const key = Object.keys(element).find(k => k.startsWith('__reactProps$'));
+        const key = Object.keys(element).find(k => k.startsWith('__reactFiber$'));
         return key ? element[key] : null;
     }
 
+    // 提取 React 节点中的文本内容
+    function getReactNodeText(node) {
+        if (!node) return '';
+        if (typeof node === 'string' || typeof node === 'number') return String(node);
+        if (Array.isArray(node)) return node.map(getReactNodeText).join('');
+        if (node.props && node.props.children) return getReactNodeText(node.props.children);
+        return '';
+    }
+
+    // 向上遍历 Fiber 树，获取完整的作业数据
+    function extractOperationFromFiber(element) {
+        let fiber = getFiberNode(element);
+        let depth = 0;
+
+        while (fiber && depth < 30) { // 向上遍历最多 30 层
+            const props = fiber.memoizedProps;
+            if (props) {
+                const candidate = props.operation || props.data || props.copilot || props.item;
+                if (candidate && typeof candidate === 'object') {
+                    if (candidate.parsedContent || Array.isArray(candidate.opers) || typeof candidate.content === 'string') {
+                        return candidate;
+                    }
+                }
+            }
+            fiber = fiber.return;
+            depth++;
+        }
+        return null;
+    }
+
+    // 获取悬浮窗组件(Popover)内部的文本内容
+    function extractPopoverContentFromFiber(element) {
+        let fiber = getFiberNode(element);
+        let depth = 0;
+
+        while (fiber && depth < 15) {
+            const props = fiber.memoizedProps;
+            if (props && props.content !== undefined) {
+                return getReactNodeText(props.content);
+            }
+            fiber = fiber.return;
+            depth++;
+        }
+        return "";
+    }
+
     /**
-     * [核心算法优化] 干员与干员组的可用性判定（贪心策略）
+     * 干员与干员组的可用性判定
      */
     function checkOperationAvailability(operation, ownedOpsSet, filterMode) {
         if (!ownedOpsSet || ownedOpsSet.size === 0 || filterMode === 'NONE') {
             return { isAvailable: true, missingCount: 0, missingOps:[] };
         }
 
-        const { opers: requiredOps = [], groups: requiredGroups =[] } = operation.parsedContent || {};
-
-        // 兼容性回退：处理无法获取React Props的老DOM数据
-        if (operation._isFallback) {
-             const missing = requiredOps
-                .map(op => op.name)
-                .filter(name => !ownedOpsSet.has(name));
-             const isAvail = (filterMode === 'PERFECT') ? (missing.length === 0) : (missing.length <= 1);
-             return { isAvailable: isAvail, missingCount: missing.length, missingOps: missing };
+        let parsed = operation.parsedContent;
+        if (!parsed) {
+            if (Array.isArray(operation.opers) || Array.isArray(operation.groups)) {
+                parsed = operation;
+            } else if (typeof operation.content === 'string') {
+                try { parsed = JSON.parse(operation.content); } catch(e) {}
+            }
         }
+        const { opers: requiredOps = [], groups: requiredGroups =[] } = parsed || {};
 
         if (requiredOps.length === 0 && requiredGroups.length === 0) {
             return { isAvailable: true, missingCount: 0, missingOps:[] };
@@ -294,9 +336,10 @@
         const usedOwnedOps = new Set();
         const missingDetails =[];
 
-        // 1. 优先满足固定干员
         requiredOps.forEach(op => {
             const opName = op.name;
+            if (operation._isFallback && !OP_ID_MAP[opName]) return; // 忽略错抓的非干员词汇
+
             if (ownedOpsSet.has(opName)) {
                 usedOwnedOps.add(opName);
             } else {
@@ -304,12 +347,11 @@
             }
         });
 
-        // 2. 贪心处理干员组 (按可选名单长度升序处理)
         if (requiredGroups.length > 0) {
             const groupProcessList = requiredGroups.map(group => {
                 const allowedNames = (group.opers ||[]).map(o => o.name);
                 const candidates = allowedNames.filter(name => ownedOpsSet.has(name));
-                return { name: group.name || '未命名干员组', candidates };
+                return { name: group.name || '未命名干员组', candidates, total: allowedNames.length };
             });
 
             groupProcessList.sort((a, b) => a.candidates.length - b.candidates.length);
@@ -319,6 +361,7 @@
                 if (validCandidate) {
                     usedOwnedOps.add(validCandidate);
                 } else {
+                    if (operation._isFallback && groupItem.total === 0) return; // 无法提取组成员时放行（防误杀）
                     missingDetails.push(`[${groupItem.name}]`);
                 }
             });
@@ -897,27 +940,46 @@
                 optimizeCardVisuals(card, cardInner);
                 cleanBilibiliLinks(cardInner);
 
-                let operation = null;
-                const liProps = getReactProps(card);
-                const cardProps = getReactProps(cardInner);
+                // 1. 通过 Fiber 树提取数据，适应组件层级变化
+                let operation = extractOperationFromFiber(cardInner) || extractOperationFromFiber(card);
 
-                operation = liProps?.children?.props?.operation ||
-                            cardProps?.children?.[0]?.props?.operation ||
-                            cardProps?.operation;
-
+                // 2. 降级抓取模式：解析 DOM 结构获取干员及干员组
                 if (!operation) {
-                    const tags = Array.from(card.querySelectorAll('.bp4-tag'));
-                    const requiredOps =[];
+                    const tags = Array.from(card.querySelectorAll('.bp4-tag, .prts-op-text'));
+                    const requiredOps = [];
+                    const requiredGroups = [];
+
                     tags.forEach(tag => {
                         if (tag.querySelector('h4')) return;
+                        if (tag.style.display === 'none') return;
+
                         const text = tag.innerText.trim();
-                        if (['普通', '突袭', 'Beta'].includes(text) || text.includes('活动关卡') ||
+                        if (!text || ['普通', '突袭', 'Beta'].includes(text) || text.includes('活动关卡') ||
                             text.includes('|') || text.includes('更新') || text.includes('作者')) return;
 
-                        const name = text.split(/\s+/)[0];
-                        if (name) requiredOps.push({ name });
+                        let name = text.split(/\s+/)[0];
+                        const isGroup = /^\[.*\]$/.test(name) || tag.classList.contains('prts-op-text');
+                        name = name.replace(/^\[|\]$/g, '');
+
+                        if (name) {
+                            if (isGroup) {
+                                // 尝试获取悬浮窗组件内部的文本内容
+                                const targetNode = tag.closest('.bp4-popover2-target');
+                                let groupCandidates = [];
+                                if (targetNode) {
+                                    const popoverText = extractPopoverContentFromFiber(targetNode);
+                                    // 格式化文本 "-> 塞雷娅, 临光" -> ["塞雷娅", "临光"]
+                                    const cleanStr = popoverText.replace(/^->\s*/, '');
+                                    const names = cleanStr.split(/[,，]\s*/).map(s => s.split(/\s+/)[0]).filter(Boolean);
+                                    groupCandidates = names.map(n => ({ name: n }));
+                                }
+                                requiredGroups.push({ name: name, opers: groupCandidates });
+                            } else {
+                                requiredOps.push({ name });
+                            }
+                        }
                     });
-                    operation = { parsedContent: { opers: requiredOps }, _isFallback: true };
+                    operation = { parsedContent: { opers: requiredOps, groups: requiredGroups }, _isFallback: true };
                 }
 
                 const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);

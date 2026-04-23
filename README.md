@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-2.10.3-blue.svg?style=flat-square)
+![Version](https://img.shields.io/badge/Version-2.11.0-blue.svg?style=flat-square)
 ![License](https://img.shields.io/badge/License-GPL--3.0-red.svg?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Tampermonkey-green.svg?style=flat-square)
 [![GreasyFork](https://img.shields.io/badge/Release-GreasyFork-orange.svg?style=flat-square)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)
@@ -38,8 +38,7 @@
 *   **无缝切换**：在筛选栏或悬浮球面板中一键秒切，无需重复导入。
 
 ### 4. 🌙 深度暗黑模式 & 界面净化
-*   **高对比度优先**：深色模式下**优先使用深色模式（高对比）**，并针对原站暗黑模式下的 Blueprint UI 组件进行了初步配色修正，确保基础文字清晰。
-*   ⚠️ **适配状态说明**：*目前深色模式在部分特定组件或极端场景下，可能会存在配色怪异、不协调的问题（后续版本等待持续适配中，敬请谅解）。*
+*   ⚠️ **适配状态说明**：*目前深色模式在部分特定组件或极端场景下，可能会存在配色怪异、不协调的问题（后续版本等待持续适配中，敬请谅解）。* 建议**优先使用深色模式（高对比）**。
 *   **侧边栏净化**：默认折叠“创作工具”与“上传”区域，大幅提升首屏有效信息密度。
 *   **公告美化**：重构站务公告显示，增加“更新”、“维护”、“活动”等分类标签。
 
@@ -70,14 +69,6 @@
 
 ### 第三步：自定义偏好
 *   通过悬浮球的设置面板，您可以实时开关“卡片美化”、“侧边栏净化”、“链接优化”等功能，配置将自动云端同步（随油猴账号）。
-
----
-
-## 🛠️ 技术详情
-
-*   **数据结构**：采用 V12.0/V3.1.0 架构，使用单一 `JSON` 集合存储，性能提升 40% 并完美向下兼容。
-*   **响应式逻辑**：基于 `MutationObserver` 监听 DOM 变化，确保在翻页、搜索后增强功能依然秒速加载。
-*   **轻量级**：原生 JS 编写，不依赖大型第三方库，保持页面加载流畅。
 
 ---
 
