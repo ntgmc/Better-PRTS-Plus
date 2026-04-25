@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.12.0
+// @version      2.12.1
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -34,10 +34,10 @@
 
     // [设置配置] 功能开关默认状态
     const CONFIG = {
-        visuals: GM_getValue('prts_cfg_visuals', true), // 干员头像优化
-        sidebar: GM_getValue('prts_cfg_sidebar', true), // 侧边栏优化
-        cleanLink: GM_getValue('prts_cfg_link', true),  // 链接净化
-        filterBar: GM_getValue('prts_cfg_filter', true) // 显示筛选栏
+        visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
+        cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
+        filterBar: GM_getValue('prts_cfg_filter', true),      // 显示筛选栏
+        hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false) // 折叠侧边栏
     };
 
     // 全局状态变量
@@ -46,7 +46,6 @@
 
     let currentFilterMode = 'NONE';
     let displayMode = GM_getValue(DISPLAY_MODE_KEY, 'GRAY');
-    let isSidebarHidden = GM_getValue('prts_sidebar_hidden', false); // 侧栏折叠状态
     let ownedOpsSet = new Set();
 
     let isProcessingFilter = false;
@@ -203,18 +202,7 @@
     body.dark[data-prts-tooltip]:hover::after { background-color: #202b33; }
     body.dark [data-prts-tooltip]:hover::before { border-color: #202b33 transparent transparent transparent; }
 
-    /* 7. 侧边栏与公告 */
-    .prts-sidebar-collapsed { max-height: 48px !important; overflow: hidden !important; cursor: pointer !important; opacity: 0.9; }
-    .prts-sidebar-header-icon { display: flex; align-items: center; justify-content: space-between; }
-    .prts-sidebar-header-icon::after { content: "▼"; font-size: 0.8em; color: #9ca3af; transition: transform 0.3s; }
-    .prts-sidebar-expanded .prts-sidebar-header-icon::after { transform: rotate(180deg); }
-
-    .prts-notice-btn { cursor: pointer !important; border-left: 4px solid #3b82f6 !important; transition: transform 0.2s, box-shadow 0.2s !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-height: 48px !important; padding: 0 16px !important; }
-    .prts-notice-btn:hover { transform: translateX(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; }
-    .prts-notice-btn > div:not(.bp4-heading), .prts-notice-btn ul { display: none !important; }
-    .prts-notice-btn h4.bp4-heading { display: flex !important; align-items: center !important; margin: 0 !important; width: 100% !important; opacity: 1 !important; visibility: visible !important; color: #1f2937 !important; }
-    body.dark .prts-notice-btn h4.bp4-heading { color: #f3f4f6 !important; }
-
+    /* 7. 公告弹窗标签 */
     .prts-dialog-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-weight: bold; margin-right: 8px; color: #fff; vertical-align: middle; }
     .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; }
     .prts-tag-event { background-color: #3b82f6; } .prts-tag-note { background-color: #64748b; }
@@ -587,22 +575,13 @@
         requestFilterUpdate();
     }
 
-    function toggleSidebarPanel() {
-        isSidebarHidden = !isSidebarHidden;
-        GM_setValue('prts_sidebar_hidden', isSidebarHidden);
-        applySidebarCollapse();
-        const bar = document.getElementById('prts-filter-bar');
-        if (bar) bar.remove();
-        injectFilterControls();
-    }
-
     function applySidebarCollapse() {
         if (isFilterDisabledPage()) return;
         const wrapper = document.querySelector('.docs-content-wrapper');
         if (!wrapper) return;
         const layoutContainer = wrapper.firstElementChild;
         if (layoutContainer && layoutContainer.classList.contains('flex')) {
-            if (isSidebarHidden) {
+            if (CONFIG.hideSidebar) {
                 layoutContainer.classList.add('prts-sidebar-hidden-layout');
             } else {
                 layoutContainer.classList.remove('prts-sidebar-hidden-layout');
@@ -722,11 +701,6 @@
         // (6) 允许助战
         const btnSupport = renderButton('btn-support', '允许助战', paths.support, () => toggleFilter('SUPPORT'), currentFilterMode === 'SUPPORT');
         controlBar.appendChild(btnSupport);
-
-        // (7) 侧栏折叠按钮
-        const sidebarModeText = isSidebarHidden ? '展开侧栏' : '收起侧栏';
-        const btnSidebarToggle = renderButton('btn-sidebar-toggle', sidebarModeText, paths.sidebarToggle, toggleSidebarPanel);
-        controlBar.appendChild(btnSidebarToggle);
 
         if (isNew && currentFilterMode !== 'NONE') {
             requestFilterUpdate();
@@ -1089,45 +1063,6 @@
     //                            MODULE 6: 侧边栏与悬浮球面板
     // =========================================================================
 
-    function optimizeSidebar() {
-        if (!CONFIG.sidebar) return;
-        const cards = document.querySelectorAll('.bp4-card');
-
-        cards.forEach(card => {
-            if (card.dataset.sidebarOptimized) return;
-            const textContent = card.innerText;
-
-            if (textContent.includes('创建新作业') || textContent.includes('拖拽上传')) {
-                card.classList.add('prts-sidebar-collapsed');
-                const header = card.querySelector('h4, h5, h3, .bp4-heading') || card.firstElementChild;
-                if (header) {
-                    header.classList.add('prts-sidebar-header-icon');
-                    if (!header.dataset.origText) {
-                         header.dataset.origText = header.innerText;
-                         header.innerHTML = `🛠️ 创作工具`;
-                         header.title = "点击展开/折叠";
-                    }
-                }
-                card.onclick = (e) => {
-                    if (e.target.closest('a') || e.target.closest('button')) return;
-                    card.classList.toggle('prts-sidebar-collapsed');
-                    card.classList.toggle('prts-sidebar-expanded');
-                };
-                card.dataset.sidebarOptimized = "true";
-            }
-
-            if (textContent.includes('公告') && card.querySelector('ul')) {
-                card.classList.add('prts-notice-btn');
-                const header = card.querySelector('h4, h5, h3, .bp4-heading');
-                if (header) {
-                    header.innerHTML = `📢 站务公告 <span style="font-size:12px; opacity:0.7; font-weight:normal; margin-left:auto;">点击查看详情</span>`;
-                    header.classList.remove('text-gray-700');
-                }
-                card.dataset.sidebarOptimized = "true";
-            }
-        });
-    }
-
     function optimizeDialogContent() {
         const dialog = document.querySelector('.bp4-dialog');
         if (!dialog || dialog.dataset.contentOptimized) return;
@@ -1162,9 +1097,9 @@
 
     function saveConfig() {
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
-        GM_setValue('prts_cfg_sidebar', CONFIG.sidebar);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
         GM_setValue('prts_cfg_filter', CONFIG.filterBar);
+        GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
     }
 
     function createFloatingBall() {
@@ -1210,11 +1145,12 @@
         panel.appendChild(createSwitch('🖼️ 作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
         }));
-        panel.appendChild(createSwitch('🗂️ 侧边栏净化', CONFIG.sidebar, (val) => {
-            CONFIG.sidebar = val; saveConfig(); if(val) optimizeSidebar();
-        }));
         panel.appendChild(createSwitch('🔗 视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
+        }));
+
+        panel.appendChild(createSwitch('🗂️ 折叠侧边栏', CONFIG.hideSidebar, (val) => {
+            CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
         }));
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
@@ -1354,7 +1290,6 @@
 
         // 卡片渲染观察者
         const observer = new MutationObserver((mutations) => {
-            optimizeSidebar();
             optimizeDialogContent();
             applySidebarCollapse();
 
@@ -1407,10 +1342,8 @@
         // 保底同步刷新
         setInterval(() => {
             applySidebarCollapse();
-            optimizeSidebar();
             optimizeDialogContent();
             createFloatingBall();
-            if (CONFIG.sidebar) optimizeSidebar();
             if (!isFilterDisabledPage() && !document.getElementById('prts-filter-bar')) {
                 injectFilterControls();
             }
