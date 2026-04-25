@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.11.0
+// @version      2.12.0
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -46,6 +46,7 @@
 
     let currentFilterMode = 'NONE';
     let displayMode = GM_getValue(DISPLAY_MODE_KEY, 'GRAY');
+    let isSidebarHidden = GM_getValue('prts_sidebar_hidden', false); // 侧栏折叠状态
     let ownedOpsSet = new Set();
 
     let isProcessingFilter = false;
@@ -69,7 +70,7 @@
     /* ==========================================================================
        [PRTS 业务模块] 专有组件样式
        ========================================================================== */
-    
+
     /* 1. 描述容器 (Hover 展开) */
     .prts-desc-wrapper { position: relative; height: 24px; margin: 2px 0; width: 100%; z-index: 10; }
     .prts-desc-wrapper:hover { z-index: 100; }
@@ -82,7 +83,7 @@
         white-space: normal; overflow: visible; background-color: #ffffff; color: #374151;
         padding: 4px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); border: 1px solid #e5e7eb;
     }
-    
+
     body.dark .prts-desc-content { color: #9ca3af; }
     body.dark .prts-desc-wrapper:hover .prts-desc-content {
         background-color: #232326; color: #e5e7eb; border-color: #3f3f46;
@@ -138,15 +139,15 @@
 
     /* 4. 状态标签与卡片置灰 */
     .prts-status-label {
-        font-size: 13px !important; font-weight: 700 !important; display: flex !important; 
+        font-size: 13px !important; font-weight: 700 !important; display: flex !important;
         align-items: center !important; line-height: 1.5 !important; margin-bottom: 4px !important;
     }
-    
-    .prts-label-missing { color: #dc2626 !important; } 
-    body.dark .prts-label-missing { color: #ef4444 !important; } 
+
+    .prts-label-missing { color: #dc2626 !important; }
+    body.dark .prts-label-missing { color: #ef4444 !important; }
     .prts-label-support { color: #d97706 !important; }
     body.dark .prts-label-support { color: #f59e0b !important; }
-    
+
     .prts-card-gray .bp4-card { opacity: 0.4 !important; filter: grayscale(1) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; }
     .prts-card-gray:hover .bp4-card { opacity: 0.9 !important; filter: grayscale(0) !important; }
 
@@ -159,17 +160,17 @@
     body.dark .bg-purple-100.ring-purple-200 { background-color: rgba(147, 51, 234, 0.2) !important; --tw-ring-color: rgba(168, 85, 247, 0.6) !important; box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important; }
     body.dark .bg-slate-100.ring-slate-200 { background-color: #2d2d30 !important; --tw-ring-color: #3f3f46 !important; box-shadow: inset 0 0 0 2px #3f3f46 !important; color: #52525b !important; }
     body.dark .text-slate-300 { color: #52525b !important; }
-    
+
     .prts-op-item, .prts-op-text { position: relative; width: 42px; height: 42px; box-shadow: 0 1px 2px rgba(0,0,0,0.1); transition: transform 0.2s, box-shadow 0.2s; box-sizing: border-box; }
     .prts-op-item:hover, .prts-op-text:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.2); z-index: 50; }
-    
+
     .prts-op-item { background-color: #f8fafc; border: 1px solid #cbd5e1; border-radius: 4px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
     body.dark .prts-op-item { background-color: #1f2937; border-color: #374151; }
     .prts-op-item:hover { border-color: #3b82f6; }
     body.dark .prts-op-item:hover { border-color: #60a5fa; }
-    
+
     .prts-op-img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 3px; }
-    
+
     .prts-op-text { display: flex; align-items: center; justify-content: center; background-color: #f1f5f9; color: #475569; border: 1px dashed #94a3b8; border-radius: 4px; font-size: 12px; font-weight: bold; text-align: center; line-height: 1.1; padding: 2px; word-break: break-all; }
     .prts-op-text:hover { border-style: solid; border-color: #3b82f6; background-color: #fff; }
     body.dark .prts-op-text { background-color: #27272a; color: #d1d5db; border-color: #52525b; }
@@ -207,13 +208,13 @@
     .prts-sidebar-header-icon { display: flex; align-items: center; justify-content: space-between; }
     .prts-sidebar-header-icon::after { content: "▼"; font-size: 0.8em; color: #9ca3af; transition: transform 0.3s; }
     .prts-sidebar-expanded .prts-sidebar-header-icon::after { transform: rotate(180deg); }
-    
+
     .prts-notice-btn { cursor: pointer !important; border-left: 4px solid #3b82f6 !important; transition: transform 0.2s, box-shadow 0.2s !important; display: flex !important; flex-direction: column !important; justify-content: center !important; min-height: 48px !important; padding: 0 16px !important; }
     .prts-notice-btn:hover { transform: translateX(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1) !important; }
     .prts-notice-btn > div:not(.bp4-heading), .prts-notice-btn ul { display: none !important; }
     .prts-notice-btn h4.bp4-heading { display: flex !important; align-items: center !important; margin: 0 !important; width: 100% !important; opacity: 1 !important; visibility: visible !important; color: #1f2937 !important; }
     body.dark .prts-notice-btn h4.bp4-heading { color: #f3f4f6 !important; }
-    
+
     .prts-dialog-tag { display: inline-block; padding: 2px 6px; border-radius: 4px; font-size: 14px; font-weight: bold; margin-right: 8px; color: #fff; vertical-align: middle; }
     .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; }
     .prts-tag-event { background-color: #3b82f6; } .prts-tag-note { background-color: #64748b; }
@@ -225,23 +226,23 @@
     #prts-float-container.is-snapping { transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
     #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 12px)); }
     #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 12px)); }
-    
+
     .prts-float-btn { width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none; border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2; }
     .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
     #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
     body.dark .prts-float-btn { background-color: #232326; border-color: #3f3f46; color: #e5e7eb; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
-    
+
     .prts-settings-panel { position: absolute; top: 0; width: 260px; background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); z-index: 1; visibility: hidden; opacity: 0; pointer-events: none; transition: all 0.5s cubic-bezier(0.22, 1, 0.36, 1); right: 55px; left: auto; transform: translateX(20px) scale(0.95); transform-origin: top right; }
     #prts-float-container.snap-left .prts-settings-panel { left: 55px; right: auto; transform: translateX(-20px) scale(0.95); transform-origin: top left; }
     #prts-float-container.prts-float-open .prts-settings-panel { visibility: visible; opacity: 1; transform: translateX(0) scale(1); pointer-events: auto; }
     body.dark .prts-settings-panel { background: #18181c; border-color: #3f3f46; box-shadow: 0 4px 20px rgba(0,0,0,0.6); }
     body.high-contrast-theme .prts-settings-panel { background: #18181c; }
-    
+
     .prts-panel-title { font-size: 14px; font-weight: bold; margin-bottom: 12px; color: #1f2937; display: flex; align-items: center; padding-bottom: 8px; border-bottom: 1px solid #f3f4f6; }
     body.dark .prts-panel-title { color: #f3f4f6; border-color: #3f3f46; }
     .prts-panel-item { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; font-size: 13px; color: #4b5563; }
     body.dark .prts-panel-item { color: #d1d5db; }
-    
+
     .prts-switch { position: relative; display: inline-block; width: 36px; height: 20px; }
     .prts-switch input { opacity: 0; width: 0; height: 0; }
     .prts-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
@@ -250,6 +251,16 @@
     input:checked + .prts-slider:before { transform: translateX(16px); }
     body.dark .prts-slider { background-color: #4b5563; }
     body.dark input:checked + .prts-slider { background-color: #2563eb; }
+
+    /* 9. 侧边栏折叠布局 */
+    .prts-sidebar-hidden-layout > div:nth-child(1) {
+        width: 100% !important;
+        max-width: 100% !important;
+        margin-right: 0 !important;
+    }
+    .prts-sidebar-hidden-layout > div:nth-child(2) {
+        display: none !important;
+    }
 `;
 
     GM_addStyle(mergedStyles);
@@ -482,7 +493,7 @@
     }
 
     // =========================================================================
-    //                            MODULE 5: 业务逻辑 - 筛选与净化
+    //                            MODULE 5: 业务逻辑 - 筛选、折叠与净化
     // =========================================================================
 
     function isFilterDisabledPage() {
@@ -576,6 +587,29 @@
         requestFilterUpdate();
     }
 
+    function toggleSidebarPanel() {
+        isSidebarHidden = !isSidebarHidden;
+        GM_setValue('prts_sidebar_hidden', isSidebarHidden);
+        applySidebarCollapse();
+        const bar = document.getElementById('prts-filter-bar');
+        if (bar) bar.remove();
+        injectFilterControls();
+    }
+
+    function applySidebarCollapse() {
+        if (isFilterDisabledPage()) return;
+        const wrapper = document.querySelector('.docs-content-wrapper');
+        if (!wrapper) return;
+        const layoutContainer = wrapper.firstElementChild;
+        if (layoutContainer && layoutContainer.classList.contains('flex')) {
+            if (isSidebarHidden) {
+                layoutContainer.classList.add('prts-sidebar-hidden-layout');
+            } else {
+                layoutContainer.classList.remove('prts-sidebar-hidden-layout');
+            }
+        }
+    }
+
     function updateFilterButtonStyles() {
         const perfectBtn = document.getElementById('btn-perfect');
         const supportBtn = document.getElementById('btn-support');
@@ -618,7 +652,8 @@
             eyeOff: 'M6.41 7.83c-.03.39.07.79.31 1.12.24.34.59.58.98.68.39.1.81.02 1.15-.21.34-.23.59-.57.7-.96.1-.39.02-.8-.21-1.15-.16-.23-.38-.42-.64-.53L6.41 7.83z M2.05 2.64L1.03 3.66l2.54 2.54C2.22 6.75 1.12 7.34 0 8c0 0 4 5.6 8 5.6 1.41 0 2.71-.35 3.85-.96l2.08 2.09 1.02-1.02L2.05 2.64z M8 12c-2.21 0-4-1.79-4-4 0-.2.02-.39.05-.58l5.04 5.04c-1.24.74-3.46.59-1.09-.46z M13.57 11.6c.54-1.06.83-2.24.83-3.6 0 0-4-5.6-8-5.6-.69 0-1.34.09-1.98.25L6.07 4.3C6.68 4.1 7.33 4 8 4c2.21 0 4 1.79 4 4 0 .64-.14 1.24-.38 1.79l1.95 1.81z',
             perfect: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
             support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm3.2-1.6c0-1.77-1.43-3.2-3.2-3.2-.45 0-.86.1-1.26.26.7.74 1.15 1.72 1.24 2.82.02.21.02.41 0 .62-.1 1.04-.51 1.98-1.16 2.71.37.13.75.19 1.18.19 1.77.01 3.2-1.42 3.2-3.4zM8.8 10.4H2.4c-.88 0-1.6.72-1.6 1.6v2.4h9.6V12c0-.88-.72-1.6-1.6-1.6zm-5.6 2.4h4.8v.8H3.2v-.8zm12-1.6h-4.8c.21 0 .4.03.59.07.67.15 1.29.44 1.81.85.91.71 1.5 1.81 1.57 3.04.01.1.01.18.03.28V12c0-.88-.72-1.6-1.6-1.6z',
-            user: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z'
+            user: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
+            sidebarToggle: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z'
         };
 
         const renderButton = (id, text, svgPath, onClick, active = false, disabled = false) => {
@@ -687,6 +722,11 @@
         // (6) 允许助战
         const btnSupport = renderButton('btn-support', '允许助战', paths.support, () => toggleFilter('SUPPORT'), currentFilterMode === 'SUPPORT');
         controlBar.appendChild(btnSupport);
+
+        // (7) 侧栏折叠按钮
+        const sidebarModeText = isSidebarHidden ? '展开侧栏' : '收起侧栏';
+        const btnSidebarToggle = renderButton('btn-sidebar-toggle', sidebarModeText, paths.sidebarToggle, toggleSidebarPanel);
+        controlBar.appendChild(btnSidebarToggle);
 
         if (isNew && currentFilterMode !== 'NONE') {
             requestFilterUpdate();
@@ -1308,6 +1348,7 @@
 
     function init() {
         loadOwnedOps();
+        applySidebarCollapse();
         createFloatingBall();
         injectFilterControls();
 
@@ -1315,6 +1356,7 @@
         const observer = new MutationObserver((mutations) => {
             optimizeSidebar();
             optimizeDialogContent();
+            applySidebarCollapse();
 
             if (isProcessingFilter) return;
             if (isFilterDisabledPage()) return;
@@ -1364,6 +1406,7 @@
 
         // 保底同步刷新
         setInterval(() => {
+            applySidebarCollapse();
             optimizeSidebar();
             optimizeDialogContent();
             createFloatingBall();

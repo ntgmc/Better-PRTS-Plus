@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-2.11.0-blue.svg?style=flat-square)
+![Version](https://img.shields.io/badge/Version-2.12.0-blue.svg?style=flat-square)
 ![License](https://img.shields.io/badge/License-GPL--3.0-red.svg?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Tampermonkey-green.svg?style=flat-square)
 [![GreasyFork](https://img.shields.io/badge/Release-GreasyFork-orange.svg?style=flat-square)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)
