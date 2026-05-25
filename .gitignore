@@ -1,2 +1,3 @@
-tool
+tool/*
+!tool/sync-readme-version.ps1
 .idea

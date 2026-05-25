@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.12.2
+// @version      2.12.3
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -1192,7 +1192,7 @@
 
         let isDragging = false;
         let hasMoved = false;
-        let startX, startY, initialLeft, initialTop;
+        let startX, startY, initialLeft, initialTop, initialSnapRight;
 
         btn.addEventListener('mousedown', (e) => {
             isDragging = true;
@@ -1202,6 +1202,7 @@
             const rect = container.getBoundingClientRect();
             initialLeft = rect.left;
             initialTop = rect.top;
+            initialSnapRight = container.style.right === '0px' || (container.classList.contains('snap-right') && !container.classList.contains('snap-left'));
 
             container.classList.remove('is-snapping');
             container.classList.add('is-dragging');
@@ -1250,7 +1251,7 @@
                 if (centerX < winWidth / 2) {
                     container.style.left = '0px';
                     container.style.right = 'auto';
-                    container.classList.remove('snap-left');
+                    container.classList.remove('snap-right');
                     container.classList.add('snap-left');
                     isRight = false;
                 } else {
@@ -1264,6 +1265,18 @@
                 container.style.top = topPercent;
 
                 GM_setValue('prts_float_pos', JSON.stringify({ top: topPercent, isRight: isRight }));
+            } else {
+                if (initialSnapRight) {
+                    container.style.left = 'auto';
+                    container.style.right = '0px';
+                    container.classList.remove('snap-left');
+                    container.classList.add('snap-right');
+                } else {
+                    container.style.left = '0px';
+                    container.style.right = 'auto';
+                    container.classList.remove('snap-right');
+                    container.classList.add('snap-left');
+                }
             }
         });
 
