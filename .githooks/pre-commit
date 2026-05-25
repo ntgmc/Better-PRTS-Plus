@@ -1,0 +1,13 @@
+#!/bin/sh
+set -e
+
+if command -v pwsh >/dev/null 2>&1; then
+    pwsh -NoProfile -ExecutionPolicy Bypass -File tool/sync-readme-version.ps1
+elif command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File tool/sync-readme-version.ps1
+else
+    echo "PowerShell is required to sync README version." >&2
+    exit 1
+fi
+
+git add README.md
