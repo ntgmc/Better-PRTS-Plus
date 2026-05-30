@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-2.12.3-blue.svg?style=flat-square)
+![Version](https://img.shields.io/badge/Version-2.13.0-blue.svg?style=flat-square)
 ![License](https://img.shields.io/badge/License-GPL--3.0-red.svg?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Tampermonkey-green.svg?style=flat-square)
 [![GreasyFork](https://img.shields.io/badge/Release-GreasyFork-orange.svg?style=flat-square)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)
@@ -37,9 +37,8 @@
 *   **配置同步**：开关状态和账号数据随油猴存储保存，刷新页面后仍能保留。
 
 ### 4. 🌙 界面净化与深色适配
-*   **深色模式增强**：优化 PRTS Plus 的深色显示体验，并提供高对比模式以改善阅读舒适度。
+*   **深色模式增强**：优化 PRTS Plus 的显示体验。
 *   **侧边栏净化**：折叠低频使用区域，让作业列表占据更多可视空间。
-*   **公告美化**：为站务公告增加分类标签，更新、维护、活动信息更容易扫读。
 *   **悬浮设置面板**：通过页面侧边悬浮球快速开关功能，不必进入额外设置页。
 
 ---
