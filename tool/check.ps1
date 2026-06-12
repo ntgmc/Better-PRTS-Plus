@@ -73,6 +73,24 @@ if ($userScript -match "existingLabel\.innerHTML|labelDiv\.innerHTML = new") {
 if ($userScript -notmatch "GM_setValue\(FILTER_MODE_KEY, currentFilterMode\)") {
     throw "Filter mode persistence is missing"
 }
+if ($userScript -notmatch "function scheduleFilterUpdate") {
+    throw "Missing unified filter scheduler"
+}
+if ($userScript -notmatch "function handleRouteChange") {
+    throw "Missing route-change refresh handler"
+}
+if ($userScript -notmatch "function hasRelevantDomMutation") {
+    throw "Missing relevant DOM mutation filter"
+}
+if ($userScript -notmatch "addEventListener\('pointerdown'") {
+    throw "Floating ball should use pointer events"
+}
+if ($userScript -match "addEventListener\('mousedown'|addEventListener\('mousemove'|addEventListener\('mouseup'") {
+    throw "Floating ball still uses mouse-only drag events"
+}
+if ($userScript -notmatch "setInterval\(\(\) => \{[\s\S]*\}, 3000\)") {
+    throw "Fallback interval should run at the reduced 3000ms cadence"
+}
 
 $specialCases = @(
     @{ id = "char_1019_siege2"; contains = [char]0x00B7 },

@@ -52,6 +52,7 @@
     let isProcessingFilter = false;
     let rafId = null;
     let filterDebounceTimer = null;
+    let lastRouteKey = `${window.location.pathname}${window.location.search}`;
 
     // =========================================================================
     //                            MODULE 2: 数据与样式
@@ -1023,7 +1024,57 @@
 
     function requestFilterUpdate() {
         if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(applyFilterLogic);
+        rafId = requestAnimationFrame(() => {
+            rafId = null;
+            applyFilterLogic();
+        });
+    }
+
+    function scheduleFilterUpdate(delay = 80) {
+        if (isFilterDisabledPage()) return;
+        if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
+        filterDebounceTimer = setTimeout(() => {
+            filterDebounceTimer = null;
+            requestFilterUpdate();
+        }, delay);
+    }
+
+    function syncPageScaffold() {
+        applySidebarCollapse();
+        optimizeDialogContent();
+        createFloatingBall();
+        injectFilterControls();
+    }
+
+    function getRouteKey() {
+        return `${window.location.pathname}${window.location.search}`;
+    }
+
+    function handleRouteChange() {
+        const routeKey = getRouteKey();
+        if (routeKey === lastRouteKey) return false;
+
+        lastRouteKey = routeKey;
+        syncPageScaffold();
+        scheduleFilterUpdate(120);
+        return true;
+    }
+
+    function isScriptOwnedNode(node) {
+        if (!node || node.nodeType !== 1) return false;
+        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, .prts-status-label'));
+    }
+
+    function hasRelevantDomMutation(mutations) {
+        for (const mutation of mutations) {
+            if (isScriptOwnedNode(mutation.target)) continue;
+
+            const added = Array.from(mutation.addedNodes || []);
+            const removed = Array.from(mutation.removedNodes || []);
+            const changedNodes = added.concat(removed);
+            if (changedNodes.some(node => !isScriptOwnedNode(node))) return true;
+        }
+        return false;
     }
 
     function optimizeCardVisuals(card, cardInner) {
@@ -1348,6 +1399,7 @@
         const btn = document.createElement('div');
         btn.className = 'prts-float-btn';
         btn.title = "脚本设置 (可拖拽)";
+        btn.style.touchAction = 'none';
         btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z"></path></svg>`;
 
         const panel = document.createElement('div');
@@ -1418,9 +1470,10 @@
 
         let isDragging = false;
         let hasMoved = false;
-        let startX, startY, initialLeft, initialTop, initialSnapRight;
+        let startX, startY, initialLeft, initialTop, initialSnapRight, activePointerId;
 
-        btn.addEventListener('mousedown', (e) => {
+        btn.addEventListener('pointerdown', (e) => {
+            activePointerId = e.pointerId;
             isDragging = true;
             hasMoved = false;
             startX = e.clientX;
@@ -1436,10 +1489,13 @@
             container.style.top = initialTop + 'px';
             container.style.right = 'auto';
             container.style.transform = 'none';
+            btn.setPointerCapture?.(e.pointerId);
+            e.preventDefault();
         });
 
-        document.addEventListener('mousemove', (e) => {
+        document.addEventListener('pointermove', (e) => {
             if (!isDragging) return;
+            if (activePointerId !== undefined && e.pointerId !== activePointerId) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
             if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
@@ -1461,9 +1517,12 @@
             container.style.top = newTop + 'px';
         });
 
-        document.addEventListener('mouseup', (e) => {
+        const finishDrag = (e) => {
             if (!isDragging) return;
+            if (activePointerId !== undefined && e.pointerId !== activePointerId) return;
             isDragging = false;
+            btn.releasePointerCapture?.(activePointerId);
+            activePointerId = undefined;
             container.classList.remove('is-dragging');
             container.style.transform = '';
 
@@ -1504,7 +1563,10 @@
                     container.classList.add('snap-left');
                 }
             }
-        });
+        };
+
+        document.addEventListener('pointerup', finishDrag);
+        document.addEventListener('pointercancel', finishDrag);
 
         btn.onclick = (e) => {
             e.stopPropagation();
@@ -1522,32 +1584,19 @@
 
     function init() {
         loadOwnedOps();
-        applySidebarCollapse();
-        createFloatingBall();
-        injectFilterControls();
+        syncPageScaffold();
+        scheduleFilterUpdate(0);
 
         // 卡片渲染观察者
         const observer = new MutationObserver((mutations) => {
-            optimizeDialogContent();
-            applySidebarCollapse();
+            if (handleRouteChange()) return;
 
             if (isProcessingFilter) return;
             if (isFilterDisabledPage()) return;
 
-            let domChanged = false;
-            for (const mutation of mutations) {
-                if (mutation.target.classList && mutation.target.classList.contains('prts-status-label')) continue;
-                if (mutation.target.id === 'prts-filter-bar') continue;
-                if (mutation.addedNodes.length > 0 || mutation.removedNodes.length > 0) {
-                    domChanged = true;
-                    break;
-                }
-            }
-
-            if (domChanged) {
-                injectFilterControls();
-                if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
-                filterDebounceTimer = setTimeout(requestFilterUpdate, 50);
+            if (hasRelevantDomMutation(mutations)) {
+                syncPageScaffold();
+                scheduleFilterUpdate(80);
             }
         });
 
@@ -1579,13 +1628,13 @@
 
         // 保底同步刷新
         setInterval(() => {
-            applySidebarCollapse();
-            optimizeDialogContent();
-            createFloatingBall();
-            if (!isFilterDisabledPage() && !document.getElementById('prts-filter-bar')) {
-                injectFilterControls();
+            if (handleRouteChange()) return;
+            const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
+            syncPageScaffold();
+            if (missingFilterBar && currentFilterMode !== 'NONE') {
+                scheduleFilterUpdate(120);
             }
-        }, 1000);
+        }, 3000);
     }
 
     init();
