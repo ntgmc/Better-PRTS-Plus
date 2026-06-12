@@ -175,7 +175,25 @@
     }
 
     function getCardSignature(card) {
-        return card ? card.innerText : '';
+        if (!card) return '';
+
+        const ignoredSelector = '.prts-status-label, .prts-video-box, #prts-filter-bar, #prts-float-container';
+        const parts = [];
+        const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, {
+            acceptNode(node) {
+                if (node.parentElement?.closest(ignoredSelector)) {
+                    return NodeFilter.FILTER_REJECT;
+                }
+                return node.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+        });
+
+        let node = walker.nextNode();
+        while (node) {
+            parts.push(node.nodeValue.trim());
+            node = walker.nextNode();
+        }
+        return parts.join('|');
     }
 
     function buildFallbackOperation(card) {

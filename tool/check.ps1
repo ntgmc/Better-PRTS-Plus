@@ -61,6 +61,12 @@ if ($userScript -notmatch "const operationCache = new WeakMap\(\)") {
 if ($userScript -notmatch "function getOperationForCard") {
     throw "Missing cached operation resolver"
 }
+if ($userScript -match "card\.innerText|cloneNode\(true\)") {
+    throw "Card cache signatures should not include script UI or clone entire cards"
+}
+if ($userScript -notmatch "function getCardSignature[\s\S]*prts-status-label[\s\S]*prts-video-box") {
+    throw "Card cache signature should ignore script-owned card UI"
+}
 if ($userScript -notmatch "labelDiv\.dataset\.opsProcessed = `"true`"") {
     throw "Missing operator visual processing marker"
 }
