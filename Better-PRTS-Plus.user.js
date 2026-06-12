@@ -1006,30 +1006,69 @@
         }
     }
 
+    function findBilibiliUrl(text) {
+        const match = String(text || '').match(/(?:【.*?】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+)/i);
+        return match ? { fullText: match[0], url: match[1] } : null;
+    }
+
+    function extractAndRemoveBilibiliUrl(container) {
+        const link = Array.from(container.querySelectorAll('a[href]'))
+            .find(anchor => findBilibiliUrl(anchor.href));
+        if (link) {
+            const url = findBilibiliUrl(link.href).url;
+            link.remove();
+            return url;
+        }
+
+        const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+        let textNode = walker.nextNode();
+        while (textNode) {
+            const match = findBilibiliUrl(textNode.nodeValue);
+            if (match) {
+                textNode.nodeValue = textNode.nodeValue.replace(match.fullText, '').trim();
+                return match.url;
+            }
+            textNode = walker.nextNode();
+        }
+        return null;
+    }
+
+    function trimTrailingDescriptionNoise(container) {
+        while (container.lastChild) {
+            const node = container.lastChild;
+            if (node.nodeType === Node.TEXT_NODE && node.nodeValue.trim() === '') {
+                node.remove();
+            } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'BR') {
+                node.remove();
+            } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'P' && node.textContent.trim() === '') {
+                node.remove();
+            } else {
+                break;
+            }
+        }
+    }
+
+    function wrapDescriptionContent(descContainer) {
+        const content = document.createElement('div');
+        content.className = 'prts-desc-content';
+
+        while (descContainer.firstChild) {
+            content.appendChild(descContainer.firstChild);
+        }
+        if (content.textContent.trim() === '') {
+            content.textContent = '(无文字描述)';
+        }
+        descContainer.appendChild(content);
+    }
+
     function cleanBilibiliLinks(cardInner) {
         if (!CONFIG.cleanLink) return;
         const descContainer = cardInner.querySelector('.grow.text-gray-700');
         if (!descContainer || descContainer.dataset.biliProcessed) return;
 
-        let html = descContainer.innerHTML;
-        let videoUrl = null;
-
-        const regex = /((?:【.*?】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+))/gi;
-        const match = regex.exec(html);
-
-        if (match) {
-            videoUrl = match[2];
-            html = html.replace(match[1], '');
-        }
-
-        const trailingTrashRegex = /(?:<p>\s*(?:<br\s*\/?>)?\s*<\/p>|<br\s*\/?>|\s)+$/gi;
-        html = html.replace(trailingTrashRegex, '');
-
-        if (html.replace(/<[^>]+>/g, '').trim() === '') {
-            html = '(无文字描述)';
-        }
-
-        descContainer.innerHTML = `<div class="prts-desc-content">${html}</div>`;
+        const videoUrl = extractAndRemoveBilibiliUrl(descContainer);
+        trimTrailingDescriptionNoise(descContainer);
+        wrapDescriptionContent(descContainer);
         descContainer.classList.add('prts-desc-wrapper');
         descContainer.classList.remove('grow');
         descContainer.style.width = '100%';
@@ -1043,7 +1082,10 @@
             linkBtn.target = "_blank";
             linkBtn.rel = "noopener noreferrer";
             linkBtn.className = 'prts-bili-link';
-            linkBtn.innerHTML = `<span class="bp4-icon bp4-icon-video"></span>参考视频`;
+            const icon = document.createElement('span');
+            icon.className = 'bp4-icon bp4-icon-video';
+            linkBtn.appendChild(icon);
+            linkBtn.appendChild(document.createTextNode('参考视频'));
             linkBtn.onclick = (e) => e.stopPropagation();
 
             btnContainer.appendChild(linkBtn);

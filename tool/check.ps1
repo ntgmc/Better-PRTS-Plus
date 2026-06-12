@@ -70,6 +70,15 @@ if ($userScript -notmatch "function updateStatusLabel") {
 if ($userScript -match "existingLabel\.innerHTML|labelDiv\.innerHTML = new") {
     throw "Status labels should not be rendered with innerHTML"
 }
+if ($userScript -notmatch "function extractAndRemoveBilibiliUrl") {
+    throw "Missing DOM-based Bilibili URL extraction"
+}
+if ($userScript -notmatch "document\.createTreeWalker") {
+    throw "Bilibili URL extraction should inspect text nodes with TreeWalker"
+}
+if ($userScript -match "descContainer\.innerHTML|linkBtn\.innerHTML") {
+    throw "Bilibili description/link cleanup should not use innerHTML"
+}
 if ($userScript -notmatch "GM_setValue\(FILTER_MODE_KEY, currentFilterMode\)") {
     throw "Filter mode persistence is missing"
 }
