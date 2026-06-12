@@ -1,3 +1,4 @@
 tool/*
+!tool/check.ps1
 !tool/sync-readme-version.ps1
 .idea

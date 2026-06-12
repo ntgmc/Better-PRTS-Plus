@@ -36,7 +36,6 @@
     const CONFIG = {
         visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
         cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
-        filterBar: GM_getValue('prts_cfg_filter', true),      // 显示筛选栏
         hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false) // 折叠侧边栏
     };
 
@@ -61,6 +60,111 @@
     const OP_ID_MAP = {};
     if (typeof RAW_OPS !== 'undefined' && RAW_OPS.length > 0) {
         RAW_OPS.forEach(op => { OP_ID_MAP[op.name] = op.id; });
+    }
+
+    const ACCOUNT_IDS = [1, 2, 3];
+
+    function createEmptyAccountsData() {
+        return { 1: [], 2: [], 3: [] };
+    }
+
+    function normalizeAccountId(id) {
+        const parsed = parseInt(id, 10);
+        return ACCOUNT_IDS.includes(parsed) ? parsed : 1;
+    }
+
+    function normalizeOperatorName(name) {
+        return typeof name === 'string' ? name.trim() : '';
+    }
+
+    function sanitizeOperatorNames(names) {
+        if (!Array.isArray(names)) return [];
+
+        const seen = new Set();
+        const result = [];
+        names.forEach(name => {
+            const normalized = normalizeOperatorName(name);
+            if (!normalized) return;
+            if (normalized.length > 50) return;
+            if (/[\x00-\x1F\x7F]/.test(normalized)) return;
+            if (seen.has(normalized)) return;
+            seen.add(normalized);
+            result.push(normalized);
+        });
+        return result;
+    }
+
+    function normalizeAccountsData(value) {
+        const normalized = createEmptyAccountsData();
+        if (!value || typeof value !== 'object') return normalized;
+
+        ACCOUNT_IDS.forEach(id => {
+            normalized[id] = sanitizeOperatorNames(value[id]);
+        });
+        return normalized;
+    }
+
+    function safeJsonParse(rawValue, fallback) {
+        try {
+            return JSON.parse(rawValue);
+        } catch (e) {
+            return fallback;
+        }
+    }
+
+    function parseOperatorNamesFromJson(json) {
+        if (!Array.isArray(json)) throw new Error('数据格式非数组');
+        if (json.length === 0) return [];
+
+        if (typeof json[0] === 'string') {
+            return sanitizeOperatorNames(json);
+        }
+
+        if (typeof json[0] === 'object' && json[0] !== null && 'name' in json[0]) {
+            return sanitizeOperatorNames(
+                json
+                    .filter(op => op?.own !== false)
+                    .map(op => normalizeOperatorName(op?.name))
+            );
+        }
+
+        return [];
+    }
+
+    function parseOperatorNamesFromText(text) {
+        return sanitizeOperatorNames(
+            String(text || '')
+                .replace(/^\uFEFF/, '')
+                .split(/\r?\n/)
+                .map(line => line.trim())
+                .filter(line => line && !line.startsWith('#') && !line.startsWith('//'))
+        );
+    }
+
+    function parseImportedOperatorNames(rawText, fileName = '') {
+        const text = String(rawText || '');
+        const isTxtFile = /\.txt$/i.test(fileName);
+
+        if (!isTxtFile) {
+            const parsed = safeJsonParse(text, null);
+            if (parsed !== null) return parseOperatorNamesFromJson(parsed);
+            if (/\.json$/i.test(fileName)) throw new Error('文件格式错误：不是有效的 JSON 文件');
+        }
+
+        return parseOperatorNamesFromText(text);
+    }
+
+    function parseFloatingPosition(rawValue) {
+        const fallback = { top: '40%', isRight: true };
+        const parsed = typeof rawValue === 'string' ? safeJsonParse(rawValue, fallback) : rawValue;
+        const topValue = typeof parsed?.top === 'string' ? parsed.top : fallback.top;
+        const topNumber = /^-?\d+(?:\.\d+)?%$/.test(topValue) ? parseFloat(topValue) : parseFloat(fallback.top);
+        const clampedTop = Math.min(95, Math.max(0, topNumber));
+
+        return {
+            top: `${Number(clampedTop.toFixed(1))}%`,
+            isRight: parsed?.isRight !== false
+        };
     }
 
     // [样式] CSS 样式定义
@@ -484,6 +588,8 @@
      * 持久化保存所有多账号数据
      */
     function saveAccountsData() {
+        activeAccountId = normalizeAccountId(activeAccountId);
+        accountsData = normalizeAccountsData(accountsData);
         GM_setValue(ACCOUNTS_DATA_KEY, JSON.stringify({
             activeAccountId,
             accountsData
@@ -501,21 +607,23 @@
         if (unifiedStore) {
             try {
                 const parsed = JSON.parse(unifiedStore);
-                activeAccountId = parsed.activeAccountId || 1;
-                accountsData = parsed.accountsData || { 1: [], 2: [], 3:[] };
+                activeAccountId = normalizeAccountId(parsed.activeAccountId);
+                accountsData = normalizeAccountsData(parsed.accountsData);
             } catch (e) {
                 console.error('[Better PRTS] 主数据解析失败', e);
+                activeAccountId = 1;
+                accountsData = createEmptyAccountsData();
             }
         } else {
             // [迁移] 尝试从用户单独定义的 prts_plus_user_ops_N 中恢复
             for (let i = 1; i <= 3; i++) {
                 const legacyVal = GM_getValue(`prts_plus_user_ops_${i}`);
                 if (legacyVal) {
-                    try { accountsData[i] = JSON.parse(legacyVal); migrated = true; } catch(e){}
+                    try { accountsData[i] = sanitizeOperatorNames(JSON.parse(legacyVal)); migrated = true; } catch(e){}
                 }
             }
             const activeLegacy = GM_getValue('prts_plus_active_account');
-            if (activeLegacy) activeAccountId = parseInt(activeLegacy) || 1;
+            if (activeLegacy) activeAccountId = normalizeAccountId(activeLegacy);
 
             // [迁移] 尝试从最远古的单账号版本恢复到账号 1
             const veryOldVal = GM_getValue('prts_plus_user_ops');
@@ -526,7 +634,7 @@
                         if (ops.length > 0 && typeof ops[0] === 'object') {
                             ops = ops.filter(op => op.own !== false && op.name).map(op => op.name);
                         }
-                        accountsData[1] = ops;
+                        accountsData[1] = sanitizeOperatorNames(ops);
                         migrated = true;
                     }
                 } catch(e){}
@@ -543,6 +651,7 @@
      * 执行账号切换
      */
     function switchAccount(id) {
+        id = normalizeAccountId(id);
         if (id === activeAccountId) return;
 
         activeAccountId = id;
@@ -603,43 +712,20 @@
             const reader = new FileReader();
             reader.onload = event => {
                 try {
-                    const jsonStr = event.target.result;
-                    let json;
-                    try {
-                        json = JSON.parse(jsonStr);
-                    } catch (e) {
-                        alert('❌ 文件格式错误：不是有效的 JSON 文件');
-                        return;
-                    }
-
-                    if (!Array.isArray(json)) throw new Error("数据格式非数组");
-
-                    let names =[];
-                    if (json.length === 0) {
-                         names =[];
-                    } else if (typeof json[0] === 'string') {
-                        names = json;
-                    } else if (typeof json[0] === 'object' && json[0] !== null && 'name' in json[0]) {
-                        names = json
-                            .filter(op => op?.own !== false && typeof op?.name === 'string')
-                            .map(op => String(op.name).trim())
-                            .filter(name => /^[a-zA-Z0-9\u4e00-\u9fa5\-\(\)\uff08\uff09]+$/.test(name));
-                    }
+                    const names = parseImportedOperatorNames(event.target.result, file.name);
 
                     if (names.length > 0) {
-                        const uniqueNames = Array.from(new Set(names));
-
                         // 保存至当前活跃账号
-                        accountsData[activeAccountId] = uniqueNames;
+                        accountsData[activeAccountId] = names;
                         saveAccountsData();
-                        ownedOpsSet = new Set(uniqueNames);
+                        ownedOpsSet = new Set(names);
 
                         // 销毁并重建控制栏以更新数字
                         const bar = document.getElementById('prts-filter-bar');
                         if (bar) bar.remove();
                         injectFilterControls();
 
-                        alert(`✅ 账号 ${activeAccountId} 导入成功！\n共识别 ${uniqueNames.length} 名持有干员。`);
+                        alert(`✅ 账号 ${activeAccountId} 导入成功！\n共识别 ${names.length} 名持有干员。`);
                         if (currentFilterMode !== 'NONE') requestFilterUpdate();
                     } else {
                         alert('⚠️ 未能识别有效的干员数据，请检查文件格式');
@@ -840,6 +926,7 @@
             const linkBtn = document.createElement('a');
             linkBtn.href = videoUrl;
             linkBtn.target = "_blank";
+            linkBtn.rel = "noopener noreferrer";
             linkBtn.className = 'prts-bili-link';
             linkBtn.innerHTML = `<span class="bp4-icon bp4-icon-video"></span>参考视频`;
             linkBtn.onclick = (e) => e.stopPropagation();
@@ -1196,14 +1283,13 @@
     function saveConfig() {
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
-        GM_setValue('prts_cfg_filter', CONFIG.filterBar);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
     }
 
     function createFloatingBall() {
         if (document.getElementById('prts-float-container')) return;
 
-        const savedPos = JSON.parse(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
+        const savedPos = parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
         const container = document.createElement('div');
         container.id = 'prts-float-container';
 
