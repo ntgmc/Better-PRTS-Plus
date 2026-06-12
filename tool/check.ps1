@@ -79,6 +79,12 @@ if ($userScript -notmatch "document\.createTreeWalker") {
 if ($userScript -match "descContainer\.innerHTML|linkBtn\.innerHTML") {
     throw "Bilibili description/link cleanup should not use innerHTML"
 }
+if ($userScript -notmatch "function createDialogTag") {
+    throw "Missing DOM-based dialog tag builder"
+}
+if ($userScript -match "h2\.innerHTML|tagHtml") {
+    throw "Dialog tags should not be rendered with innerHTML"
+}
 if ($userScript -notmatch "GM_setValue\(FILTER_MODE_KEY, currentFilterMode\)") {
     throw "Filter mode persistence is missing"
 }

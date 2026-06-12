@@ -1415,6 +1415,27 @@
     //                            MODULE 6: 侧边栏与悬浮球面板
     // =========================================================================
 
+    function createDialogTag(text) {
+        const tag = document.createElement('span');
+        tag.classList.add('prts-dialog-tag');
+
+        if (text.includes('升级') || text.includes('优化') || text.includes('更新')) {
+            tag.classList.add('prts-tag-update');
+            tag.textContent = '更新';
+        } else if (text.includes('修复') || text.includes('问题') || text.includes('Bug')) {
+            tag.classList.add('prts-tag-fix');
+            tag.textContent = '维护';
+        } else if (text.includes('活动') || text.includes('关卡')) {
+            tag.classList.add('prts-tag-event');
+            tag.textContent = '活动';
+        } else {
+            tag.classList.add('prts-tag-note');
+            tag.textContent = '通知';
+        }
+
+        return tag;
+    }
+
     function optimizeDialogContent() {
         const dialog = document.querySelector('.bp4-dialog');
         if (!dialog || dialog.dataset.contentOptimized) return;
@@ -1425,21 +1446,8 @@
             if (contentBody) {
                 const headers = contentBody.querySelectorAll('h2');
                 headers.forEach(h2 => {
-                    const text = h2.innerText;
-                    let tagHtml = '';
-
-                    if (text.includes('升级') || text.includes('优化') || text.includes('更新')) {
-                        tagHtml = `<span class="prts-dialog-tag prts-tag-update">更新</span>`;
-                    } else if (text.includes('修复') || text.includes('问题') || text.includes('Bug')) {
-                        tagHtml = `<span class="prts-dialog-tag prts-tag-fix">维护</span>`;
-                    } else if (text.includes('活动') || text.includes('关卡')) {
-                        tagHtml = `<span class="prts-dialog-tag prts-tag-event">活动</span>`;
-                    } else {
-                        tagHtml = `<span class="prts-dialog-tag prts-tag-note">通知</span>`;
-                    }
-
                     if (!h2.querySelector('.prts-dialog-tag')) {
-                        h2.innerHTML = tagHtml + h2.innerHTML;
+                        h2.insertBefore(createDialogTag(h2.textContent), h2.firstChild);
                     }
                 });
             }
