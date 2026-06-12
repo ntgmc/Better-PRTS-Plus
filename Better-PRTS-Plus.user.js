@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.13.1
+// @version      2.14.0
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -591,6 +591,54 @@
         return "";
     }
 
+    function matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, allowUnknownFallbackGroup) {
+        const groups = requiredGroups
+            .map((group, index) => {
+                const allowedNames = (group.opers || [])
+                    .map(o => o.name)
+                    .filter(Boolean);
+                const candidates = allowedNames
+                    .filter(name => ownedOpsSet.has(name) && !usedOwnedOps.has(name));
+                return {
+                    index,
+                    name: group.name || '未命名干员组',
+                    candidates,
+                    total: allowedNames.length
+                };
+            })
+            .filter(group => !(allowUnknownFallbackGroup && group.total === 0));
+
+        const groupOrder = [...groups].sort((a, b) => a.candidates.length - b.candidates.length);
+        const matchedByOperator = new Map();
+
+        function tryAssign(group, seenOperators) {
+            for (const opName of group.candidates) {
+                if (seenOperators.has(opName)) continue;
+                seenOperators.add(opName);
+
+                const previousGroup = matchedByOperator.get(opName);
+                if (!previousGroup || tryAssign(previousGroup, seenOperators)) {
+                    matchedByOperator.set(opName, group);
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        const missingGroups = [];
+        groupOrder.forEach(group => {
+            if (!tryAssign(group, new Set())) {
+                missingGroups.push(`[${group.name}]`);
+            }
+        });
+
+        matchedByOperator.forEach((group, opName) => {
+            usedOwnedOps.add(opName);
+        });
+
+        return missingGroups;
+    }
+
     /**
      * 干员与干员组的可用性判定
      */
@@ -628,23 +676,8 @@
         });
 
         if (requiredGroups.length > 0) {
-            const groupProcessList = requiredGroups.map(group => {
-                const allowedNames = (group.opers ||[]).map(o => o.name);
-                const candidates = allowedNames.filter(name => ownedOpsSet.has(name));
-                return { name: group.name || '未命名干员组', candidates, total: allowedNames.length };
-            });
-
-            groupProcessList.sort((a, b) => a.candidates.length - b.candidates.length);
-
-            groupProcessList.forEach(groupItem => {
-                const validCandidate = groupItem.candidates.find(name => !usedOwnedOps.has(name));
-                if (validCandidate) {
-                    usedOwnedOps.add(validCandidate);
-                } else {
-                    if (operation._isFallback && groupItem.total === 0) return; // 无法提取组成员时放行（防误杀）
-                    missingDetails.push(`[${groupItem.name}]`);
-                }
-            });
+            const missingGroups = matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, operation._isFallback);
+            missingDetails.push(...missingGroups);
         }
 
         const missingCount = missingDetails.length;

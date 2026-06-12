@@ -91,6 +91,49 @@ if ($userScript -match "addEventListener\('mousedown'|addEventListener\('mousemo
 if ($userScript -notmatch "setInterval\(\(\) => \{[\s\S]*\}, 3000\)") {
     throw "Fallback interval should run at the reduced 3000ms cadence"
 }
+if ($userScript -notmatch "function matchOperatorGroups") {
+    throw "Missing operator group matching algorithm"
+}
+if ($userScript -match "groupProcessList") {
+    throw "Old greedy operator group algorithm is still present"
+}
+
+function Test-OperatorGroupMatching {
+    $owned = [System.Collections.Generic.HashSet[string]]::new()
+    @("A", "B") | ForEach-Object { [void]$owned.Add($_) }
+    $used = [System.Collections.Generic.HashSet[string]]::new()
+    $groups = @(
+        @{ name = "wide"; candidates = @("A", "B") },
+        @{ name = "narrow"; candidates = @("A") }
+    )
+    $matchedByOperator = @{}
+
+    function TryAssignGroup($group, $seen) {
+        foreach ($name in $group.candidates) {
+            if (-not $owned.Contains($name) -or $used.Contains($name) -or $seen.Contains($name)) {
+                continue
+            }
+            [void]$seen.Add($name)
+            $previousGroup = $matchedByOperator[$name]
+            if (-not $previousGroup -or (TryAssignGroup $previousGroup $seen)) {
+                $matchedByOperator[$name] = $group
+                return $true
+            }
+        }
+        return $false
+    }
+
+    foreach ($group in $groups) {
+        if (-not (TryAssignGroup $group ([System.Collections.Generic.HashSet[string]]::new()))) {
+            return $false
+        }
+    }
+    return $matchedByOperator.Count -eq 2
+}
+
+if (-not (Test-OperatorGroupMatching)) {
+    throw "Operator group matching regression sample failed"
+}
 
 $specialCases = @(
     @{ id = "char_1019_siege2"; contains = [char]0x00B7 },
