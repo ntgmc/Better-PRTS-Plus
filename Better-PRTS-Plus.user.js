@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      2.14.0
+// @version      2.14.2
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -115,6 +115,16 @@
         }
     }
 
+    function isOwnedOperatorRecord(op) {
+        if (!op || typeof op !== 'object') return false;
+        if (!Object.prototype.hasOwnProperty.call(op, 'own')) return true;
+
+        const own = op.own;
+        if (own === false || own === 0) return false;
+        if (typeof own === 'string' && ['false', '0', 'no'].includes(own.trim().toLowerCase())) return false;
+        return true;
+    }
+
     function parseOperatorNamesFromJson(json) {
         if (!Array.isArray(json)) throw new Error('数据格式非数组');
         if (json.length === 0) return [];
@@ -126,7 +136,7 @@
         if (typeof json[0] === 'object' && json[0] !== null && 'name' in json[0]) {
             return sanitizeOperatorNames(
                 json
-                    .filter(op => op?.own !== false)
+                    .filter(isOwnedOperatorRecord)
                     .map(op => normalizeOperatorName(op?.name))
             );
         }
@@ -146,13 +156,10 @@
 
     function parseImportedOperatorNames(rawText, fileName = '') {
         const text = String(rawText || '');
-        const isTxtFile = /\.txt$/i.test(fileName);
 
-        if (!isTxtFile) {
-            const parsed = safeJsonParse(text, null);
-            if (parsed !== null) return parseOperatorNamesFromJson(parsed);
-            if (/\.json$/i.test(fileName)) throw new Error('文件格式错误：不是有效的 JSON 文件');
-        }
+        const parsed = safeJsonParse(text, null);
+        if (parsed !== null) return parseOperatorNamesFromJson(parsed);
+        if (/\.json$/i.test(fileName)) throw new Error('文件格式错误：不是有效的 JSON 文件');
 
         return parseOperatorNamesFromText(text);
     }
@@ -762,9 +769,9 @@
                 try {
                     let ops = JSON.parse(veryOldVal);
                     if (Array.isArray(ops)) {
-                        if (ops.length > 0 && typeof ops[0] === 'object') {
-                            ops = ops.filter(op => op.own !== false && op.name).map(op => op.name);
-                        }
+                    if (ops.length > 0 && typeof ops[0] === 'object') {
+                        ops = ops.filter(op => isOwnedOperatorRecord(op) && op.name).map(op => op.name);
+                    }
                         accountsData[1] = sanitizeOperatorNames(ops);
                         migrated = true;
                     }

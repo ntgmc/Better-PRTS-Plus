@@ -52,8 +52,31 @@ Write-Host "Checking import parser guards..."
 if ($userScript -notmatch "function parseImportedOperatorNames") {
     throw "Missing parseImportedOperatorNames"
 }
+if ($userScript -notmatch "function isOwnedOperatorRecord") {
+    throw "Missing owned operator record normalizer"
+}
+if ($userScript -notmatch "if\s*\(parsed !== null\)\s*return parseOperatorNamesFromJson\(parsed\)") {
+    throw "JSON imports should return parsed operators instead of falling through to text parsing"
+}
+if ($userScript -match "isTxtFile") {
+    throw "TXT files should still attempt JSON parsing before text fallback"
+}
+if ($userScript -match "op\??\.own !== false") {
+    throw "Owned operator checks should use isOwnedOperatorRecord"
+}
 if ($userScript -match "\\u4e00-\\u9fa5") {
     throw "Import parsing still contains the old narrow CJK whitelist"
+}
+$importSamplePath = Join-Path $PSScriptRoot "test.txt"
+if (Test-Path -LiteralPath $importSamplePath) {
+ $sampleOperators = Get-Content -LiteralPath $importSamplePath -Raw -Encoding UTF8 | ConvertFrom-Json
+ if ($sampleOperators.Count -ne 418) {
+  throw "Import sample should contain 418 operator records"
+ }
+ $sampleOwnedCount = @($sampleOperators | Where-Object { $_.own -eq $true } | Select-Object -ExpandProperty name -Unique).Count
+ if ($sampleOwnedCount -ne 396) {
+  throw "Import sample should resolve to 396 owned operators"
+ }
 }
 if ($userScript -notmatch "const operationCache = new WeakMap\(\)") {
     throw "Missing operation cache"
