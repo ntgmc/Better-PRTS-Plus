@@ -1,0 +1,57 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - v*
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Run project checks
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tool/check.ps1
+
+      - name: Validate release tag
+        shell: pwsh
+        run: pwsh -NoProfile -ExecutionPolicy Bypass -File tool/check-release.ps1 -Tag "${{ github.ref_name }}"
+
+      - name: Read release metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".Substring(1)
+          $isPrerelease = $version.Contains("-")
+          "version=$version" >> $env:GITHUB_OUTPUT
+          "prerelease=$($isPrerelease.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          args=(
+            "${{ github.ref_name }}"
+            "Better-PRTS-Plus.user.js"
+            --title "Better-PRTS-Plus ${{ github.ref_name }}"
+            --generate-notes
+          )
+
+          if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then
+            args+=(--prerelease)
+          fi
+
+          gh release create "${args[@]}"
