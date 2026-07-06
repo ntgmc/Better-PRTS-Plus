@@ -4,5 +4,7 @@ tool/*
 !tool/sync-readme-version.ps1
 !tool/build-userscript.ps1
 !tool/update-operator-data.ps1
+!tool/upload-release.ps1
+!tool/publish-release.ps1
 !tool/operator-data.generated.json
 .idea
