@@ -275,6 +275,12 @@ if ($userScript -notmatch "const operationCache = new WeakMap\(\)") {
 if ($userScript -notmatch "function getOperationForCard") {
     throw "Missing cached operation resolver"
 }
+if ($userScript -notmatch "function getOperationResolutionForCard") {
+    throw "Missing operation resolution metadata"
+}
+if ($userScript -notmatch "source: 'fiber'" -or $userScript -notmatch "source: 'fallback'") {
+    throw "Operation resolution should distinguish Fiber and fallback sources"
+}
 if ($userScript -match "card\.innerText|cloneNode\(true\)") {
     throw "Card cache signatures should not include script UI or clone entire cards"
 }
@@ -286,6 +292,18 @@ if ($userScript -notmatch "labelDiv\.dataset\.opsProcessed = `"true`"") {
 }
 if ($userScript -notmatch "function updateStatusLabel") {
     throw "Missing safe status label renderer"
+}
+if ($userScript -notmatch "function hasEffectiveOperationData") {
+    throw "Missing operation data effectiveness check"
+}
+if ($userScript -notmatch "prts_cfg_compat_debug" -or $userScript -notmatch "compatDebug: GM_getValue\('prts_cfg_compat_debug', false\)") {
+    throw "Missing compatibility diagnostics config"
+}
+if ($userScript -notmatch "#prts-compat-debug-panel") {
+    throw "Missing compatibility diagnostics panel"
+}
+if ($userScript -notmatch "BetterPRTSPlusDebug[\s\S]*getCompatibilityDiagnostics") {
+    throw "Missing compatibility diagnostics debug API"
 }
 if ($userScript -match "existingLabel\.innerHTML|labelDiv\.innerHTML = new") {
     throw "Status labels should not be rendered with innerHTML"

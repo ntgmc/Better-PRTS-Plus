@@ -111,11 +111,93 @@
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        if (isFilterDisabledPage()) {
+            setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
+        } else {
+            renderCompatibilityDiagnosticsPanel();
+        }
     }
 
     function getRouteKey() {
         return `${window.location.pathname}${window.location.search}`;
     }
+
+    function createCompatibilityDiagnostics(totalCards = 0, fiberCards = 0, fallbackCards = 0, noDataCards = 0) {
+        return {
+            route: getRouteKey(),
+            totalCards,
+            fiberCards,
+            fallbackCards,
+            noDataCards,
+            updatedAt: new Date().toISOString()
+        };
+    }
+
+    let compatibilityDiagnostics = createCompatibilityDiagnostics();
+
+    function getCompatibilityDiagnostics() {
+        return { ...compatibilityDiagnostics };
+    }
+
+    function setCompatibilityDiagnostics(stats) {
+        compatibilityDiagnostics = createCompatibilityDiagnostics(
+            Number(stats?.totalCards) || 0,
+            Number(stats?.fiberCards) || 0,
+            Number(stats?.fallbackCards) || 0,
+            Number(stats?.noDataCards) || 0
+        );
+        renderCompatibilityDiagnosticsPanel();
+    }
+
+    function removeCompatibilityDiagnosticsPanel() {
+        document.getElementById('prts-compat-debug-panel')?.remove();
+    }
+
+    function renderCompatibilityDiagnosticsPanel() {
+        if (!CONFIG.compatDebug || isFilterDisabledPage()) {
+            removeCompatibilityDiagnosticsPanel();
+            return;
+        }
+        if (!document.body) return;
+
+        let panel = document.getElementById('prts-compat-debug-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'prts-compat-debug-panel';
+            panel.setAttribute('role', 'status');
+            panel.setAttribute('aria-live', 'polite');
+
+            const title = document.createElement('div');
+            title.className = 'prts-compat-debug-title';
+            title.textContent = '兼容诊断';
+
+            const summary = document.createElement('div');
+            summary.className = 'prts-compat-debug-summary';
+
+            const meta = document.createElement('div');
+            meta.className = 'prts-compat-debug-meta';
+
+            panel.appendChild(title);
+            panel.appendChild(summary);
+            panel.appendChild(meta);
+            document.body.appendChild(panel);
+        }
+
+        const diagnostics = getCompatibilityDiagnostics();
+        const summary = panel.querySelector('.prts-compat-debug-summary');
+        const meta = panel.querySelector('.prts-compat-debug-meta');
+        const timeText = diagnostics.updatedAt ? new Date(diagnostics.updatedAt).toLocaleTimeString() : '未刷新';
+
+        if (summary) {
+            summary.textContent = `卡片 ${diagnostics.totalCards} · Fiber ${diagnostics.fiberCards} · fallback ${diagnostics.fallbackCards} · 无有效数据 ${diagnostics.noDataCards}`;
+        }
+        if (meta) {
+            meta.textContent = `${diagnostics.route || '/'} · ${timeText}`;
+        }
+    }
+
+    betterPrtsDebug.getCompatibilityDiagnostics = getCompatibilityDiagnostics;
+    window.BetterPRTSPlusDebug = betterPrtsDebug;
 
     function handleRouteChange() {
         const routeKey = getRouteKey();
@@ -129,7 +211,7 @@
 
     function isScriptOwnedNode(node) {
         if (!node || node.nodeType !== 1) return false;
-        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, .prts-import-status, .prts-status-label'));
+        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
     }
 
     function hasRelevantDomMutation(mutations) {
@@ -335,21 +417,46 @@
      * [筛选逻辑的核心应用方法] - 包含最优算法注入
      */
     function applyFilterLogic() {
-        if (isFilterDisabledPage()) return;
+        if (isFilterDisabledPage()) {
+            setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
+            return;
+        }
         isProcessingFilter = true;
 
         try {
             let cards = document.querySelectorAll('ul.grid > li, .tabular-nums ul > li');
-            if (cards.length === 0) return;
+            const diagnostics = {
+                totalCards: cards.length,
+                fiberCards: 0,
+                fallbackCards: 0,
+                noDataCards: 0
+            };
+            if (cards.length === 0) {
+                setCompatibilityDiagnostics(diagnostics);
+                return;
+            }
 
             cards.forEach(card => {
                 const cardInner = card.querySelector(BP_SELECTORS.card);
-                if (!cardInner) return;
+                if (!cardInner) {
+                    diagnostics.noDataCards += 1;
+                    return;
+                }
 
                 optimizeCardVisuals(card, cardInner);
                 cleanBilibiliLinks(cardInner);
 
-                const operation = getOperationForCard(card, cardInner);
+                const resolution = getOperationResolutionForCard(card, cardInner);
+                const operation = resolution.operation;
+                if (hasEffectiveOperationData(operation)) {
+                    if (resolution.source === 'fiber') {
+                        diagnostics.fiberCards += 1;
+                    } else {
+                        diagnostics.fallbackCards += 1;
+                    }
+                } else {
+                    diagnostics.noDataCards += 1;
+                }
 
                 const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
 
@@ -408,8 +515,9 @@
                 }
             });
 
+            setCompatibilityDiagnostics(diagnostics);
+
         } finally {
             isProcessingFilter = false;
         }
     }
-

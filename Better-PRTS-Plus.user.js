@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      3.0.0
+// @version      3.0.1
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -54,7 +54,8 @@
     const CONFIG = {
         visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
         cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
-        hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false) // 折叠侧边栏
+        hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false), // 折叠侧边栏
+        compatDebug: GM_getValue('prts_cfg_compat_debug', false)  // 兼容性诊断
     };
 
     const BP_SELECTORS = {
@@ -85,7 +86,6 @@
     let filterDebounceTimer = null;
     let lastRouteKey = `${window.location.pathname}${window.location.search}`;
     let operatorImportDialogCleanup = null;
-
     // =========================================================================
     //                            MODULE 2: 数据与样式
     // =========================================================================
@@ -827,16 +827,25 @@
         return { parsedContent: { opers: requiredOps, groups: requiredGroups }, _isFallback: true };
     }
 
-    function getOperationForCard(card, cardInner) {
+    function getOperationResolutionForCard(card, cardInner) {
         const signature = getCardSignature(card);
         const cached = operationCache.get(card);
         if (cached && cached.signature === signature) {
-            return cached.operation;
+            return cached.resolution;
         }
 
-        const operation = extractOperationFromFiber(cardInner) || extractOperationFromFiber(card) || buildFallbackOperation(card);
-        operationCache.set(card, { signature, operation });
-        return operation;
+        const cardInnerOperation = extractOperationFromFiber(cardInner);
+        const cardOperation = cardInnerOperation || extractOperationFromFiber(card);
+        const resolution = cardOperation
+            ? { operation: cardOperation, source: 'fiber' }
+            : { operation: buildFallbackOperation(card), source: 'fallback' };
+
+        operationCache.set(card, { signature, resolution });
+        return resolution;
+    }
+
+    function getOperationForCard(card, cardInner) {
+        return getOperationResolutionForCard(card, cardInner).operation;
     }
 
     function updateStatusLabel(label, className, iconText, text) {
@@ -855,7 +864,6 @@
         label.appendChild(document.createTextNode(text));
         label.dataset.prtsStatusState = state;
     }
-
     // [样式] CSS 样式定义
     const mergedStyles = `
     /* ==========================================================================
@@ -945,14 +953,19 @@
     .prts-panel-actions { display: flex; gap: 8px; margin-top: 8px; width: 100%; }
     .prts-panel-actions .prts-btn { flex: 1 1 0 !important; margin: 0 !important; padding: 6px 8px !important; font-size: 13px !important; }
     .prts-acc-btn.active { background-color: #3b82f6 !important; color: #fff !important; border-color: #3b82f6 !important; }
+    .prts-debug-options { display: none; margin: 2px 0 12px; padding: 10px 0 0; border-top: 1px dashed #cbd5e1; }
+    .prts-debug-options.is-visible { display: block; }
+    .prts-debug-options .prts-panel-item { margin-bottom: 0; }
     body.dark .prts-acc-btn { border-color: #415262 !important; color: #c4d0dc !important; }
     body.dark .prts-acc-btn.active { background-color: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
     body.dark .prts-account-rename { border-color: #415262; color: #c4d0dc; }
     body.dark .prts-account-rename:hover { color: #60a5fa; border-color: #60a5fa; background-color: rgba(96, 165, 250, 0.16); }
+    body.dark .prts-debug-options { border-color: #415262; }
     body.high-contrast-theme .prts-acc-btn { border-color: #38383b !important; color: #d1d5db !important; }
     body.high-contrast-theme .prts-acc-btn.active { background-color: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
     body.high-contrast-theme .prts-account-rename { border-color: #38383b; color: #d1d5db; }
     body.high-contrast-theme .prts-account-rename:hover { color: #60a5fa; border-color: #60a5fa; background-color: rgba(96, 165, 250, 0.16); }
+    body.high-contrast-theme .prts-debug-options { border-color: #38383b; }
 
 
     .prts-divider { width: 1px; height: 16px; background-color: rgba(16, 22, 26, 0.15); margin: 0 8px; display: inline-block; }
@@ -1128,6 +1141,20 @@
     body.high-contrast-theme .prts-toast.warning { border-color: #f59e0b; color: #fde68a; }
     body.high-contrast-theme .prts-toast.error { border-color: #ef4444; color: #fecaca; }
 
+    #prts-compat-debug-panel { position: fixed; left: 16px; bottom: 24px; z-index: 2147483645; width: min(390px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #1e293b; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; pointer-events: none; }
+    #prts-compat-debug-panel * { box-sizing: border-box; }
+    .prts-compat-debug-title { font-size: 12px; line-height: 1.4; font-weight: 700; color: #2563eb; }
+    .prts-compat-debug-summary { margin-top: 3px; font-size: 13px; line-height: 1.45; font-weight: 700; color: #0f172a; }
+    .prts-compat-debug-meta { margin-top: 4px; font-size: 11px; line-height: 1.45; color: #64748b; overflow-wrap: anywhere; }
+    body.dark #prts-compat-debug-panel { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+    body.dark .prts-compat-debug-title { color: #60a5fa; }
+    body.dark .prts-compat-debug-summary { color: #f5f8fa; }
+    body.dark .prts-compat-debug-meta { color: #c4d0dc; }
+    body.high-contrast-theme #prts-compat-debug-panel { border-color: #38383b; background: #18181c; color: #e0e0e0; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55); }
+    body.high-contrast-theme .prts-compat-debug-title { color: #60a5fa; }
+    body.high-contrast-theme .prts-compat-debug-summary { color: #ffffff; }
+    body.high-contrast-theme .prts-compat-debug-meta { color: #d1d5db; }
+
     #prts-import-dialog-backdrop { position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.38); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
     #prts-import-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
     #prts-import-dialog * { box-sizing: border-box; }
@@ -1265,7 +1292,6 @@
 `;
 
     GM_addStyle(isSklandHost() ? sklandImportStyles : mergedStyles);
-
     // =========================================================================
     //                            MODULE 3: 工具函数与核心算法
     // =========================================================================
@@ -1371,6 +1397,49 @@
         return missingGroups;
     }
 
+    function getParsedOperationContent(operation) {
+        let parsed = operation?.parsedContent;
+        if (!parsed) {
+            if (Array.isArray(operation?.opers) || Array.isArray(operation?.groups)) {
+                parsed = operation;
+            } else if (typeof operation?.content === 'string') {
+                try { parsed = JSON.parse(operation.content); } catch(e) {}
+            }
+        }
+
+        return {
+            requiredOps: Array.isArray(parsed?.opers) ? parsed.opers : [],
+            requiredGroups: Array.isArray(parsed?.groups) ? parsed.groups : []
+        };
+    }
+
+    function hasNamedOperatorEntry(entry) {
+        return typeof entry?.name === 'string' && entry.name.trim().length > 0;
+    }
+
+    function hasKnownOperatorEntry(entry) {
+        return hasNamedOperatorEntry(entry) && Boolean(OP_ID_MAP[entry.name.trim()]);
+    }
+
+    function hasGroupEntry(group) {
+        return hasNamedOperatorEntry(group) ||
+            (Array.isArray(group?.opers) && group.opers.some(hasNamedOperatorEntry));
+    }
+
+    function hasKnownGroupCandidate(group) {
+        return Array.isArray(group?.opers) && group.opers.some(hasKnownOperatorEntry);
+    }
+
+    function hasEffectiveOperationData(operation) {
+        if (!operation || typeof operation !== 'object') return false;
+
+        const { requiredOps, requiredGroups } = getParsedOperationContent(operation);
+        if (operation._isFallback) {
+            return requiredOps.some(hasKnownOperatorEntry) || requiredGroups.some(hasKnownGroupCandidate);
+        }
+        return requiredOps.some(hasNamedOperatorEntry) || requiredGroups.some(hasGroupEntry);
+    }
+
     /**
      * 干员与干员组的可用性判定
      */
@@ -1379,15 +1448,7 @@
             return { isAvailable: true, missingCount: 0, missingOps:[] };
         }
 
-        let parsed = operation.parsedContent;
-        if (!parsed) {
-            if (Array.isArray(operation.opers) || Array.isArray(operation.groups)) {
-                parsed = operation;
-            } else if (typeof operation.content === 'string') {
-                try { parsed = JSON.parse(operation.content); } catch(e) {}
-            }
-        }
-        const { opers: requiredOps = [], groups: requiredGroups =[] } = parsed || {};
+        const { requiredOps, requiredGroups } = getParsedOperationContent(operation);
 
         if (requiredOps.length === 0 && requiredGroups.length === 0) {
             return { isAvailable: true, missingCount: 0, missingOps:[] };
@@ -1423,7 +1484,6 @@
 
         return { isAvailable, missingCount, missingOps: missingDetails };
     }
-
     // =========================================================================
     //                            MODULE 4: 数据存取与账号管理
     // =========================================================================
@@ -2390,11 +2450,93 @@
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        if (isFilterDisabledPage()) {
+            setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
+        } else {
+            renderCompatibilityDiagnosticsPanel();
+        }
     }
 
     function getRouteKey() {
         return `${window.location.pathname}${window.location.search}`;
     }
+
+    function createCompatibilityDiagnostics(totalCards = 0, fiberCards = 0, fallbackCards = 0, noDataCards = 0) {
+        return {
+            route: getRouteKey(),
+            totalCards,
+            fiberCards,
+            fallbackCards,
+            noDataCards,
+            updatedAt: new Date().toISOString()
+        };
+    }
+
+    let compatibilityDiagnostics = createCompatibilityDiagnostics();
+
+    function getCompatibilityDiagnostics() {
+        return { ...compatibilityDiagnostics };
+    }
+
+    function setCompatibilityDiagnostics(stats) {
+        compatibilityDiagnostics = createCompatibilityDiagnostics(
+            Number(stats?.totalCards) || 0,
+            Number(stats?.fiberCards) || 0,
+            Number(stats?.fallbackCards) || 0,
+            Number(stats?.noDataCards) || 0
+        );
+        renderCompatibilityDiagnosticsPanel();
+    }
+
+    function removeCompatibilityDiagnosticsPanel() {
+        document.getElementById('prts-compat-debug-panel')?.remove();
+    }
+
+    function renderCompatibilityDiagnosticsPanel() {
+        if (!CONFIG.compatDebug || isFilterDisabledPage()) {
+            removeCompatibilityDiagnosticsPanel();
+            return;
+        }
+        if (!document.body) return;
+
+        let panel = document.getElementById('prts-compat-debug-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'prts-compat-debug-panel';
+            panel.setAttribute('role', 'status');
+            panel.setAttribute('aria-live', 'polite');
+
+            const title = document.createElement('div');
+            title.className = 'prts-compat-debug-title';
+            title.textContent = '兼容诊断';
+
+            const summary = document.createElement('div');
+            summary.className = 'prts-compat-debug-summary';
+
+            const meta = document.createElement('div');
+            meta.className = 'prts-compat-debug-meta';
+
+            panel.appendChild(title);
+            panel.appendChild(summary);
+            panel.appendChild(meta);
+            document.body.appendChild(panel);
+        }
+
+        const diagnostics = getCompatibilityDiagnostics();
+        const summary = panel.querySelector('.prts-compat-debug-summary');
+        const meta = panel.querySelector('.prts-compat-debug-meta');
+        const timeText = diagnostics.updatedAt ? new Date(diagnostics.updatedAt).toLocaleTimeString() : '未刷新';
+
+        if (summary) {
+            summary.textContent = `卡片 ${diagnostics.totalCards} · Fiber ${diagnostics.fiberCards} · fallback ${diagnostics.fallbackCards} · 无有效数据 ${diagnostics.noDataCards}`;
+        }
+        if (meta) {
+            meta.textContent = `${diagnostics.route || '/'} · ${timeText}`;
+        }
+    }
+
+    betterPrtsDebug.getCompatibilityDiagnostics = getCompatibilityDiagnostics;
+    window.BetterPRTSPlusDebug = betterPrtsDebug;
 
     function handleRouteChange() {
         const routeKey = getRouteKey();
@@ -2408,7 +2550,7 @@
 
     function isScriptOwnedNode(node) {
         if (!node || node.nodeType !== 1) return false;
-        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, .prts-import-status, .prts-status-label'));
+        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
     }
 
     function hasRelevantDomMutation(mutations) {
@@ -2614,21 +2756,46 @@
      * [筛选逻辑的核心应用方法] - 包含最优算法注入
      */
     function applyFilterLogic() {
-        if (isFilterDisabledPage()) return;
+        if (isFilterDisabledPage()) {
+            setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
+            return;
+        }
         isProcessingFilter = true;
 
         try {
             let cards = document.querySelectorAll('ul.grid > li, .tabular-nums ul > li');
-            if (cards.length === 0) return;
+            const diagnostics = {
+                totalCards: cards.length,
+                fiberCards: 0,
+                fallbackCards: 0,
+                noDataCards: 0
+            };
+            if (cards.length === 0) {
+                setCompatibilityDiagnostics(diagnostics);
+                return;
+            }
 
             cards.forEach(card => {
                 const cardInner = card.querySelector(BP_SELECTORS.card);
-                if (!cardInner) return;
+                if (!cardInner) {
+                    diagnostics.noDataCards += 1;
+                    return;
+                }
 
                 optimizeCardVisuals(card, cardInner);
                 cleanBilibiliLinks(cardInner);
 
-                const operation = getOperationForCard(card, cardInner);
+                const resolution = getOperationResolutionForCard(card, cardInner);
+                const operation = resolution.operation;
+                if (hasEffectiveOperationData(operation)) {
+                    if (resolution.source === 'fiber') {
+                        diagnostics.fiberCards += 1;
+                    } else {
+                        diagnostics.fallbackCards += 1;
+                    }
+                } else {
+                    diagnostics.noDataCards += 1;
+                }
 
                 const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
 
@@ -2687,11 +2854,12 @@
                 }
             });
 
+            setCompatibilityDiagnostics(diagnostics);
+
         } finally {
             isProcessingFilter = false;
         }
     }
-
     // =========================================================================
     //                            MODULE 6: 侧边栏与悬浮球面板
     // =========================================================================
@@ -2740,6 +2908,7 @@
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
+        GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
     }
 
     function registerAccountsDataChangeListener() {
@@ -2948,8 +3117,31 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
+        title.tabIndex = 0;
+        title.setAttribute('role', 'button');
+        title.setAttribute('aria-label', '功能开关');
         title.innerHTML = `<span style="margin-right:auto">功能开关</span><span style="font-size:12px;opacity:0.6">刷新生效</span>`;
         panel.appendChild(title);
+
+        let debugOptionsRevealed = CONFIG.compatDebug === true;
+        const debugOptions = document.createElement('div');
+        debugOptions.className = 'prts-debug-options';
+        if (debugOptionsRevealed) debugOptions.classList.add('is-visible');
+
+        const revealDebugOptions = event => {
+            if (!event.shiftKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            debugOptionsRevealed = !debugOptionsRevealed;
+            debugOptions.classList.toggle('is-visible', debugOptionsRevealed);
+        };
+
+        title.addEventListener('click', revealDebugOptions);
+        title.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                revealDebugOptions(event);
+            }
+        });
 
         panel.appendChild(createSwitch('🖼️ 作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
@@ -2961,6 +3153,18 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         panel.appendChild(createSwitch('🗂️ 折叠侧边栏', CONFIG.hideSidebar, (val) => {
             CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
         }, 'hideSidebar'));
+
+        debugOptions.appendChild(createSwitch('兼容诊断', CONFIG.compatDebug, (val) => {
+            CONFIG.compatDebug = val;
+            saveConfig();
+            if (val) {
+                renderCompatibilityDiagnosticsPanel();
+                requestFilterUpdate();
+            } else {
+                removeCompatibilityDiagnosticsPanel();
+            }
+        }, 'compatDebug'));
+        panel.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
         const accRow = document.createElement('div');
@@ -3157,7 +3361,6 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             if (!isDragging) container.classList.remove('prts-float-open');
         });
     }
-
     // =========================================================================
     //                            MODULE 7: 初始化与统一监听
     // =========================================================================

@@ -89,16 +89,25 @@
         return { parsedContent: { opers: requiredOps, groups: requiredGroups }, _isFallback: true };
     }
 
-    function getOperationForCard(card, cardInner) {
+    function getOperationResolutionForCard(card, cardInner) {
         const signature = getCardSignature(card);
         const cached = operationCache.get(card);
         if (cached && cached.signature === signature) {
-            return cached.operation;
+            return cached.resolution;
         }
 
-        const operation = extractOperationFromFiber(cardInner) || extractOperationFromFiber(card) || buildFallbackOperation(card);
-        operationCache.set(card, { signature, operation });
-        return operation;
+        const cardInnerOperation = extractOperationFromFiber(cardInner);
+        const cardOperation = cardInnerOperation || extractOperationFromFiber(card);
+        const resolution = cardOperation
+            ? { operation: cardOperation, source: 'fiber' }
+            : { operation: buildFallbackOperation(card), source: 'fallback' };
+
+        operationCache.set(card, { signature, resolution });
+        return resolution;
+    }
+
+    function getOperationForCard(card, cardInner) {
+        return getOperationResolutionForCard(card, cardInner).operation;
     }
 
     function updateStatusLabel(label, className, iconText, text) {
@@ -117,4 +126,3 @@
         label.appendChild(document.createTextNode(text));
         label.dataset.prtsStatusState = state;
     }
-

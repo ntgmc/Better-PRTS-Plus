@@ -46,6 +46,7 @@
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
+        GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
     }
 
     function registerAccountsDataChangeListener() {
@@ -254,8 +255,31 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
+        title.tabIndex = 0;
+        title.setAttribute('role', 'button');
+        title.setAttribute('aria-label', '功能开关');
         title.innerHTML = `<span style="margin-right:auto">功能开关</span><span style="font-size:12px;opacity:0.6">刷新生效</span>`;
         panel.appendChild(title);
+
+        let debugOptionsRevealed = CONFIG.compatDebug === true;
+        const debugOptions = document.createElement('div');
+        debugOptions.className = 'prts-debug-options';
+        if (debugOptionsRevealed) debugOptions.classList.add('is-visible');
+
+        const revealDebugOptions = event => {
+            if (!event.shiftKey) return;
+            event.preventDefault();
+            event.stopPropagation();
+            debugOptionsRevealed = !debugOptionsRevealed;
+            debugOptions.classList.toggle('is-visible', debugOptionsRevealed);
+        };
+
+        title.addEventListener('click', revealDebugOptions);
+        title.addEventListener('keydown', event => {
+            if (event.key === 'Enter' || event.key === ' ') {
+                revealDebugOptions(event);
+            }
+        });
 
         panel.appendChild(createSwitch('🖼️ 作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
@@ -267,6 +291,18 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         panel.appendChild(createSwitch('🗂️ 折叠侧边栏', CONFIG.hideSidebar, (val) => {
             CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
         }, 'hideSidebar'));
+
+        debugOptions.appendChild(createSwitch('兼容诊断', CONFIG.compatDebug, (val) => {
+            CONFIG.compatDebug = val;
+            saveConfig();
+            if (val) {
+                renderCompatibilityDiagnosticsPanel();
+                requestFilterUpdate();
+            } else {
+                removeCompatibilityDiagnosticsPanel();
+            }
+        }, 'compatDebug'));
+        panel.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
         const accRow = document.createElement('div');
@@ -463,4 +499,3 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             if (!isDragging) container.classList.remove('prts-float-open');
         });
     }
-

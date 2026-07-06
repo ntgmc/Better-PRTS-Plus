@@ -87,14 +87,19 @@
     .prts-panel-actions { display: flex; gap: 8px; margin-top: 8px; width: 100%; }
     .prts-panel-actions .prts-btn { flex: 1 1 0 !important; margin: 0 !important; padding: 6px 8px !important; font-size: 13px !important; }
     .prts-acc-btn.active { background-color: #3b82f6 !important; color: #fff !important; border-color: #3b82f6 !important; }
+    .prts-debug-options { display: none; margin: 2px 0 12px; padding: 10px 0 0; border-top: 1px dashed #cbd5e1; }
+    .prts-debug-options.is-visible { display: block; }
+    .prts-debug-options .prts-panel-item { margin-bottom: 0; }
     body.dark .prts-acc-btn { border-color: #415262 !important; color: #c4d0dc !important; }
     body.dark .prts-acc-btn.active { background-color: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
     body.dark .prts-account-rename { border-color: #415262; color: #c4d0dc; }
     body.dark .prts-account-rename:hover { color: #60a5fa; border-color: #60a5fa; background-color: rgba(96, 165, 250, 0.16); }
+    body.dark .prts-debug-options { border-color: #415262; }
     body.high-contrast-theme .prts-acc-btn { border-color: #38383b !important; color: #d1d5db !important; }
     body.high-contrast-theme .prts-acc-btn.active { background-color: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
     body.high-contrast-theme .prts-account-rename { border-color: #38383b; color: #d1d5db; }
     body.high-contrast-theme .prts-account-rename:hover { color: #60a5fa; border-color: #60a5fa; background-color: rgba(96, 165, 250, 0.16); }
+    body.high-contrast-theme .prts-debug-options { border-color: #38383b; }
 
 
     .prts-divider { width: 1px; height: 16px; background-color: rgba(16, 22, 26, 0.15); margin: 0 8px; display: inline-block; }
@@ -270,6 +275,20 @@
     body.high-contrast-theme .prts-toast.warning { border-color: #f59e0b; color: #fde68a; }
     body.high-contrast-theme .prts-toast.error { border-color: #ef4444; color: #fecaca; }
 
+    #prts-compat-debug-panel { position: fixed; left: 16px; bottom: 24px; z-index: 2147483645; width: min(390px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #1e293b; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; pointer-events: none; }
+    #prts-compat-debug-panel * { box-sizing: border-box; }
+    .prts-compat-debug-title { font-size: 12px; line-height: 1.4; font-weight: 700; color: #2563eb; }
+    .prts-compat-debug-summary { margin-top: 3px; font-size: 13px; line-height: 1.45; font-weight: 700; color: #0f172a; }
+    .prts-compat-debug-meta { margin-top: 4px; font-size: 11px; line-height: 1.45; color: #64748b; overflow-wrap: anywhere; }
+    body.dark #prts-compat-debug-panel { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45); }
+    body.dark .prts-compat-debug-title { color: #60a5fa; }
+    body.dark .prts-compat-debug-summary { color: #f5f8fa; }
+    body.dark .prts-compat-debug-meta { color: #c4d0dc; }
+    body.high-contrast-theme #prts-compat-debug-panel { border-color: #38383b; background: #18181c; color: #e0e0e0; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55); }
+    body.high-contrast-theme .prts-compat-debug-title { color: #60a5fa; }
+    body.high-contrast-theme .prts-compat-debug-summary { color: #ffffff; }
+    body.high-contrast-theme .prts-compat-debug-meta { color: #d1d5db; }
+
     #prts-import-dialog-backdrop { position: fixed; inset: 0; z-index: 2147483646; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.38); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
     #prts-import-dialog { width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
     #prts-import-dialog * { box-sizing: border-box; }
@@ -407,4 +426,3 @@
 `;
 
     GM_addStyle(isSklandHost() ? sklandImportStyles : mergedStyles);
-

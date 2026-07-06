@@ -103,6 +103,49 @@
         return missingGroups;
     }
 
+    function getParsedOperationContent(operation) {
+        let parsed = operation?.parsedContent;
+        if (!parsed) {
+            if (Array.isArray(operation?.opers) || Array.isArray(operation?.groups)) {
+                parsed = operation;
+            } else if (typeof operation?.content === 'string') {
+                try { parsed = JSON.parse(operation.content); } catch(e) {}
+            }
+        }
+
+        return {
+            requiredOps: Array.isArray(parsed?.opers) ? parsed.opers : [],
+            requiredGroups: Array.isArray(parsed?.groups) ? parsed.groups : []
+        };
+    }
+
+    function hasNamedOperatorEntry(entry) {
+        return typeof entry?.name === 'string' && entry.name.trim().length > 0;
+    }
+
+    function hasKnownOperatorEntry(entry) {
+        return hasNamedOperatorEntry(entry) && Boolean(OP_ID_MAP[entry.name.trim()]);
+    }
+
+    function hasGroupEntry(group) {
+        return hasNamedOperatorEntry(group) ||
+            (Array.isArray(group?.opers) && group.opers.some(hasNamedOperatorEntry));
+    }
+
+    function hasKnownGroupCandidate(group) {
+        return Array.isArray(group?.opers) && group.opers.some(hasKnownOperatorEntry);
+    }
+
+    function hasEffectiveOperationData(operation) {
+        if (!operation || typeof operation !== 'object') return false;
+
+        const { requiredOps, requiredGroups } = getParsedOperationContent(operation);
+        if (operation._isFallback) {
+            return requiredOps.some(hasKnownOperatorEntry) || requiredGroups.some(hasKnownGroupCandidate);
+        }
+        return requiredOps.some(hasNamedOperatorEntry) || requiredGroups.some(hasGroupEntry);
+    }
+
     /**
      * 干员与干员组的可用性判定
      */
@@ -111,15 +154,7 @@
             return { isAvailable: true, missingCount: 0, missingOps:[] };
         }
 
-        let parsed = operation.parsedContent;
-        if (!parsed) {
-            if (Array.isArray(operation.opers) || Array.isArray(operation.groups)) {
-                parsed = operation;
-            } else if (typeof operation.content === 'string') {
-                try { parsed = JSON.parse(operation.content); } catch(e) {}
-            }
-        }
-        const { opers: requiredOps = [], groups: requiredGroups =[] } = parsed || {};
+        const { requiredOps, requiredGroups } = getParsedOperationContent(operation);
 
         if (requiredOps.length === 0 && requiredGroups.length === 0) {
             return { isAvailable: true, missingCount: 0, missingOps:[] };
@@ -155,4 +190,3 @@
 
         return { isAvailable, missingCount, missingOps: missingDetails };
     }
-
