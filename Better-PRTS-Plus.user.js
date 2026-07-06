@@ -6,12 +6,17 @@
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
 // @match        https://prts.plus/*
+// @match        https://www.skland.com/*
+// @match        https://skland.com/*
 // @icon         https://prts.plus/favicon.ico
 // @homepage     https://github.com/ntgmc/Better-PRTS-Plus
 // @supportURL   https://github.com/ntgmc/Better-PRTS-Plus/issues
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
+// @grant        GM_xmlhttpRequest
+// @grant        GM_addValueChangeListener
+// @connect      zonai.skland.com
 // @run-at       document-body
 // @license      GPL-3.0 License
 // ==/UserScript==
@@ -32,12 +37,31 @@
     const ACCOUNTS_DATA_KEY = 'prts_plus_accounts_data';
     const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 可选值: 'GRAY' | 'HIDE'
     const FILTER_MODE_KEY = 'prts_plus_filter_mode'; // 可选值: 'NONE' | 'PERFECT' | 'SUPPORT'
+    const SKLAND_LAST_IMPORT_KEY = 'prts_plus_skland_last_import';
+    const SKLAND_BASE_URL = 'https://zonai.skland.com';
+    const SKLAND_HOME_URL = 'https://www.skland.com/index';
+    const SKLAND_REQUEST_TIMEOUT_MS = 25000;
 
     // [设置配置] 功能开关默认状态
+    const SKLAND_FAVICON_SVG = '<svg class="prts-btn-icon-svg" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M0,15h1v1H0z" fill="#CCE519" opacity="0.039"/><path d="M2,15h1v1H2z" fill="#C8EE21" opacity="0.424"/><path d="M15,0h1v1H15z" fill="#D0D017" opacity="0.043"/><path d="M14,15h1v1H14z" fill="#D3F825" opacity="0.486"/><path d="M4,15h2v1H4z" fill="#C7EB21" opacity="0.502"/><path d="M11,15h3v1H11z" fill="#C9ED21" opacity="0.502"/><path d="M6,15h1v1H6z" fill="#C9EF1F" opacity="0.502"/><path d="M10,15h1v1H10z" fill="#C9F11F" opacity="0.502"/><path d="M3,15h1v1H3zM7,15h1v1H7z" fill="#CBEF21" opacity="0.502"/><path d="M8,15h2v1H8z" fill="#CDF321" opacity="0.502"/><path d="M14,0h1v1H14z" fill="#D1F323" opacity="0.502"/><path d="M15,1h1v1H15z" fill="#D0F321" opacity="0.6"/><path d="M0,13h1v1H0z" fill="#CFEF23" opacity="0.651"/><path d="M0,11h1v1H0z" fill="#D3B809" opacity="0.71"/><path d="M2,0h1v1H2z" fill="#D6F822" opacity="0.745"/><path d="M0,10h1v1H0z" fill="#DFC01A" opacity="0.757"/><path d="M0,12h1v1H0z" fill="#C9F718" opacity="0.769"/><path d="M0,2h1v1H0z" fill="#CDF222" opacity="0.773"/><path d="M13,0h1v1H13z" fill="#D2F723" opacity="0.792"/><path d="M0,5h1v1H0z" fill="#C0E51A" opacity="0.816"/><path d="M0,4h1v1H0z" fill="#C6EB17" opacity="0.816"/><path d="M0,6h1v1H0z" fill="#C9E618" opacity="0.816"/><path d="M15,14h1v1H15z" fill="#C9F127" opacity="0.816"/><path d="M4,0h2v1H4zM9,0h3v1H9z" fill="#CDF222" opacity="0.816"/><path d="M6,0h1v1H6z" fill="#CFF322" opacity="0.816"/><path d="M8,0h1v1H8z" fill="#D0F61F" opacity="0.816"/><path d="M7,0h1v1H7z" fill="#D4FB1D" opacity="0.816"/><path d="M0,8h1v1H0z" fill="#D5F022" opacity="0.816"/><path d="M0,7h1v1H0z" fill="#E0B61D" opacity="0.816"/><path d="M12,0h1v1H12z" fill="#CEF221" opacity="0.824"/><path d="M9,6h1v1H9z" fill="#9BB075" opacity="0.827"/><path d="M3,0h1v1H3z" fill="#CEF221" opacity="0.827"/><path d="M0,9h1v1H0z" fill="#D2FD21" opacity="0.827"/><path d="M0,3h1v1H0z" fill="#D0F522" opacity="0.831"/><path d="M8,10h1v1H8z" fill="#4B4848" opacity="0.859"/><path d="M10,6h1v1H10z" fill="#EBE6D6" opacity="0.89"/><path d="M1,14h1v1H1z" fill="#D0F421" opacity="0.922"/><path d="M15,8h1v1H15z" fill="#95DC0B" opacity="0.933"/><path d="M15,7h1v1H15z" fill="#9EBD4D" opacity="0.933"/><path d="M15,10h1v1H15z" fill="#A7B177" opacity="0.933"/><path d="M15,9h1v1H15z" fill="#ABB952" opacity="0.933"/><path d="M15,6h1v1H15z" fill="#BBCA71" opacity="0.933"/><path d="M15,11h1v1H15z" fill="#BBD01D" opacity="0.933"/><path d="M15,5h1v1H15z" fill="#C1E516" opacity="0.933"/><path d="M15,12h1v1H15z" fill="#D0F320" opacity="0.933"/><path d="M15,4h1v1H15z" fill="#D3F721" opacity="0.933"/><path d="M15,2h1v1H15z" fill="#CCF021" opacity="0.937"/><path d="M9,7h1v1H9z" fill="#4D5441" opacity="0.937"/><path d="M15,3h1v1H15z" fill="#CDF022" opacity="0.941"/><path d="M5,10h1v1H5z" fill="#E1F0D0" opacity="0.945"/><path d="M12,8h1v1H12z" fill="#4B4749" opacity="0.945"/><path d="M8,9h1v1H8z" fill="#FAF9FB" opacity="0.953"/><path d="M15,13h1v1H15z" fill="#CFF121" opacity="0.961"/><path d="M10,7h1v1H10z" fill="#2F2D28" opacity="0.961"/><path d="M9,10h1v1H9z" fill="#323031" opacity="0.976"/><path d="M13,8h1v1H13z" fill="#9E9693" opacity="0.98"/><path d="M5,9h1v1H5z" fill="#ABB09A" opacity="0.98"/><path d="M12,9h1v1H12z" fill="#1C1B19" opacity="0.98"/><path d="M6,10h1v1H6z" fill="#525650" opacity="0.984"/><path d="M11,6h1v1H11z" fill="#FCFDF6" opacity="0.992"/><path d="M12,6h1v1H12z" fill="#FEFEFE" opacity="0.992"/><path d="M13,9h1v1H13z" fill="#272429" opacity="0.992"/><path d="M9,9h1v1H9z" fill="#3D3D3D" opacity="0.992"/><path d="M7,10h1v1H7z" fill="#1F1F20" opacity="0.996"/><path d="M6,9h1v1H6z" fill="#282A06" opacity="0.996"/><path d="M11,7h1v1H11z" fill="#555653" opacity="0.996"/><path d="M7,12h1v1H7z" fill="#656379"/><path d="M8,6h1v1H8z" fill="#667D4D"/><path d="M7,9h1v1H7z" fill="#69696F"/><path d="M7,4h1v1H7z" fill="#6B687A"/><path d="M4,7h1v1H4z" fill="#6F6C80"/><path d="M14,8h1v1H14z" fill="#719246"/><path d="M4,8h1v1H4z" fill="#767574"/><path d="M3,7h1v1H3z" fill="#7C7778"/><path d="M8,12h1v1H8z" fill="#7C7967"/><path d="M9,12h1v1H9z" fill="#828073"/><path d="M7,8h1v1H7z" fill="#82827E"/><path d="M2,9h1v1H2z" fill="#82C10A"/><path d="M12,11h1v1H12z" fill="#848194"/><path d="M7,3h1v1H7z" fill="#8984A5"/><path d="M6,12h1v1H6z" fill="#8A8EA8"/><path d="M7,5h1v1H7z" fill="#8C8C86"/><path d="M3,9h1v1H3z" fill="#8CA753"/><path d="M2,5h1v1H2z" fill="#908AA8"/><path d="M3,6h1v1H3z" fill="#93948D"/><path d="M10,12h1v1H10z" fill="#94978F"/><path d="M2,7h1v1H2z" fill="#959994"/><path d="M14,10h1v1H14z" fill="#9692A3"/><path d="M5,7h1v1H5z" fill="#989892"/><path d="M8,3h1v1H8z" fill="#9EA675"/><path d="M14,5h1v1H14z" fill="#A1AF5D"/><path d="M3,8h1v1H3z" fill="#A2B173"/><path d="M13,4h1v1H13z" fill="#A3B357"/><path d="M8,8h1v1H8z" fill="#A5A4A7"/><path d="M6,7h1v1H6z" fill="#A5A6AD"/><path d="M6,13h1v1H6z" fill="#A5B030"/><path d="M6,6h1v1H6z" fill="#A5BF2C"/><path d="M7,2h1v1H7z" fill="#A6A4B0"/><path d="M1,5h1v1H1z" fill="#A6AA95"/><path d="M11,3h1v1H11z" fill="#A6B658"/><path d="M9,3h1v1H9z" fill="#A7C711"/><path d="M8,2h1v1H8z" fill="#A8B959"/><path d="M12,4h1v1H12z" fill="#A9AF8C"/><path d="M10,3h1v1H10z" fill="#A9B862"/><path d="M1,10h1v1H1z" fill="#A9CB31"/><path d="M11,12h1v1H11z" fill="#ABB288"/><path d="M2,4h1v1H2z" fill="#ABB86E"/><path d="M12,12h1v1H12z" fill="#ABBE4F"/><path d="M4,6h1v1H4z" fill="#ACBA68"/><path d="M9,13h1v1H9z" fill="#ADB95F"/><path d="M6,3h1v1H6z" fill="#ADC054"/><path d="M8,4h1v1H8z" fill="#AEAEAD"/><path d="M13,11h1v1H13z" fill="#AEB789"/><path d="M2,8h1v1H2z" fill="#AED330"/><path d="M1,6h1v1H1z" fill="#AFB97C"/><path d="M6,4h1v1H6z" fill="#B0C061"/><path d="M1,11h1v1H1z" fill="#B0C765"/><path d="M1,4h1v1H1z" fill="#B1BD74"/><path d="M3,5h1v1H3z" fill="#B1C64C"/><path d="M7,6h1v1H7z" fill="#B2B0B8"/><path d="M2,10h1v1H2z" fill="#B2B19B"/><path d="M7,13h1v1H7z" fill="#B2BE62"/><path d="M6,2h1v1H6z" fill="#B2CF29"/><path d="M12,3h1v1H12z" fill="#B4D70F"/><path d="M8,13h1v1H8z" fill="#B7C36A"/><path d="M14,11h1v1H14z" fill="#B7CE3E"/><path d="M10,13h1v1H10z" fill="#B9B938"/><path d="M9,4h1v1H9z" fill="#B9BAB2"/><path d="M13,7h1v1H13z" fill="#B9BCA2"/><path d="M14,7h1v1H14z" fill="#BAC981"/><path d="M2,12h1v1H2z" fill="#BBC39A"/><path d="M7,1h1v1H7z" fill="#BBDB28"/><path d="M5,13h1v1H5z" fill="#BBDF11"/><path d="M3,13h1v1H3z" fill="#BCDF15"/><path d="M13,12h1v1H13z" fill="#BCDF18"/><path d="M6,5h1v1H6z" fill="#BDDA2E"/><path d="M1,12h1v1H1z" fill="#BDDB2F"/><path d="M2,13h1v1H2z" fill="#BDE114"/><path d="M5,6h1v1H5z" fill="#BEDA35"/><path d="M4,13h1v1H4zM11,13h1v1H11z" fill="#C0E215"/><path d="M14,4h1v1H14z" fill="#C2E710"/><path d="M2,3h1v1H2z" fill="#C3E617"/><path d="M3,4h1v1H3z" fill="#C3E714"/><path d="M6,11h1v1H6z" fill="#C4C3C3"/><path d="M10,2h1v1H10z" fill="#C6EB12"/><path d="M3,2h1v1H3z" fill="#C7EA21"/><path d="M11,2h1v1H11z" fill="#C7EC14"/><path d="M4,5h1v1H4z" fill="#C7EF0A"/><path d="M4,2h1v1H4zM13,2h1v1H13zM4,3h1v1H4z" fill="#C8EB21"/><path d="M2,2h1v1H2z" fill="#C8EC21"/><path d="M13,3h1v1H13z" fill="#C8EE14"/><path d="M5,4h1v1H5z" fill="#C8EF15"/><path d="M3,12h1v1H3z" fill="#C9CEB2"/><path d="M5,12h1v1H5z" fill="#CACFAA"/><path d="M8,1h1v1H8z" fill="#CAEE22"/><path d="M1,3h1v1H1z" fill="#CAEF1A"/><path d="M5,3h1v1H5z" fill="#CAF016"/><path d="M4,12h1v1H4z" fill="#CBD0B0"/><path d="M3,3h1v1H3z" fill="#CBEE21"/><path d="M1,7h1v1H1z" fill="#CBF12D"/><path d="M12,13h1v1H12z" fill="#CBF216"/><path d="M4,9h1v1H4z" fill="#CCCACC"/><path d="M12,2h1v1H12z" fill="#CCEF21"/><path d="M4,4h1v1H4z" fill="#CCEF22"/><path d="M1,13h1v1H1z" fill="#CCF01E"/><path d="M5,2h1v1H5z" fill="#CCF11D"/><path d="M9,2h1v1H9z" fill="#CDF513"/><path d="M13,13h1v1H13z" fill="#CFF320"/><path d="M1,8h1v1H1z" fill="#CFF419"/><path d="M14,2h1v1H14z" fill="#CFF422"/><path d="M5,5h1v1H5z" fill="#CFF617"/><path d="M14,3h1v1H14z" fill="#D0F322"/><path d="M12,7h1v1H12z" fill="#D1D1D5"/><path d="M6,1h1v1H6z" fill="#D1F820"/><path d="M11,8h1v1H11z" fill="#151616"/><path d="M3,1h2v1H3zM12,1h1v1H12z" fill="#D2F723"/><path d="M5,1h1v1H5zM10,1h2v1H10z" fill="#D3F823"/><path d="M14,12h1v1H14z" fill="#D3F918"/><path d="M13,1h1v1H13z" fill="#D4F823"/><path d="M9,1h1v1H9z" fill="#D4F923"/><path d="M14,13h1v1H14z" fill="#D5FA22"/><path d="M1,9h1v1H1z" fill="#D6F621"/><path d="M9,14h1v1H9z" fill="#D6FA16"/><path d="M9,5h1v1H9z" fill="#D7D4E0"/><path d="M8,14h1v1H8z" fill="#D7F613"/><path d="M2,1h1v1H2z" fill="#D7FC24"/><path d="M1,2h1v1H1z" fill="#D9FF23"/><path d="M14,14h1v1H14z" fill="#D9FF24"/><path d="M1,1h1v1H1z" fill="#DAFF24"/><path d="M7,14h1v1H7z" fill="#DCFF17"/><path d="M4,14h2v1H4z" fill="#DDFF22"/><path d="M3,14h1v1H3z" fill="#DEFF22"/><path d="M2,14h1v1H2z" fill="#DEFF23"/><path d="M12,14h1v1H12z" fill="#E0FF23"/><path d="M13,5h1v1H13z" fill="#E1DEEF"/><path d="M11,14h1v1H11z" fill="#E1FF22"/><path d="M13,14h1v1H13z" fill="#E1FF23"/><path d="M14,1h1v1H14z" fill="#E1FF25"/><path d="M10,14h1v1H10z" fill="#E2FF1F"/><path d="M6,14h1v1H6z" fill="#E3FF21"/><path d="M11,4h1v1H11z" fill="#EAE7F7"/><path d="M3,10h1v1H3z" fill="#EEEAF3"/><path d="M14,6h1v1H14z" fill="#F2EDFF"/><path d="M10,4h1v1H10z" fill="#F5F2FF"/><path d="M2,11h1v1H2z" fill="#FFFEFF"/><path d="M10,5h3v1H10zM13,6h1v1H13zM4,10h1v1H4zM3,11h3v1H3z" fill="#FFFFFF"/><path d="M8,11h1v1H8z" fill="#1E1F1E"/><path d="M10,10h1v1H10z" fill="#1F1F23"/><path d="M10,9h1v1H10z" fill="#212121"/><path d="M9,11h1v1H9z" fill="#22221B"/><path d="M10,8h1v1H10z" fill="#272829"/><path d="M11,9h1v1H11z" fill="#292929"/><path d="M11,10h1v1H11z" fill="#292A2B"/><path d="M7,11h1v1H7z" fill="#2F2F2E"/><path d="M9,8h1v1H9z" fill="#302F32"/><path d="M12,10h1v1H12z" fill="#3A3B3A"/><path d="M2,6h1v1H2z" fill="#46435C"/><path d="M10,11h1v1H10z" fill="#48472B"/><path d="M13,10h1v1H13z" fill="#4B4A54"/><path d="M8,5h1v1H8z" fill="#4C4755"/><path d="M8,7h1v1H8z" fill="#4D553F"/><path d="M11,11h1v1H11z" fill="#4F4D4E"/><path d="M6,8h1v1H6z" fill="#5C5B54"/><path d="M14,9h1v1H14z" fill="#605D93"/><path d="M5,8h1v1H5z" fill="#615F60"/><path d="M7,7h1v1H7z" fill="#626084"/><path d="M0,14h1v1H0z" fill="#CEEC1E" opacity="0.165"/><path d="M1,15h1v1H1z" fill="#CCEF1E" opacity="0.259"/><path d="M15,15h1v1H15z" fill="#C9F225" opacity="0.318"/><path d="M0,1h1v1H0z" fill="#CEF122" opacity="0.373"/><path d="M1,0h1v1H1z" fill="#CAEF21" opacity="0.384"/></svg>';
+
     const CONFIG = {
         visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
         cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
         hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false) // 折叠侧边栏
+    };
+
+    const BP_SELECTORS = {
+        inputGroup: '.bp4-input-group, .bp6-input-group',
+        card: '.bp4-card, .bp6-card',
+        tag: '.bp4-tag, .bp6-tag',
+        heading: '.bp4-heading, .bp6-heading',
+        popoverTarget: '.bp4-popover2-target, .bp6-popover-target',
+        popoverContent: '.bp4-popover2-content, .bp6-popover-content',
+        popover: '.bp4-popover2, .bp6-popover',
+        menuOrItem: 'ul.bp4-menu, ul.bp6-menu, li, a.bp4-menu-item, a.bp6-menu-item',
+        portal: '.bp4-portal, .bp6-portal',
+        dialog: '.bp4-dialog, .bp6-dialog'
     };
 
     // 全局状态变量
@@ -164,6 +188,446 @@
         return parseOperatorNamesFromText(text);
     }
 
+    function isSklandHost() {
+        return /(^|\.)skland\.com$/i.test(window.location.hostname);
+    }
+
+    function isPrtsHost() {
+        return /(^|\.)prts\.plus$/i.test(window.location.hostname) || /(^|\.)zoot\.plus$/i.test(window.location.hostname);
+    }
+
+    function isPlainRecord(value) {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function stringValue(value) {
+        if (typeof value === 'string') return value.trim();
+        if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+        return '';
+    }
+
+    function readSklandCredentialFromStorage() {
+        let raw = '';
+        try {
+            raw = window.localStorage.getItem('SK_OAUTH_CRED_KEY') || '';
+        } catch (error) {
+            throw new Error('无法读取森空岛网页存储，请确认浏览器允许脚本访问 localStorage。');
+        }
+
+        const candidates = [];
+        const pushCandidate = value => {
+            if (typeof value === 'string' && value.trim()) candidates.push(value.trim());
+        };
+        const pushJsonCandidates = text => {
+            try {
+                const parsed = JSON.parse(text);
+                if (typeof parsed === 'string') pushCandidate(parsed);
+                if (isPlainRecord(parsed)) {
+                    pushCandidate(parsed.cred);
+                    pushCandidate(parsed.value);
+                }
+            } catch (error) {
+                // 不是 JSON 时按原始凭据继续处理。
+            }
+        };
+
+        pushCandidate(raw);
+        const decodedRaw = decodeSklandCredentialText(raw);
+        pushCandidate(decodedRaw);
+        pushJsonCandidates(raw);
+        if (decodedRaw !== raw) pushJsonCandidates(decodedRaw);
+
+        for (const candidate of candidates) {
+            const normalized = normalizeSklandCredentialCandidate(candidate);
+            if (normalized) return normalized;
+        }
+        throw new Error('未找到森空岛登录凭据，请先在当前森空岛页面完成登录。');
+    }
+
+    function decodeSklandCredentialText(value) {
+        let decoded = String(value || '').trim();
+        for (let i = 0; i < 2; i++) {
+            try {
+                const next = decodeURIComponent(decoded);
+                if (next === decoded) break;
+                decoded = next;
+            } catch (error) {
+                break;
+            }
+        }
+        return decoded;
+    }
+
+    function normalizeSklandCredentialCandidate(value) {
+        const candidate = decodeSklandCredentialText(value).replace(/^["']|["']$/g, '').trim();
+        if (!candidate || candidate.length < 12) return null;
+        if (candidate.includes('=') || candidate.includes(';')) return null;
+        return candidate;
+    }
+
+    async function importSklandOperatorsToAccount(accountId) {
+        const targetAccountId = normalizeAccountId(accountId);
+        const credential = readSklandCredentialFromStorage();
+        const refreshed = await refreshSklandToken(credential);
+        const binding = await getSklandArknightsBinding(credential, refreshed.token, refreshed.timestamp);
+        const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
+        const names = convertSklandPlayerInfoToNames(playerInfo);
+
+        accountsData[targetAccountId] = names;
+        activeAccountId = targetAccountId;
+        saveAccountsData();
+        ownedOpsSet = new Set(names);
+
+        const summary = {
+            accountId: targetAccountId,
+            operatorCount: names.length,
+            nickname: binding.nickname,
+            uid: binding.uid,
+            importedAt: new Date().toISOString()
+        };
+        GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(summary));
+        return summary;
+    }
+
+    async function refreshSklandToken(credential) {
+        const path = '/api/v1/auth/refresh';
+        const timestamp = `${Math.floor(Date.now() / 1000)}`;
+        const sign = await generateSklandSign('', path, '', timestamp);
+        const data = await sklandRequestJson(`${SKLAND_BASE_URL}${path}`, {
+            method: 'GET',
+            headers: buildSklandHeaders(timestamp, sign, { cred: credential })
+        });
+        if (data.code !== 0 || data.message !== 'OK' || !isPlainRecord(data.data) || typeof data.data.token !== 'string') {
+            throw new Error('森空岛登录凭据已失效，请刷新页面或重新登录森空岛。');
+        }
+        return {
+            token: data.data.token,
+            timestamp: stringValue(data.timestamp) || timestamp
+        };
+    }
+
+    async function getSklandArknightsBinding(credential, token, timestamp) {
+        const data = await sklandSignedGet('/api/v1/game/player/binding', '', credential, token, timestamp);
+        if (data.code !== 0 || data.message !== 'OK' || !isPlainRecord(data.data) || !Array.isArray(data.data.list)) {
+            throw new Error('读取森空岛绑定角色失败，请稍后重试。');
+        }
+
+        for (const item of data.data.list) {
+            if (!isPlainRecord(item) || item.appCode !== 'arknights' || !Array.isArray(item.bindingList)) continue;
+            const bindingList = item.bindingList.filter(isPlainRecord);
+            const first = bindingList[0];
+            const uid = stringValue(item.defaultUid ?? first?.uid);
+            const matched = bindingList.find(binding => stringValue(binding.uid) === uid) || first;
+            const nickname = stringValue(matched?.nickName ?? matched?.nickname ?? uid);
+            const channel = stringValue(matched?.channelName ?? matched?.channel ?? '官方');
+            if (uid && nickname) {
+                return { uid, nickname, channelName: channel || '官方' };
+            }
+        }
+        throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+    }
+
+    async function getSklandGamePlayerInfo(credential, token, timestamp, uid) {
+        const query = `uid=${encodeURIComponent(uid)}`;
+        const data = await sklandSignedGet('/api/v1/game/player/info', query, credential, token, timestamp);
+        if (data.code !== 0 || data.message !== 'OK') {
+            throw new Error('读取森空岛干员数据失败，请稍后重试。');
+        }
+        return data;
+    }
+
+    async function sklandSignedGet(path, query, credential, token, timestamp) {
+        const sign = await generateSklandSign(token, path, query, timestamp);
+        const url = `${SKLAND_BASE_URL}${path}${query ? `?${query}` : ''}`;
+        return sklandRequestJson(url, {
+            method: 'GET',
+            headers: buildSklandHeaders(timestamp, sign, { cred: credential, token })
+        });
+    }
+
+    function buildSklandHeaders(timestamp, sign, extraHeaders = {}) {
+        return {
+            'Content-Type': 'application/json',
+            platform: '1',
+            'Accept-Language': 'zh-Hans-CN;q=1.0',
+            dId: '',
+            vName: '1.21.0',
+            language: 'zh-hans-CN',
+            sign,
+            timestamp,
+            ...extraHeaders
+        };
+    }
+
+    async function sklandRequestJson(url, init) {
+        const method = init.method || 'GET';
+        const headers = init.headers || {};
+        const body = init.body;
+        let fetchError = null;
+
+        if (typeof fetch === 'function') {
+            const controller = typeof AbortController === 'function' ? new AbortController() : null;
+            const timeoutId = controller ? window.setTimeout(() => controller.abort(), SKLAND_REQUEST_TIMEOUT_MS) : null;
+            try {
+                const response = await fetch(url, {
+                    method,
+                    headers,
+                    body,
+                    signal: controller?.signal,
+                    credentials: 'omit'
+                });
+                if (!response.ok) throw new Error(`森空岛接口请求失败: HTTP ${response.status}`);
+                return await response.json();
+            } catch (error) {
+                fetchError = error;
+            } finally {
+                if (timeoutId !== null) window.clearTimeout(timeoutId);
+            }
+        }
+
+        if (typeof GM_xmlhttpRequest !== 'function') {
+            throw fetchError instanceof Error ? fetchError : new Error('森空岛接口请求失败，请稍后重试。');
+        }
+
+        return new Promise((resolve, reject) => {
+            GM_xmlhttpRequest({
+                method,
+                url,
+                headers,
+                data: body,
+                timeout: SKLAND_REQUEST_TIMEOUT_MS,
+                responseType: 'json',
+                onload: response => {
+                    if (response.status < 200 || response.status >= 300) {
+                        reject(new Error(`森空岛接口请求失败: HTTP ${response.status}`));
+                        return;
+                    }
+                    if (response.response && typeof response.response === 'object') {
+                        resolve(response.response);
+                        return;
+                    }
+                    try {
+                        resolve(JSON.parse(response.responseText || 'null'));
+                    } catch (error) {
+                        reject(new Error('森空岛接口返回格式异常，请稍后重试。'));
+                    }
+                },
+                ontimeout: () => reject(new Error('森空岛接口请求超时，请稍后重试。')),
+                onerror: () => reject(new Error('森空岛接口请求失败，请稍后重试。'))
+            });
+        });
+    }
+
+    function convertSklandPlayerInfoToNames(gamePlayerInfo) {
+        const data = isPlainRecord(gamePlayerInfo) && isPlainRecord(gamePlayerInfo.data) ? gamePlayerInfo.data : null;
+        const chars = data && Array.isArray(data.chars) ? data.chars : [];
+        const charInfoMap = data && isPlainRecord(data.charInfoMap) ? data.charInfoMap : {};
+        const names = [];
+
+        for (const raw of chars) {
+            if (!isPlainRecord(raw)) continue;
+            const id = stringValue(raw.charId ?? raw.id);
+            if (!id.startsWith('char_')) continue;
+            const meta = isPlainRecord(charInfoMap[id]) ? charInfoMap[id] : null;
+            const name = normalizeOperatorName(meta?.name ?? raw.name);
+            if (name) names.push(name);
+        }
+
+        const sanitized = sanitizeOperatorNames(names);
+        if (sanitized.length === 0) {
+            throw new Error('森空岛干员数据为空，请确认账号已绑定明日方舟角色。');
+        }
+        return sanitized.sort((left, right) => left.localeCompare(right, 'zh-CN'));
+    }
+
+    async function generateSklandSign(token, path, queryOrBody, timestamp) {
+        const headerForSign = {
+            platform: '1',
+            timestamp,
+            dId: '',
+            vName: '1.21.0'
+        };
+        const source = path + queryOrBody + timestamp + JSON.stringify(headerForSign);
+        const hmac = await hmacSha256Hex(token, source);
+        return md5Hex(hmac);
+    }
+
+    async function hmacSha256Hex(key, message) {
+        const blockSize = 64;
+        let keyBytes = utf8Bytes(key);
+        if (keyBytes.length > blockSize) keyBytes = await sha256Bytes(keyBytes);
+
+        const paddedKey = new Uint8Array(blockSize);
+        paddedKey.set(keyBytes);
+
+        const outerPad = new Uint8Array(blockSize);
+        const innerPad = new Uint8Array(blockSize);
+        for (let i = 0; i < blockSize; i++) {
+            outerPad[i] = paddedKey[i] ^ 0x5c;
+            innerPad[i] = paddedKey[i] ^ 0x36;
+        }
+
+        const innerHash = await sha256Bytes(concatBytes(innerPad, utf8Bytes(message)));
+        const finalHash = await sha256Bytes(concatBytes(outerPad, innerHash));
+        return bytesToHex(finalHash);
+    }
+
+    async function sha256Bytes(bytes) {
+        if (!window.crypto?.subtle) throw new Error('当前浏览器不支持森空岛请求签名所需的 WebCrypto。');
+        return new Uint8Array(await window.crypto.subtle.digest('SHA-256', bytes));
+    }
+
+    function utf8Bytes(value) {
+        return new TextEncoder().encode(String(value));
+    }
+
+    function concatBytes(left, right) {
+        const combined = new Uint8Array(left.length + right.length);
+        combined.set(left, 0);
+        combined.set(right, left.length);
+        return combined;
+    }
+
+    function bytesToHex(bytes) {
+        return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function md5Hex(input) {
+        const bytes = utf8Bytes(input);
+        const wordCount = (((bytes.length + 8) >>> 6) + 1) * 16;
+        const words = new Array(wordCount).fill(0);
+        for (let i = 0; i < bytes.length; i++) {
+            words[i >> 2] |= bytes[i] << ((i % 4) * 8);
+        }
+        words[bytes.length >> 2] |= 0x80 << ((bytes.length % 4) * 8);
+        const bitLength = bytes.length * 8;
+        words[wordCount - 2] = bitLength >>> 0;
+        words[wordCount - 1] = Math.floor(bitLength / 0x100000000) >>> 0;
+
+        let a = 0x67452301;
+        let b = 0xefcdab89;
+        let c = 0x98badcfe;
+        let d = 0x10325476;
+
+        for (let i = 0; i < wordCount; i += 16) {
+            const oldA = a;
+            const oldB = b;
+            const oldC = c;
+            const oldD = d;
+
+            a = md5Ff(a, b, c, d, words[i], 7, -680876936);
+            d = md5Ff(d, a, b, c, words[i + 1], 12, -389564586);
+            c = md5Ff(c, d, a, b, words[i + 2], 17, 606105819);
+            b = md5Ff(b, c, d, a, words[i + 3], 22, -1044525330);
+            a = md5Ff(a, b, c, d, words[i + 4], 7, -176418897);
+            d = md5Ff(d, a, b, c, words[i + 5], 12, 1200080426);
+            c = md5Ff(c, d, a, b, words[i + 6], 17, -1473231341);
+            b = md5Ff(b, c, d, a, words[i + 7], 22, -45705983);
+            a = md5Ff(a, b, c, d, words[i + 8], 7, 1770035416);
+            d = md5Ff(d, a, b, c, words[i + 9], 12, -1958414417);
+            c = md5Ff(c, d, a, b, words[i + 10], 17, -42063);
+            b = md5Ff(b, c, d, a, words[i + 11], 22, -1990404162);
+            a = md5Ff(a, b, c, d, words[i + 12], 7, 1804603682);
+            d = md5Ff(d, a, b, c, words[i + 13], 12, -40341101);
+            c = md5Ff(c, d, a, b, words[i + 14], 17, -1502002290);
+            b = md5Ff(b, c, d, a, words[i + 15], 22, 1236535329);
+
+            a = md5Gg(a, b, c, d, words[i + 1], 5, -165796510);
+            d = md5Gg(d, a, b, c, words[i + 6], 9, -1069501632);
+            c = md5Gg(c, d, a, b, words[i + 11], 14, 643717713);
+            b = md5Gg(b, c, d, a, words[i], 20, -373897302);
+            a = md5Gg(a, b, c, d, words[i + 5], 5, -701558691);
+            d = md5Gg(d, a, b, c, words[i + 10], 9, 38016083);
+            c = md5Gg(c, d, a, b, words[i + 15], 14, -660478335);
+            b = md5Gg(b, c, d, a, words[i + 4], 20, -405537848);
+            a = md5Gg(a, b, c, d, words[i + 9], 5, 568446438);
+            d = md5Gg(d, a, b, c, words[i + 14], 9, -1019803690);
+            c = md5Gg(c, d, a, b, words[i + 3], 14, -187363961);
+            b = md5Gg(b, c, d, a, words[i + 8], 20, 1163531501);
+            a = md5Gg(a, b, c, d, words[i + 13], 5, -1444681467);
+            d = md5Gg(d, a, b, c, words[i + 2], 9, -51403784);
+            c = md5Gg(c, d, a, b, words[i + 7], 14, 1735328473);
+            b = md5Gg(b, c, d, a, words[i + 12], 20, -1926607734);
+
+            a = md5Hh(a, b, c, d, words[i + 5], 4, -378558);
+            d = md5Hh(d, a, b, c, words[i + 8], 11, -2022574463);
+            c = md5Hh(c, d, a, b, words[i + 11], 16, 1839030562);
+            b = md5Hh(b, c, d, a, words[i + 14], 23, -35309556);
+            a = md5Hh(a, b, c, d, words[i + 1], 4, -1530992060);
+            d = md5Hh(d, a, b, c, words[i + 4], 11, 1272893353);
+            c = md5Hh(c, d, a, b, words[i + 7], 16, -155497632);
+            b = md5Hh(b, c, d, a, words[i + 10], 23, -1094730640);
+            a = md5Hh(a, b, c, d, words[i + 13], 4, 681279174);
+            d = md5Hh(d, a, b, c, words[i], 11, -358537222);
+            c = md5Hh(c, d, a, b, words[i + 3], 16, -722521979);
+            b = md5Hh(b, c, d, a, words[i + 6], 23, 76029189);
+            a = md5Hh(a, b, c, d, words[i + 9], 4, -640364487);
+            d = md5Hh(d, a, b, c, words[i + 12], 11, -421815835);
+            c = md5Hh(c, d, a, b, words[i + 15], 16, 530742520);
+            b = md5Hh(b, c, d, a, words[i + 2], 23, -995338651);
+
+            a = md5Ii(a, b, c, d, words[i], 6, -198630844);
+            d = md5Ii(d, a, b, c, words[i + 7], 10, 1126891415);
+            c = md5Ii(c, d, a, b, words[i + 14], 15, -1416354905);
+            b = md5Ii(b, c, d, a, words[i + 5], 21, -57434055);
+            a = md5Ii(a, b, c, d, words[i + 12], 6, 1700485571);
+            d = md5Ii(d, a, b, c, words[i + 3], 10, -1894986606);
+            c = md5Ii(c, d, a, b, words[i + 10], 15, -1051523);
+            b = md5Ii(b, c, d, a, words[i + 1], 21, -2054922799);
+            a = md5Ii(a, b, c, d, words[i + 8], 6, 1873313359);
+            d = md5Ii(d, a, b, c, words[i + 15], 10, -30611744);
+            c = md5Ii(c, d, a, b, words[i + 6], 15, -1560198380);
+            b = md5Ii(b, c, d, a, words[i + 13], 21, 1309151649);
+            a = md5Ii(a, b, c, d, words[i + 4], 6, -145523070);
+            d = md5Ii(d, a, b, c, words[i + 11], 10, -1120210379);
+            c = md5Ii(c, d, a, b, words[i + 2], 15, 718787259);
+            b = md5Ii(b, c, d, a, words[i + 9], 21, -343485551);
+
+            a = md5Add(a, oldA);
+            b = md5Add(b, oldB);
+            c = md5Add(c, oldC);
+            d = md5Add(d, oldD);
+        }
+
+        return md5WordToHex(a) + md5WordToHex(b) + md5WordToHex(c) + md5WordToHex(d);
+    }
+
+    function md5Add(left, right) {
+        return (left + right) >>> 0;
+    }
+
+    function md5RotateLeft(value, shift) {
+        return (value << shift) | (value >>> (32 - shift));
+    }
+
+    function md5Cmn(query, a, b, x, shift, constant) {
+        return md5Add(md5RotateLeft(md5Add(md5Add(a, query), md5Add(x, constant)), shift), b);
+    }
+
+    function md5Ff(a, b, c, d, x, shift, constant) {
+        return md5Cmn((b & c) | (~b & d), a, b, x, shift, constant);
+    }
+
+    function md5Gg(a, b, c, d, x, shift, constant) {
+        return md5Cmn((b & d) | (c & ~d), a, b, x, shift, constant);
+    }
+
+    function md5Hh(a, b, c, d, x, shift, constant) {
+        return md5Cmn(b ^ c ^ d, a, b, x, shift, constant);
+    }
+
+    function md5Ii(a, b, c, d, x, shift, constant) {
+        return md5Cmn(c ^ (b | ~d), a, b, x, shift, constant);
+    }
+
+    function md5WordToHex(word) {
+        let output = '';
+        for (let i = 0; i < 4; i++) {
+            output += ((word >>> (i * 8)) & 0xff).toString(16).padStart(2, '0');
+        }
+        return output;
+    }
+
     function parseFloatingPosition(rawValue) {
         const fallback = { top: '40%', isRight: true };
         const parsed = typeof rawValue === 'string' ? safeJsonParse(rawValue, fallback) : rawValue;
@@ -179,6 +643,15 @@
 
     function normalizeFilterMode(mode) {
         return ['NONE', 'PERFECT', 'SUPPORT'].includes(mode) ? mode : 'NONE';
+    }
+
+    function findSearchInputGroup() {
+        const blueprintGroup = document.querySelector(BP_SELECTORS.inputGroup);
+        if (blueprintGroup) return blueprintGroup;
+
+        const searchInput = document.querySelector('input[type="search"][enterkeyhint="search"]') ||
+                            document.querySelector('input[type="search"]');
+        return searchInput?.closest('div') || null;
     }
 
     function getCardSignature(card) {
@@ -204,7 +677,7 @@
     }
 
     function buildFallbackOperation(card) {
-        const tags = Array.from(card.querySelectorAll('.bp4-tag, .prts-op-text'));
+        const tags = Array.from(card.querySelectorAll(`${BP_SELECTORS.tag}, .prts-op-text`));
         const requiredOps = [];
         const requiredGroups = [];
 
@@ -224,7 +697,7 @@
 
             if (isGroup) {
                 // 尝试获取悬浮窗组件内部的文本内容
-                const targetNode = tag.closest('.bp4-popover2-target');
+                const targetNode = tag.closest(BP_SELECTORS.popoverTarget);
                 let groupCandidates = [];
                 if (targetNode) {
                     const popoverText = extractPopoverContentFromFiber(targetNode);
@@ -329,6 +802,8 @@
     .prts-btn:hover { background-color: rgba(167, 182, 194, 0.3) !important; color: #1c2127 !important; text-decoration: none !important; }
     .prts-btn.prts-active { background-color: rgba(167, 182, 194, 0.3) !important; color: #2563eb !important; font-weight: 600 !important; }
     .prts-btn .bp4-icon { margin-right: 7px !important; color: #5c7080 !important; fill: currentColor !important; }
+    .prts-btn-icon-img, .prts-btn-icon-svg { width: 16px !important; height: 16px !important; margin-right: 7px !important; border-radius: 3px !important; flex: 0 0 auto !important; object-fit: contain !important; display: inline-block !important; vertical-align: middle !important; }
+    .prts-btn-icon-svg { overflow: visible !important; }
     .prts-btn.prts-active .bp4-icon { color: #2563eb !important; }
 
     body.dark .prts-btn { color: #8a9baa !important; }
@@ -376,12 +851,12 @@
     body.high-contrast-theme .prts-label-support { color: #f59e0b !important; }
 
 
-    .prts-card-gray .bp4-card { opacity: 0.4 !important; filter: grayscale(1) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; }
-    .prts-card-gray:hover .bp4-card { opacity: 0.9 !important; filter: grayscale(0) !important; }
+    .prts-card-gray .bp4-card, .prts-card-gray .bp6-card { opacity: 0.4 !important; filter: grayscale(1) !important; transition: opacity 0.2s ease, filter 0.2s ease !important; }
+    .prts-card-gray:hover .bp4-card, .prts-card-gray:hover .bp6-card { opacity: 0.9 !important; filter: grayscale(0) !important; }
 
     /* 5. 干员显示 (Grid, Items, Avatar, Badges) */
     .prts-op-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; margin-bottom: 8px; align-items: center; }
-    .prts-op-grid .bp4-popover2-target { display: inline-flex !important; margin: 0 !important; padding: 0 !important; vertical-align: top !important; height: 42px !important; }
+    .prts-op-grid .bp4-popover2-target, .prts-op-grid .bp6-popover-target { display: inline-flex !important; margin: 0 !important; padding: 0 !important; vertical-align: top !important; height: 42px !important; }
 
     body.dark .bg-orange-200.ring-orange-300 { background-color: rgba(234, 88, 12, 0.2) !important; --tw-ring-color: rgba(249, 115, 22, 0.6) !important; box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important; }
     body.dark .bg-yellow-100.ring-yellow-200 { background-color: rgba(234, 179, 8, 0.2) !important; --tw-ring-color: rgba(234, 179, 8, 0.6) !important; box-shadow: inset 0 0 0 2px var(--tw-ring-color) !important; }
@@ -424,9 +899,9 @@
 
 
     /* 技能角标与 Grid Popover */
-    .bp4-popover2-content { background-color: #ffffff !important; color: #18181b !important; border: 1px solid #e5e7eb !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
-    body.dark .bp4-popover2-content { background-color: #30404d !important; color: #f5f8fa !important; border-color: #415262 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
-    body.high-contrast-theme .bp4-popover2-content { background-color: #18181c !important; color: #e0e0e0 !important; border-color: #38383b !important; box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important; }
+    .bp4-popover2-content, .bp6-popover-content { background-color: #ffffff !important; color: #18181b !important; border: 1px solid #e5e7eb !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
+    body.dark .bp4-popover2-content, body.dark .bp6-popover-content { background-color: #30404d !important; color: #f5f8fa !important; border-color: #415262 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
+    body.high-contrast-theme .bp4-popover2-content, body.high-contrast-theme .bp6-popover-content { background-color: #18181c !important; color: #e0e0e0 !important; border-color: #38383b !important; box-shadow: 0 4px 12px rgba(0,0,0,0.6) !important; }
 
     .bp4-popover2-arrow-fill { fill: #ffffff !important; }
     body.dark .bp4-popover2-arrow-fill { fill: #30404d !important; }
@@ -437,43 +912,43 @@
     body.high-contrast-theme .bp4-popover2-arrow-border { fill: #38383b !important; }
 
     /* bp4-menu inside popover: must be transparent to inherit popover bg */
-    .bp4-popover2-content .bp4-menu { background-color: transparent !important; border: none !important; }
-    body.dark .bp4-popover2-content .bp4-menu { background-color: transparent !important; border: none !important; }
-    body.high-contrast-theme .bp4-popover2-content .bp4-menu { background-color: transparent !important; border: none !important; }
+    .bp4-popover2-content .bp4-menu, .bp6-popover-content .bp6-menu { background-color: transparent !important; border: none !important; }
+    body.dark .bp4-popover2-content .bp4-menu, body.dark .bp6-popover-content .bp6-menu { background-color: transparent !important; border: none !important; }
+    body.high-contrast-theme .bp4-popover2-content .bp4-menu, body.high-contrast-theme .bp6-popover-content .bp6-menu { background-color: transparent !important; border: none !important; }
 
     /* bp4-menu-item hover & selected states */
-    .bp4-menu-item:hover, .bp4-menu-item.bp4-active { background-color: rgba(167, 182, 194, 0.15) !important; }
-    .bp4-menu-item.bp4-selected { background-color: rgba(59, 130, 246, 0.15) !important; color: #f5f8fa !important; }
-    body.dark .bp4-menu-item:hover, body.dark .bp4-menu-item.bp4-active { background-color: rgba(138, 155, 168, 0.15) !important; }
-    body.dark .bp4-menu-item.bp4-selected { background-color: rgba(139, 92, 246, 0.15) !important; color: #f5f8fa !important; }
-    body.high-contrast-theme .bp4-menu-item:hover, body.high-contrast-theme .bp4-menu-item.bp4-active { background-color: rgba(138, 155, 168, 0.15) !important; }
-    body.high-contrast-theme .bp4-menu-item.bp4-selected { background-color: rgba(139, 92, 246, 0.15) !important; color: #e0e0e0 !important; }
+    .bp4-menu-item:hover, .bp4-menu-item.bp4-active, .bp6-menu-item:hover, .bp6-menu-item.bp6-active { background-color: rgba(167, 182, 194, 0.15) !important; }
+    .bp4-menu-item.bp4-selected, .bp6-menu-item.bp6-selected { background-color: rgba(59, 130, 246, 0.15) !important; color: #f5f8fa !important; }
+    body.dark .bp4-menu-item:hover, body.dark .bp4-menu-item.bp4-active, body.dark .bp6-menu-item:hover, body.dark .bp6-menu-item.bp6-active { background-color: rgba(138, 155, 168, 0.15) !important; }
+    body.dark .bp4-menu-item.bp4-selected, body.dark .bp6-menu-item.bp6-selected { background-color: rgba(139, 92, 246, 0.15) !important; color: #f5f8fa !important; }
+    body.high-contrast-theme .bp4-menu-item:hover, body.high-contrast-theme .bp4-menu-item.bp4-active, body.high-contrast-theme .bp6-menu-item:hover, body.high-contrast-theme .bp6-menu-item.bp6-active { background-color: rgba(138, 155, 168, 0.15) !important; }
+    body.high-contrast-theme .bp4-menu-item.bp4-selected, body.high-contrast-theme .bp6-menu-item.bp6-selected { background-color: rgba(139, 92, 246, 0.15) !important; color: #e0e0e0 !important; }
 
     /* bp4-input-group & bp4-input inside popover */
-    .bp4-popover2-content .bp4-input-group .bp4-input { background-color: #ffffff; border: 1px solid #e5e7eb; color: #18181b; box-shadow: none; }
-    .bp4-popover2-content .bp4-input-group .bp4-input::placeholder { color: #9ca3af; }
-    body.dark .bp4-popover2-content .bp4-input-group .bp4-input { background-color: #202b33; border-color: #415262; color: #f5f8fa; }
-    body.dark .bp4-popover2-content .bp4-input-group .bp4-input::placeholder { color: #8a9baa; }
-    body.high-contrast-theme .bp4-popover2-content .bp4-input-group .bp4-input { background-color: #2d2d30; border-color: #38383b; color: #ffffff; }
-    body.high-contrast-theme .bp4-popover2-content .bp4-input-group .bp4-input::placeholder { color: #6b7280; }
+    .bp4-popover2-content .bp4-input-group .bp4-input, .bp6-popover-content .bp6-input-group .bp6-input { background-color: #ffffff; border: 1px solid #e5e7eb; color: #18181b; box-shadow: none; }
+    .bp4-popover2-content .bp4-input-group .bp4-input::placeholder, .bp6-popover-content .bp6-input-group .bp6-input::placeholder { color: #9ca3af; }
+    body.dark .bp4-popover2-content .bp4-input-group .bp4-input, body.dark .bp6-popover-content .bp6-input-group .bp6-input { background-color: #202b33; border-color: #415262; color: #f5f8fa; }
+    body.dark .bp4-popover2-content .bp4-input-group .bp4-input::placeholder, body.dark .bp6-popover-content .bp6-input-group .bp6-input::placeholder { color: #8a9baa; }
+    body.high-contrast-theme .bp4-popover2-content .bp4-input-group .bp4-input, body.high-contrast-theme .bp6-popover-content .bp6-input-group .bp6-input { background-color: #2d2d30; border-color: #38383b; color: #ffffff; }
+    body.high-contrast-theme .bp4-popover2-content .bp4-input-group .bp4-input::placeholder, body.high-contrast-theme .bp6-popover-content .bp6-input-group .bp6-input::placeholder { color: #6b7280; }
 
     /* bp4-input-group icon inside popover */
-    .bp4-popover2-content .bp4-input-group .bp4-icon { color: #9ca3af; background-color: transparent; }
-    body.dark .bp4-popover2-content .bp4-input-group .bp4-icon { color: #8a9baa; background-color: transparent; }
-    body.high-contrast-theme .bp4-popover2-content .bp4-input-group .bp4-icon { color: #9ca3af; background-color: transparent; }
+    .bp4-popover2-content .bp4-input-group .bp4-icon, .bp6-popover-content .bp6-input-group .bp6-icon { color: #9ca3af; background-color: transparent; }
+    body.dark .bp4-popover2-content .bp4-input-group .bp4-icon, body.dark .bp6-popover-content .bp6-input-group .bp6-icon { color: #8a9baa; background-color: transparent; }
+    body.high-contrast-theme .bp4-popover2-content .bp4-input-group .bp4-icon, body.high-contrast-theme .bp6-popover-content .bp6-input-group .bp6-icon { color: #9ca3af; background-color: transparent; }
 
     /* bp4-button inside popover */
-    body.dark .bp4-popover2-content .bp4-button .bp4-button-text { color: #f5f8fa; }
-    body.high-contrast-theme .bp4-popover2-content .bp4-button .bp4-button-text { color: #e0e0e0; }
+    body.dark .bp4-popover2-content .bp4-button .bp4-button-text, body.dark .bp6-popover-content .bp6-button .bp6-button-text { color: #f5f8fa; }
+    body.high-contrast-theme .bp4-popover2-content .bp4-button .bp4-button-text, body.high-contrast-theme .bp6-popover-content .bp6-button .bp6-button-text { color: #e0e0e0; }
 
     /* bp4-divider inside popover */
-    .bp4-popover2-content .bp4-divider { border-color: #e5e7eb; }
-    body.dark .bp4-popover2-content .bp4-divider { border-color: #415262; }
-    body.high-contrast-theme .bp4-popover2-content .bp4-divider { border-color: #38383b; }
+    .bp4-popover2-content .bp4-divider, .bp6-popover-content .bp6-divider { border-color: #e5e7eb; }
+    body.dark .bp4-popover2-content .bp4-divider, body.dark .bp6-popover-content .bp6-divider { border-color: #415262; }
+    body.high-contrast-theme .bp4-popover2-content .bp4-divider, body.high-contrast-theme .bp6-popover-content .bp6-divider { border-color: #38383b; }
 
     /* bp4-tag inside popover */
-    body.dark .bp4-popover2-content .bp4-tag { background-color: #202b33; color: #f5f8fa; }
-    body.high-contrast-theme .bp4-popover2-content .bp4-tag { background-color: #2d2d30; color: #e0e0e0; }
+    body.dark .bp4-popover2-content .bp4-tag, body.dark .bp6-popover-content .bp6-tag { background-color: #202b33; color: #f5f8fa; }
+    body.high-contrast-theme .bp4-popover2-content .bp4-tag, body.high-contrast-theme .bp6-popover-content .bp6-tag { background-color: #2d2d30; color: #e0e0e0; }
 
 
 
@@ -485,9 +960,9 @@
     .prts-popover-img { width: 100%; height: 100%; object-fit: cover; border-radius: 3px; }
 
     .prts-op-skill, .prts-popover-skill { position: absolute; bottom: 0; right: 0; z-index: 10; font-size: 11px !important; font-weight: 800 !important; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; line-height: 1.1; text-align: center; padding: 1px 4px; min-width: 14px; border-top-left-radius: 4px; background-color: #18181b !important; color: #f3f4f6 !important; border-top: 1px solid rgba(255, 255, 255, 0.3); border-left: 1px solid rgba(255, 255, 255, 0.3); box-shadow: 1px 1px 3px rgba(0, 0, 0, 0.5); pointer-events: none; }
-    .bp4-popover2-content .prts-popover-skill { background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb; }
-    body.dark .bp4-popover2-content .prts-popover-skill, body.dark .prts-popover-skill { background-color: #30404d !important; color: #f5f8fa !important; border-color: rgba(255, 255, 255, 0.3) !important; }
-    body.high-contrast-theme .bp4-popover2-content .prts-popover-skill, body.high-contrast-theme .prts-popover-skill { background-color: #18181c !important; color: #e0e0e0 !important; border-color: rgba(255, 255, 255, 0.3) !important; }
+    .bp4-popover2-content .prts-popover-skill, .bp6-popover-content .prts-popover-skill { background-color: #ffffff !important; color: #000000 !important; border: 1px solid #e5e7eb; }
+    body.dark .bp4-popover2-content .prts-popover-skill, body.dark .bp6-popover-content .prts-popover-skill, body.dark .prts-popover-skill { background-color: #30404d !important; color: #f5f8fa !important; border-color: rgba(255, 255, 255, 0.3) !important; }
+    body.high-contrast-theme .bp4-popover2-content .prts-popover-skill, body.high-contrast-theme .bp6-popover-content .prts-popover-skill, body.high-contrast-theme .prts-popover-skill { background-color: #18181c !important; color: #e0e0e0 !important; border-color: rgba(255, 255, 255, 0.3) !important; }
 
 
     /* 6. 模拟 Tooltip */
@@ -557,7 +1032,33 @@
     }
 `;
 
-    GM_addStyle(mergedStyles);
+    const sklandImportStyles = `
+    #prts-skland-import-panel { position: fixed; right: 16px; top: 96px; z-index: 2147483647; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
+    #prts-skland-import-panel * { box-sizing: border-box; }
+    .prts-skland-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 14px 10px; border-bottom: 1px solid #eef2f7; }
+    .prts-skland-title { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 700; color: #111827; }
+    .prts-skland-subtitle { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: #64748b; }
+    .prts-skland-close { width: 28px; height: 28px; border: none; border-radius: 4px; background: transparent; color: #64748b; font-size: 20px; line-height: 1; cursor: pointer; }
+    .prts-skland-close:hover { background: #f1f5f9; color: #0f172a; }
+    .prts-skland-body { padding: 12px 14px 14px; }
+    .prts-skland-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #475569; }
+    .prts-skland-accounts { display: flex; gap: 6px; margin-bottom: 12px; }
+    .prts-skland-account { flex: 1; height: 30px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #475569; cursor: pointer; font-size: 13px; font-weight: 700; }
+    .prts-skland-account.active { border-color: #2563eb; background: #2563eb; color: #ffffff; }
+    .prts-skland-primary { width: 100%; height: 36px; border: none; border-radius: 4px; background: #2563eb; color: #ffffff; cursor: pointer; font-size: 14px; font-weight: 700; }
+    .prts-skland-primary:hover { background: #1d4ed8; }
+    .prts-skland-primary:disabled { background: #94a3b8; cursor: wait; }
+    .prts-skland-status { min-height: 36px; margin: 12px 0 0; padding: 8px 10px; border-radius: 4px; background: #f8fafc; color: #475569; font-size: 12px; line-height: 1.55; white-space: pre-line; }
+    .prts-skland-status.success { background: #ecfdf5; color: #047857; }
+    .prts-skland-status.error { background: #fef2f2; color: #b91c1c; }
+    .prts-skland-link { display: inline-flex; align-items: center; margin-top: 10px; color: #2563eb; font-size: 12px; text-decoration: none; }
+    .prts-skland-link:hover { text-decoration: underline; }
+    @media (max-width: 520px) {
+        #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; }
+    }
+`;
+
+    GM_addStyle(isSklandHost() ? sklandImportStyles : mergedStyles);
 
     // =========================================================================
     //                            MODULE 3: 工具函数与核心算法
@@ -863,7 +1364,8 @@
                         if (bar) bar.remove();
                         injectFilterControls();
 
-                        alert(`✅ 账号 ${activeAccountId} 导入成功！\n共识别 ${names.length} 名持有干员。`);
+                        alert(`✅ 账号 ${activeAccountId} 导入成功！
+共识别 ${names.length} 名持有干员。`);
                         if (currentFilterMode !== 'NONE') requestFilterUpdate();
                     } else {
                         alert('⚠️ 未能识别有效的干员数据，请检查文件格式');
@@ -876,6 +1378,25 @@
             reader.readAsText(file);
         };
         input.click();
+    }
+
+    function handleOpenSklandImport() {
+        let opened = null;
+        try {
+            opened = window.open(SKLAND_HOME_URL, '_blank');
+            if (opened) opened.opener = null;
+        } catch (error) {
+            opened = null;
+        }
+        alert(opened
+            ? '已打开森空岛页面。请在森空岛网页登录后，使用页面右侧的 Better-PRTS-Plus 导入面板读取干员数据。'
+            : '已尝试打开森空岛页面。如果没有看到新窗口，请手动打开 https://www.skland.com/index 登录后使用 Better-PRTS-Plus 导入面板。');
+    }
+
+    function createSklandIconImage() {
+        const wrapper = document.createElement('span');
+        wrapper.innerHTML = SKLAND_FAVICON_SVG;
+        return wrapper.firstElementChild || wrapper;
     }
 
     function toggleDisplayMode() {
@@ -932,10 +1453,10 @@
             return;
         }
 
-        const searchInputGroup = document.querySelector('.bp4-input-group');
+        const searchInputGroup = findSearchInputGroup();
         if (!searchInputGroup) return;
         const searchRow = searchInputGroup.parentElement;
-        if (!searchRow) return;
+        if (!searchRow || !searchRow.parentNode) return;
 
         let controlBar = document.getElementById('prts-filter-bar');
         let isNew = false;
@@ -945,8 +1466,8 @@
             controlBar.id = 'prts-filter-bar';
         }
 
-        if (searchRow.nextSibling !== controlBar) {
-            searchRow.parentNode.insertBefore(controlBar, searchRow.nextSibling);
+        if (searchRow.nextElementSibling !== controlBar) {
+            searchRow.parentNode.insertBefore(controlBar, searchRow.nextElementSibling);
         }
 
         const paths = {
@@ -956,15 +1477,17 @@
             perfect: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
             support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm3.2-1.6c0-1.77-1.43-3.2-3.2-3.2-.45 0-.86.1-1.26.26.7.74 1.15 1.72 1.24 2.82.02.21.02.41 0 .62-.1 1.04-.51 1.98-1.16 2.71.37.13.75.19 1.18.19 1.77.01 3.2-1.42 3.2-3.4zM8.8 10.4H2.4c-.88 0-1.6.72-1.6 1.6v2.4h9.6V12c0-.88-.72-1.6-1.6-1.6zm-5.6 2.4h4.8v.8H3.2v-.8zm12-1.6h-4.8c.21 0 .4.03.59.07.67.15 1.29.44 1.81.85.91.71 1.5 1.81 1.57 3.04.01.1.01.18.03.28V12c0-.88-.72-1.6-1.6-1.6z',
             user: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
-            sidebarToggle: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z'
+            sidebarToggle: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
+            skland: SKLAND_FAVICON_SVG
         };
 
         const renderButton = (id, text, svgPath, onClick, active = false, disabled = false) => {
             let btn = document.getElementById(id);
+            const iconHTML = svgPath.startsWith('<svg')
+                ? svgPath
+                : `<span class="bp4-icon" aria-hidden="true" style="margin-right:6px"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="${svgPath}"></path></svg></span>`;
             const innerHTML = `
-                <span class="bp4-icon" aria-hidden="true" style="margin-right:6px">
-                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="${svgPath}"></path></svg>
-                </span>
+                ${iconHTML}
                 <span class="bp4-button-text">${text}</span>
             `;
 
@@ -1002,6 +1525,9 @@
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
         const btnImport = renderButton('btn-import', importText, paths.import, handleImport);
         controlBar.appendChild(btnImport);
+
+        const btnSklandImport = renderButton('btn-skland-import', '森空岛导入', paths.skland, handleOpenSklandImport);
+        controlBar.appendChild(btnSklandImport);
 
         // (3) 模式切换
         const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
@@ -1180,7 +1706,7 @@
     function optimizeCardVisuals(card, cardInner) {
         if (!CONFIG.visuals) return;
 
-        const heading = cardInner.querySelector('h4, h5, .bp4-heading');
+        const heading = cardInner.querySelector(`h4, h5, ${BP_SELECTORS.heading}`);
         const stageCodeSpan = cardInner.querySelector('.flex.whitespace-pre .inline-block.font-bold.my-auto');
 
         if (heading && !heading.dataset.badgeProcessed) {
@@ -1230,7 +1756,7 @@
         if (labelDiv && !labelDiv.dataset.opsProcessed) {
             const tagsContainer = labelDiv.nextElementSibling;
             if (tagsContainer) {
-                const tags = tagsContainer.querySelectorAll('.bp4-tag');
+                const tags = tagsContainer.querySelectorAll(BP_SELECTORS.tag);
                 let grid = tagsContainer.querySelector('.prts-op-grid');
                 if (!grid) {
                     grid = document.createElement('div');
@@ -1273,7 +1799,7 @@
 
                     if (!newItem) return;
 
-                    const interactiveWrapper = tag.closest('.bp4-popover2-target');
+                    const interactiveWrapper = tag.closest(BP_SELECTORS.popoverTarget);
                     if (interactiveWrapper) {
                         grid.appendChild(interactiveWrapper);
                         interactiveWrapper.innerHTML = '';
@@ -1293,16 +1819,21 @@
     }
 
     function enhancePopover(portalNode) {
-        const content = portalNode.querySelector('.bp4-popover2-content');
+        const content = portalNode.querySelector(BP_SELECTORS.popoverContent);
         if (!content || content.dataset.optimized) return;
 
-        const wrapper = content.closest('.bp4-popover2');
-        if (wrapper && (wrapper.classList.contains('bp4-suggest-popover') || wrapper.classList.contains('bp4-select-popover'))) {
+        const wrapper = content.closest(BP_SELECTORS.popover);
+        if (wrapper && (
+            wrapper.classList.contains('bp4-suggest-popover') ||
+            wrapper.classList.contains('bp6-suggest-popover') ||
+            wrapper.classList.contains('bp4-select-popover') ||
+            wrapper.classList.contains('bp6-select-popover')
+        )) {
             return;
         }
 
         if (window.location.pathname.startsWith('/create')) {
-            if (content.querySelector('ul.bp4-menu, li, a.bp4-menu-item')) return;
+            if (content.querySelector(BP_SELECTORS.menuOrItem)) return;
         }
 
         const text = content.innerText.trim();
@@ -1366,7 +1897,7 @@
             if (cards.length === 0) return;
 
             cards.forEach(card => {
-                const cardInner = card.querySelector('.bp4-card');
+                const cardInner = card.querySelector(BP_SELECTORS.card);
                 if (!cardInner) return;
 
                 optimizeCardVisuals(card, cardInner);
@@ -1462,10 +1993,10 @@
     }
 
     function optimizeDialogContent() {
-        const dialog = document.querySelector('.bp4-dialog');
+        const dialog = document.querySelector(BP_SELECTORS.dialog);
         if (!dialog || dialog.dataset.contentOptimized) return;
 
-        const title = dialog.querySelector('.bp4-heading');
+        const title = dialog.querySelector(BP_SELECTORS.heading);
         if (title && title.innerText.includes('公告')) {
             const contentBody = dialog.querySelector('.markdown-body');
             if (contentBody) {
@@ -1484,6 +2015,168 @@
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
+    }
+
+    function registerAccountsDataChangeListener() {
+        if (typeof GM_addValueChangeListener !== 'function') return;
+        GM_addValueChangeListener(ACCOUNTS_DATA_KEY, (_name, oldValue, newValue, remote) => {
+            if (!remote || oldValue === newValue) return;
+            refreshOwnedOpsFromStorage();
+        });
+    }
+
+    function refreshOwnedOpsFromStorage() {
+        loadOwnedOps();
+        const bar = document.getElementById('prts-filter-bar');
+        if (bar) bar.remove();
+        injectFilterControls();
+        if (currentFilterMode !== 'NONE') requestFilterUpdate();
+    }
+
+    function initSklandImportPage() {
+        loadOwnedOps();
+        if (document.body) {
+            createSklandImportPanel();
+            return;
+        }
+        window.addEventListener('DOMContentLoaded', createSklandImportPanel, { once: true });
+    }
+
+    function createSklandImportPanel() {
+        if (document.getElementById('prts-skland-import-panel')) return;
+
+        let targetAccountId = normalizeAccountId(activeAccountId);
+        const panel = document.createElement('section');
+        panel.id = 'prts-skland-import-panel';
+
+        const head = document.createElement('div');
+        head.className = 'prts-skland-head';
+
+        const headingWrap = document.createElement('div');
+        const title = document.createElement('h2');
+        title.className = 'prts-skland-title';
+        title.textContent = 'Better-PRTS-Plus';
+        const subtitle = document.createElement('p');
+        subtitle.className = 'prts-skland-subtitle';
+        subtitle.textContent = '从当前森空岛登录态读取明日方舟干员。';
+        headingWrap.appendChild(title);
+        headingWrap.appendChild(subtitle);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'prts-skland-close';
+        closeBtn.title = '关闭';
+        closeBtn.textContent = '×';
+        closeBtn.onclick = () => panel.remove();
+
+        head.appendChild(headingWrap);
+        head.appendChild(closeBtn);
+        panel.appendChild(head);
+
+        const body = document.createElement('div');
+        body.className = 'prts-skland-body';
+
+        const accountLabel = document.createElement('span');
+        accountLabel.className = 'prts-skland-label';
+        accountLabel.textContent = '导入到账号档位';
+        body.appendChild(accountLabel);
+
+        const accountRow = document.createElement('div');
+        accountRow.className = 'prts-skland-accounts';
+        const accountButtons = [];
+        ACCOUNT_IDS.forEach(id => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'prts-skland-account';
+            btn.textContent = `账号 ${id}`;
+            btn.onclick = () => {
+                targetAccountId = id;
+                renderSklandAccountButtons(accountButtons, targetAccountId);
+            };
+            accountButtons.push(btn);
+            accountRow.appendChild(btn);
+        });
+        body.appendChild(accountRow);
+
+        const importBtn = document.createElement('button');
+        importBtn.type = 'button';
+        importBtn.className = 'prts-skland-primary';
+        importBtn.textContent = '读取并导入干员';
+        body.appendChild(importBtn);
+
+        const status = document.createElement('div');
+        status.className = 'prts-skland-status';
+        status.textContent = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
+        body.appendChild(status);
+
+        const link = document.createElement('a');
+        link.className = 'prts-skland-link';
+        link.href = 'https://prts.plus/';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = '打开 PRTS Plus';
+        body.appendChild(link);
+
+        importBtn.onclick = async () => {
+            importBtn.disabled = true;
+            importBtn.textContent = '读取中...';
+            setSklandPanelStatus(status, `正在读取森空岛数据，并导入到账号 ${targetAccountId}。`, '');
+            try {
+                const summary = await importSklandOperatorsToAccount(targetAccountId);
+                targetAccountId = summary.accountId;
+                renderSklandAccountButtons(accountButtons, targetAccountId);
+                setSklandPanelStatus(status, formatSklandImportSummary(summary), 'success');
+            } catch (error) {
+                console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
+                setSklandPanelStatus(status, error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。', 'error');
+            } finally {
+                importBtn.disabled = false;
+                importBtn.textContent = '读取并导入干员';
+            }
+        };
+
+        renderSklandAccountButtons(accountButtons, targetAccountId);
+        const lastSummary = readSklandLastImportSummary();
+        if (lastSummary) setSklandPanelStatus(status, `最近导入：
+${formatSklandImportSummary(lastSummary)}`, 'success');
+
+        panel.appendChild(body);
+        document.body.appendChild(panel);
+    }
+
+    function renderSklandAccountButtons(buttons, activeId) {
+        buttons.forEach((btn, index) => {
+            const id = ACCOUNT_IDS[index];
+            btn.classList.toggle('active', id === activeId);
+        });
+    }
+
+    function setSklandPanelStatus(status, text, type) {
+        status.className = 'prts-skland-status';
+        if (type) status.classList.add(type);
+        status.textContent = text;
+    }
+
+    function readSklandLastImportSummary() {
+        const parsed = safeJsonParse(GM_getValue(SKLAND_LAST_IMPORT_KEY) || '', null);
+        if (!isPlainRecord(parsed)) return null;
+        return {
+            accountId: normalizeAccountId(parsed.accountId),
+            operatorCount: Number.isFinite(Number(parsed.operatorCount)) ? Number(parsed.operatorCount) : 0,
+            nickname: stringValue(parsed.nickname),
+            uid: stringValue(parsed.uid),
+            importedAt: stringValue(parsed.importedAt)
+        };
+    }
+
+    function formatSklandImportSummary(summary) {
+        const timeText = summary.importedAt ? new Date(summary.importedAt).toLocaleString() : '';
+        const lines = [
+            `账号 ${summary.accountId} 已导入 ${summary.operatorCount} 名干员。`,
+            `${summary.nickname || '博士'} / UID ${summary.uid || '未知'}`
+        ];
+        if (timeText) lines.push(timeText);
+        return lines.join('\n');
     }
 
     function createFloatingBall() {
@@ -1571,6 +2264,14 @@
         importBtn.innerHTML = '📂 导入干员数据';
         importBtn.onclick = handleImport;
         panel.appendChild(importBtn);
+
+        const sklandBtn = document.createElement('button');
+        sklandBtn.className = 'prts-btn';
+        sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
+        sklandBtn.appendChild(createSklandIconImage());
+        sklandBtn.appendChild(document.createTextNode('森空岛导入'));
+        sklandBtn.onclick = handleOpenSklandImport;
+        panel.appendChild(sklandBtn);
 
         container.appendChild(panel);
         container.appendChild(btn);
@@ -1691,7 +2392,14 @@
     // =========================================================================
 
     function init() {
+        if (isSklandHost()) {
+            initSklandImportPage();
+            return;
+        }
+        if (!isPrtsHost()) return;
+
         loadOwnedOps();
+        registerAccountsDataChangeListener();
         syncPageScaffold();
         scheduleFilterUpdate(0);
 
@@ -1713,7 +2421,7 @@
         const portalInnerObserver = new MutationObserver((mutations) => {
             if (!CONFIG.visuals) return;
             mutations.forEach(mutation => {
-                const portalNode = mutation.target.closest('.bp4-portal');
+                const portalNode = mutation.target.closest(BP_SELECTORS.portal);
                 if (portalNode) enhancePopover(portalNode);
             });
         });
@@ -1723,7 +2431,7 @@
             mutations.forEach(mutation => {
                 if (mutation.addedNodes.length > 0) {
                     mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === 1 && node.classList.contains('bp4-portal')) {
+                        if (node.nodeType === 1 && node.matches(BP_SELECTORS.portal)) {
                             setTimeout(() => enhancePopover(node), 0);
                             portalInnerObserver.observe(node, { childList: true, subtree: true });
                         }

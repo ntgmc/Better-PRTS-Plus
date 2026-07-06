@@ -67,6 +67,47 @@ if ($userScript -match "op\??\.own !== false") {
 if ($userScript -match "\\u4e00-\\u9fa5") {
     throw "Import parsing still contains the old narrow CJK whitelist"
 }
+Write-Host "Checking Skland import flow..."
+if ($userScript -notmatch "@match\s+https://www\.skland\.com/\*") {
+    throw "Missing Skland userscript match"
+}
+if ($userScript -notmatch "@grant\s+GM_addValueChangeListener") {
+    throw "Missing GM_addValueChangeListener grant"
+}
+if ($userScript -notmatch "function init\(\)\s*\{[\s\S]*isSklandHost\(\)[\s\S]*initSklandImportPage\(\)") {
+    throw "Missing Skland initialization branch"
+}
+if ($userScript -notmatch "function registerAccountsDataChangeListener\(\)[\s\S]*GM_addValueChangeListener\(ACCOUNTS_DATA_KEY" -or
+    $userScript -notmatch "function refreshOwnedOpsFromStorage\(\)[\s\S]*loadOwnedOps\(\)[\s\S]*injectFilterControls\(\)[\s\S]*requestFilterUpdate\(\)") {
+    throw "Missing cross-tab account data refresh"
+}
+if ($userScript -notmatch "localStorage\.getItem\('SK_OAUTH_CRED_KEY'\)") {
+    throw "Missing SK_OAUTH_CRED_KEY storage read"
+}
+foreach ($endpoint in @('/api/v1/auth/refresh', '/api/v1/game/player/binding', '/api/v1/game/player/info')) {
+    if ($userScript -notmatch [regex]::Escape($endpoint)) {
+        throw "Missing Skland endpoint: $endpoint"
+    }
+}
+if ($userScript -notmatch "function hmacSha256Hex" -or $userScript -notmatch "function md5Hex") {
+    throw "Missing Skland request signing helpers"
+}
+if ($userScript -notmatch "const SKLAND_FAVICON_SVG = '<svg" -or
+    $userScript -notmatch "skland:\s*SKLAND_FAVICON_SVG" -or
+    $userScript -notmatch 'viewBox="0 0 16 16"' -or
+    $userScript -notmatch "svgPath\.startsWith\('<svg'\)" -or
+    $userScript -notmatch "function createSklandIconImage") {
+    throw "Skland import buttons should use the inline Skland favicon SVG"
+}
+if ($userScript -match "M17\.9 4\.9") {
+    throw "Skland favicon SVG should be generated from the favicon instead of using the placeholder path"
+}
+if ($userScript -match "skland:\s*SKLAND_FAVICON_32_DATA_URI") {
+    throw "Skland import buttons should not rely on a data URI image"
+}
+if ($userScript -match "GM_setValue\([^\r\n]*(?:cred|credential|token)") {
+    throw "Skland credentials or tokens must not be persisted"
+}
 $importSamplePath = Join-Path $PSScriptRoot "test.txt"
 if (Test-Path -LiteralPath $importSamplePath) {
  $sampleOperators = Get-Content -LiteralPath $importSamplePath -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -125,6 +166,21 @@ if ($userScript -notmatch "function handleRouteChange") {
 }
 if ($userScript -notmatch "function hasRelevantDomMutation") {
     throw "Missing relevant DOM mutation filter"
+}
+Write-Host "Checking Blueprint v4/v6 compatibility selectors..."
+foreach ($selector in @(
+    ".bp4-input-group, .bp6-input-group",
+    ".bp4-card, .bp6-card",
+    ".bp4-tag, .bp6-tag",
+    ".bp4-portal, .bp6-portal"
+)) {
+    if ($userScript -notmatch [regex]::Escape($selector)) {
+        throw "Missing Blueprint compatibility selector: $selector"
+    }
+}
+if ($userScript -notmatch "function injectFilterControls\(\)[\s\S]*findSearchInputGroup\(\)" -or
+    $userScript -notmatch "function injectFilterControls\(\)[\s\S]*#prts-filter-bar") {
+    throw "Filter controls should use the unified Blueprint-compatible injection path"
 }
 if ($userScript -notmatch "addEventListener\('pointerdown'") {
     throw "Floating ball should use pointer events"
