@@ -3,6 +3,11 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $userScriptPath = Join-Path $repoRoot "Better-PRTS-Plus.user.js"
 $readmePath = Join-Path $repoRoot "README.md"
+$operatorDataPath = Join-Path $PSScriptRoot "operator-data.generated.json"
+$buildScriptPath = Join-Path $PSScriptRoot "build-userscript.ps1"
+
+Write-Host "Checking userscript build output..."
+& $buildScriptPath -Check -NoSyntaxCheck
 
 Write-Host "Checking userscript syntax..."
 node --check $userScriptPath
@@ -26,16 +31,41 @@ if ($readme -notmatch $badgePattern) {
 }
 
 Write-Host "Checking operator table..."
-$opsMatch = [regex]::Match(
+$generatedOpsMatch = [regex]::Match(
     $userScript,
-    "const RAW_OPS = (\[.*?\])\s*\r?\n\s*const OP_ID_MAP",
+    "// BEGIN GENERATED OPERATOR DATA\s*\r?\n\s*const RAW_OPS = (\[.*?\])\s*\r?\n\s*// END GENERATED OPERATOR DATA\s*\r?\n\s*const OP_ID_MAP",
     [System.Text.RegularExpressions.RegexOptions]::Singleline
 )
-if (-not $opsMatch.Success) {
-    throw "Cannot find RAW_OPS table"
+if (-not $generatedOpsMatch.Success) {
+    throw "Cannot find generated RAW_OPS table"
 }
 
-$ops = $opsMatch.Groups[1].Value | ConvertFrom-Json
+if (-not (Test-Path -LiteralPath $operatorDataPath)) {
+    throw "Cannot find generated operator data at $operatorDataPath; run tool/update-operator-data.ps1"
+}
+
+$opsRaw = Get-Content -LiteralPath $operatorDataPath -Raw -Encoding UTF8 | ConvertFrom-Json
+$ops = if ($opsRaw -is [System.Array]) { $opsRaw } else { @($opsRaw) }
+if ($ops.Count -eq 0) {
+    throw "Generated operator data is empty"
+}
+
+for ($i = 0; $i -lt $ops.Count; $i++) {
+    $op = $ops[$i]
+    $id = [string]$op.id
+    $name = [string]$op.name
+
+    if ([string]::IsNullOrWhiteSpace($id) -or -not $id.StartsWith("char_", [System.StringComparison]::Ordinal)) {
+        throw "Invalid operator id at generated index ${i}: '$id'"
+    }
+    if ([string]::IsNullOrWhiteSpace($name)) {
+        throw "Invalid empty operator name at generated index $i"
+    }
+    if ($name.Length -gt 50 -or $name -match "[\x00-\x1F\x7F]") {
+        throw "Invalid operator name at generated index ${i}: '$name'"
+    }
+}
+
 $duplicateNames = $ops | Group-Object name | Where-Object Count -gt 1
 if ($duplicateNames) {
     $names = ($duplicateNames | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", "
@@ -46,6 +76,24 @@ $duplicateIds = $ops | Group-Object id | Where-Object Count -gt 1
 if ($duplicateIds) {
     $ids = ($duplicateIds | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", "
     throw "Duplicate operator ids: $ids"
+}
+
+$embeddedOpsRaw = $generatedOpsMatch.Groups[1].Value | ConvertFrom-Json
+$embeddedOps = if ($embeddedOpsRaw -is [System.Array]) { $embeddedOpsRaw } else { @($embeddedOpsRaw) }
+if ($embeddedOps.Count -ne $ops.Count) {
+    throw "Embedded RAW_OPS count $($embeddedOps.Count) does not match generated operator data count $($ops.Count); run tool/update-operator-data.ps1"
+}
+
+for ($i = 0; $i -lt $ops.Count; $i++) {
+    if ([string]$embeddedOps[$i].id -ne [string]$ops[$i].id -or [string]$embeddedOps[$i].name -ne [string]$ops[$i].name) {
+        throw "Embedded RAW_OPS differs from generated operator data at index $i; run tool/update-operator-data.ps1"
+    }
+}
+
+if ($userScript -notmatch "function reportUnknownOperatorName" -or
+    $userScript -notmatch "BetterPRTSPlusDebug" -or
+    $userScript -notmatch "getUnknownOperators") {
+    throw "Missing unknown operator debug reporting"
 }
 
 Write-Host "Checking import parser guards..."
@@ -347,7 +395,7 @@ $specialCases = @(
 foreach ($case in $specialCases) {
     $op = $ops | Where-Object id -eq $case.id | Select-Object -First 1
     if (-not $op) {
-        throw "Expected special-name operator id missing from RAW_OPS: $($case.id)"
+        throw "Expected special-name operator id missing from generated operator data: $($case.id)"
     }
     if ($op.name.IndexOf([string]$case.contains, [System.StringComparison]::Ordinal) -lt 0) {
         throw "Expected operator $($case.id) to contain special character $($case.contains)"

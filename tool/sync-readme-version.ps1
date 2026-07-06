@@ -1,14 +1,14 @@
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
-$userScriptPath = Join-Path $repoRoot "Better-PRTS-Plus.user.js"
+$userScriptPath = Join-Path $repoRoot "src/meta/userscript-header.js"
 $readmePath = Join-Path $repoRoot "README.md"
 
 $userScript = Get-Content -LiteralPath $userScriptPath -Raw -Encoding UTF8
 $versionMatch = [regex]::Match($userScript, "(?m)^//\s*@version\s+([0-9]+(?:\.[0-9]+){1,3}(?:[-+][0-9A-Za-z.-]+)?)\s*$")
 
 if (-not $versionMatch.Success) {
-    throw "Cannot find @version in Better-PRTS-Plus.user.js"
+    throw "Cannot find @version in src/meta/userscript-header.js"
 }
 
 $version = $versionMatch.Groups[1].Value

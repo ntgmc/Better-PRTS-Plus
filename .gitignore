@@ -2,4 +2,7 @@ tool/*
 !tool/check.ps1
 !tool/check-release.ps1
 !tool/sync-readme-version.ps1
+!tool/build-userscript.ps1
+!tool/update-operator-data.ps1
+!tool/operator-data.generated.json
 .idea
