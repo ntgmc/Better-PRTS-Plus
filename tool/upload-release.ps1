@@ -22,25 +22,22 @@ $releasePaths = @(
     "src",
     "Better-PRTS-Plus.user.js",
     "README.md",
-    "tool/operator-data.generated.json"
+    "tool/operator-data.generated.json",
+    "tool/operator-data-update-summary.json"
 )
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 
 function Invoke-Git {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
-
-    & git @Arguments
+    & git @args
     if ($LASTEXITCODE -ne 0) {
-        throw "git $($Arguments -join ' ') failed"
+        throw "git $($args -join ' ') failed"
     }
 }
 
 function Get-GitOutput {
-    param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Arguments)
-
-    $output = & git @Arguments
+    $output = & git @args
     if ($LASTEXITCODE -ne 0) {
-        throw "git $($Arguments -join ' ') failed"
+        throw "git $($args -join ' ') failed"
     }
     return ($output -join "`n").Trim()
 }
