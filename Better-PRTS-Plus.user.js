@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      3.2.0
+// @version      3.2.1
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -209,6 +209,56 @@
         return ['default', 'manual', 'skland'].includes(source) ? source : 'default';
     }
 
+    function normalizeSklandSyncText(value, maxLength = 64) {
+        return stringValue(value).replace(/[\x00-\x1F\x7F]/g, '').slice(0, maxLength);
+    }
+
+    function normalizeSklandSyncMeta(value) {
+        if (!isPlainRecord(value)) return null;
+
+        const importedAtText = normalizeSklandSyncText(value.importedAt);
+        const importedAtDate = new Date(importedAtText);
+        if (!importedAtText || Number.isNaN(importedAtDate.getTime())) return null;
+
+        const operatorCount = Number(value.operatorCount);
+        return {
+            uid: normalizeSklandSyncText(value.uid),
+            nickname: normalizeSklandSyncText(value.nickname),
+            importedAt: importedAtDate.toISOString(),
+            operatorCount: Number.isFinite(operatorCount) && operatorCount > 0 ? Math.floor(operatorCount) : 0
+        };
+    }
+
+    function normalizeSklandImportSummary(value) {
+        if (!isPlainRecord(value)) return null;
+        const skland = normalizeSklandSyncMeta(value);
+        if (!skland) return null;
+
+        return {
+            accountId: normalizeAccountId(value.accountId),
+            accountLabel: stringValue(value.accountLabel),
+            ...skland
+        };
+    }
+
+    function formatSklandSyncTime(importedAt) {
+        const date = new Date(stringValue(importedAt));
+        return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+    }
+
+    function formatSklandSyncSummary(meta, options = {}) {
+        const skland = normalizeSklandSyncMeta(meta);
+        if (!skland) return '';
+
+        const timeText = formatSklandSyncTime(skland.importedAt);
+        const separator = options.compact ? ' ' : '：';
+        const lines = [timeText ? `来自森空岛 · 上次同步${separator}${timeText}` : '来自森空岛'];
+        if (options.includeDetail) {
+            lines.push(`${skland.nickname || '博士'} / UID ${skland.uid || '未知'} / ${skland.operatorCount} 名干员`);
+        }
+        return lines.join('\n');
+    }
+
     function normalizeAccountMeta(value) {
         const normalized = createDefaultAccountMeta();
         if (!value || typeof value !== 'object') return normalized;
@@ -225,7 +275,10 @@
             if (label === getDefaultAccountLabel(id) && labelSource !== 'skland') {
                 labelSource = 'default';
             }
-            normalized[id] = { label, labelSource };
+            const nextMeta = { label, labelSource };
+            const skland = normalizeSklandSyncMeta(raw.skland);
+            if (skland) nextMeta.skland = skland;
+            normalized[id] = nextMeta;
         });
         return normalized;
     }
@@ -314,7 +367,6 @@
         if (typeof value === 'number' && Number.isFinite(value)) return String(value);
         return '';
     }
-
     function readSklandCredentialFromStorage() {
         let raw = '';
         try {
@@ -381,20 +433,27 @@
         const binding = await getSklandArknightsBinding(credential, refreshed.token, refreshed.timestamp);
         const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const names = convertSklandPlayerInfoToNames(playerInfo);
+        const importedAt = new Date().toISOString();
 
         accountsData[targetAccountId] = names;
         activeAccountId = targetAccountId;
         updateAccountLabelFromSkland(targetAccountId, binding.nickname);
+        const skland = updateAccountSklandSyncMeta(targetAccountId, {
+            uid: binding.uid,
+            nickname: binding.nickname,
+            importedAt,
+            operatorCount: names.length
+        });
         saveAccountsData();
         ownedOpsSet = new Set(names);
 
         const summary = {
             accountId: targetAccountId,
             accountLabel: getAccountLabel(targetAccountId),
-            operatorCount: names.length,
-            nickname: binding.nickname,
-            uid: binding.uid,
-            importedAt: new Date().toISOString()
+            operatorCount: skland?.operatorCount ?? names.length,
+            nickname: skland?.nickname || binding.nickname,
+            uid: skland?.uid || binding.uid,
+            importedAt: skland?.importedAt || importedAt
         };
         GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(summary));
         return summary;
@@ -738,7 +797,6 @@
         }
         return output;
     }
-
     function parseFloatingPosition(rawValue) {
         const fallback = { top: '40%', isRight: true };
         const parsed = typeof rawValue === 'string' ? safeJsonParse(rawValue, fallback) : rawValue;
@@ -950,7 +1008,12 @@
     /* [V12.0/3.1.0] 多账号悬浮面板小按钮专属样式 */
     .prts-account-list { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
     .prts-account-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+    .prts-account-cell { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 3px; }
     .prts-acc-btn { flex: 1 1 auto !important; min-width: 0 !important; justify-content: flex-start !important; padding: 5px 8px !important; border: 1px solid #cbd5e1 !important; margin: 0 !important; border-radius: 4px !important; transition: all 0.2s; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+    .prts-account-cell .prts-acc-btn { width: 100% !important; }
+    .prts-account-sync-meta { display: none; min-width: 0; padding-left: 2px; font-size: 11px; line-height: 1.35; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .prts-account-sync-meta.is-visible { display: block; }
+    .prts-account-sync-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 26px; padding: 3px 8px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .prts-account-rename { flex: 0 0 auto; border: 1px solid #cbd5e1; border-radius: 4px; background: transparent; color: #64748b; cursor: pointer; font-size: 12px; padding: 4px 6px; line-height: 1.2; }
     .prts-account-rename:hover { color: #2563eb; border-color: #93c5fd; background-color: rgba(147, 197, 253, 0.16); }
     .prts-panel-actions { display: flex; gap: 8px; margin-top: 8px; width: 100%; }
@@ -1429,12 +1492,31 @@
         flex: 0 0 auto;
     }
     .prts-account-row { gap: var(--prts-space-2); }
+    .prts-account-cell {
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-direction: column;
+        gap: 3px;
+    }
     .prts-acc-btn, .prts-account-rename {
         min-height: 34px !important;
         border-color: var(--prts-color-border) !important;
         border-radius: var(--prts-radius-md) !important;
         color: var(--prts-color-text-muted) !important;
         background: var(--prts-color-surface) !important;
+    }
+    .prts-account-cell .prts-acc-btn {
+        width: 100% !important;
+    }
+    .prts-account-sync-meta {
+        color: var(--prts-color-text-subtle);
+    }
+    .prts-account-sync-chip {
+        border-color: var(--prts-color-primary);
+        background: var(--prts-color-primary-soft);
+        color: var(--prts-color-primary);
+        flex: 0 1 auto;
     }
     .prts-acc-btn.active {
         background: var(--prts-color-primary) !important;
@@ -2493,6 +2575,7 @@
             }
         }
 
+        if (migrateLegacySklandImportSummary()) migrated = true;
         if (migrated) saveAccountsData(); // 如果发生了任何迁移，立即转储至新结构
 
         ownedOpsSet = new Set(accountsData[activeAccountId] || []);
@@ -2545,8 +2628,15 @@
             const id = normalizeAccountId(btn.dataset.id);
             const label = getAccountLabel(id);
             btn.textContent = `${label} (${getAccountOperatorCount(id)})`;
-            btn.title = `切换到 ${label}`;
+            btn.title = formatAccountSklandTitle(id);
             btn.classList.toggle('active', id === activeAccountId);
+
+            const syncMetaEl = btn.closest('.prts-account-row')?.querySelector('.prts-account-sync-meta');
+            if (syncMetaEl) {
+                const syncText = formatSklandSyncSummary(getAccountSklandSyncMeta(id));
+                syncMetaEl.textContent = syncText;
+                syncMetaEl.classList.toggle('is-visible', Boolean(syncText));
+            }
         });
 
         document.querySelectorAll('[data-prts-config-key]').forEach(input => {
@@ -2583,9 +2673,11 @@
 
         const cleaned = String(rawLabel).replace(/[\x00-\x1F\x7F]/g, '').trim();
         accountMeta = normalizeAccountMeta(accountMeta);
+        const currentMeta = accountMeta[accountId] || {};
         accountMeta[accountId] = {
             label: normalizeAccountLabel(cleaned, accountId),
-            labelSource: cleaned ? 'manual' : 'default'
+            labelSource: cleaned ? 'manual' : 'default',
+            ...(currentMeta.skland ? { skland: currentMeta.skland } : {})
         };
         saveAccountsData();
         refreshAccountStateUi();
@@ -2600,10 +2692,68 @@
         accountMeta = normalizeAccountMeta(accountMeta);
         if (accountMeta[accountId]?.labelSource === 'manual') return;
 
+        const currentMeta = accountMeta[accountId] || {};
         accountMeta[accountId] = {
+            ...currentMeta,
             label: sklandLabel,
             labelSource: 'skland'
         };
+    }
+
+    function getAccountSklandSyncMeta(id) {
+        const accountId = normalizeAccountId(id);
+        return normalizeSklandSyncMeta(accountMeta?.[accountId]?.skland);
+    }
+
+    function updateAccountSklandSyncMeta(id, syncMeta) {
+        const accountId = normalizeAccountId(id);
+        const skland = normalizeSklandSyncMeta(syncMeta);
+        if (!skland) return null;
+
+        accountMeta = normalizeAccountMeta(accountMeta);
+        const currentMeta = accountMeta[accountId] || { label: getDefaultAccountLabel(accountId), labelSource: 'default' };
+        accountMeta[accountId] = {
+            ...currentMeta,
+            skland
+        };
+        return skland;
+    }
+
+    function getAccountSklandImportSummary(id) {
+        const accountId = normalizeAccountId(id);
+        const skland = getAccountSklandSyncMeta(accountId);
+        if (!skland) return null;
+
+        return {
+            accountId,
+            accountLabel: getAccountLabel(accountId),
+            ...skland
+        };
+    }
+
+    function formatAccountSklandTitle(id) {
+        const accountId = normalizeAccountId(id);
+        const label = getAccountLabel(accountId);
+        const lines = [
+            `切换到 ${label}`,
+            `${getAccountOperatorCount(accountId)} 名干员`
+        ];
+        const skland = getAccountSklandSyncMeta(accountId);
+        const sklandSummary = formatSklandSyncSummary(skland, { includeDetail: true });
+        if (sklandSummary) lines.push(sklandSummary);
+        return lines.join('\n');
+    }
+
+    function migrateLegacySklandImportSummary() {
+        const summary = normalizeSklandImportSummary(safeJsonParse(GM_getValue(SKLAND_LAST_IMPORT_KEY) || '', null));
+        if (!summary) return false;
+
+        const accountId = normalizeAccountId(summary.accountId);
+        accountMeta = normalizeAccountMeta(accountMeta);
+        if (accountMeta[accountId]?.skland) return false;
+
+        updateAccountSklandSyncMeta(accountId, summary);
+        return true;
     }
 
     function getBackupPreferences() {
@@ -3204,6 +3354,21 @@
         const btnAccountText = getAccountLabel(activeAccountId);
         const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: 'account', ariaLabel: `当前账号 ${btnAccountText}，点击切换账号`, onClick: cycleAccount });
         controlBar.appendChild(btnAccount);
+
+        const activeSklandSync = getAccountSklandSyncMeta(activeAccountId);
+        let accountSyncChip = document.getElementById('prts-account-sync-chip');
+        if (activeSklandSync) {
+            if (!accountSyncChip) {
+                accountSyncChip = document.createElement('span');
+                accountSyncChip.id = 'prts-account-sync-chip';
+                accountSyncChip.className = 'prts-account-sync-chip';
+            }
+            accountSyncChip.textContent = formatSklandSyncSummary(activeSklandSync, { compact: true });
+            accountSyncChip.title = formatSklandSyncSummary(activeSklandSync, { includeDetail: true });
+            controlBar.appendChild(accountSyncChip);
+        } else if (accountSyncChip) {
+            accountSyncChip.remove();
+        }
 
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
@@ -3983,6 +4148,7 @@
 
         const body = document.createElement('div');
         body.className = 'prts-skland-body';
+        const defaultStatusText = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
@@ -4000,6 +4166,7 @@
             btn.onclick = () => {
                 targetAccountId = id;
                 renderSklandAccountButtons(accountButtons, targetAccountId);
+                renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
             };
             accountButtons.push(btn);
             accountRow.appendChild(btn);
@@ -4016,7 +4183,7 @@
         status.className = 'prts-skland-status';
         status.setAttribute('role', 'status');
         status.setAttribute('aria-live', 'polite');
-        status.textContent = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
+        status.textContent = defaultStatusText;
         body.appendChild(status);
 
         const link = document.createElement('a');
@@ -4046,19 +4213,27 @@
         };
 
         renderSklandAccountButtons(accountButtons, targetAccountId);
-        const lastSummary = readSklandLastImportSummary();
-        if (lastSummary) setSklandPanelStatus(status, `最近导入：
-${formatSklandImportSummary(lastSummary)}`, 'success');
+        renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
 
         panel.appendChild(body);
         document.body.appendChild(panel);
+    }
+
+    function renderSklandSelectedAccountStatus(status, accountId, fallbackText) {
+        const summary = getAccountSklandImportSummary(accountId);
+        if (summary) {
+            setSklandPanelStatus(status, `该账号上次同步：
+${formatSklandImportSummary(summary)}`, 'success');
+            return;
+        }
+        setSklandPanelStatus(status, fallbackText, '');
     }
 
     function renderSklandAccountButtons(buttons, activeId) {
         buttons.forEach((btn, index) => {
             const id = ACCOUNT_IDS[index];
             btn.textContent = getAccountLabel(id);
-            btn.title = `${getAccountLabel(id)} / ${getAccountOperatorCount(id)} 名干员`;
+            btn.title = formatAccountSklandTitle(id);
             btn.classList.toggle('active', id === activeId);
         });
     }
@@ -4073,23 +4248,18 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
 
     function readSklandLastImportSummary() {
         const parsed = safeJsonParse(GM_getValue(SKLAND_LAST_IMPORT_KEY) || '', null);
-        if (!isPlainRecord(parsed)) return null;
-        return {
-            accountId: normalizeAccountId(parsed.accountId),
-            accountLabel: stringValue(parsed.accountLabel),
-            operatorCount: Number.isFinite(Number(parsed.operatorCount)) ? Number(parsed.operatorCount) : 0,
-            nickname: stringValue(parsed.nickname),
-            uid: stringValue(parsed.uid),
-            importedAt: stringValue(parsed.importedAt)
-        };
+        return normalizeSklandImportSummary(parsed);
     }
 
     function formatSklandImportSummary(summary) {
-        const timeText = summary.importedAt ? new Date(summary.importedAt).toLocaleString() : '';
-        const accountLabel = summary.accountLabel || getAccountLabel(summary.accountId);
+        const normalized = normalizeSklandImportSummary(summary);
+        if (!normalized) return '';
+
+        const timeText = formatSklandSyncTime(normalized.importedAt);
+        const accountLabel = normalized.accountLabel || getAccountLabel(normalized.accountId);
         const lines = [
-            `${accountLabel} 已导入 ${summary.operatorCount} 名干员。`,
-            `${summary.nickname || '博士'} / UID ${summary.uid || '未知'}`
+            `${accountLabel} 已导入 ${normalized.operatorCount} 名干员。`,
+            `${normalized.nickname || '博士'} / UID ${normalized.uid || '未知'}`
         ];
         if (timeText) lines.push(timeText);
         return lines.join('\n');
@@ -4220,6 +4390,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             const row = document.createElement('div');
             row.className = 'prts-account-row';
 
+            const accountCell = document.createElement('div');
+            accountCell.className = 'prts-account-cell';
+
             const accBtn = document.createElement('button');
             accBtn.type = 'button';
             accBtn.className = 'prts-btn prts-acc-btn';
@@ -4228,6 +4401,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
                 e.stopPropagation();
                 switchAccount(i);
             };
+
+            const syncMeta = document.createElement('span');
+            syncMeta.className = 'prts-account-sync-meta';
 
             const renameBtn = document.createElement('button');
             renameBtn.type = 'button';
@@ -4239,7 +4415,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
                 renameAccount(i);
             };
 
-            row.appendChild(accBtn);
+            accountCell.appendChild(accBtn);
+            accountCell.appendChild(syncMeta);
+            row.appendChild(accountCell);
             row.appendChild(renameBtn);
             accBtnGroup.appendChild(row);
         }

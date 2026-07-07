@@ -67,6 +67,7 @@
             }
         }
 
+        if (migrateLegacySklandImportSummary()) migrated = true;
         if (migrated) saveAccountsData(); // 如果发生了任何迁移，立即转储至新结构
 
         ownedOpsSet = new Set(accountsData[activeAccountId] || []);
@@ -119,8 +120,15 @@
             const id = normalizeAccountId(btn.dataset.id);
             const label = getAccountLabel(id);
             btn.textContent = `${label} (${getAccountOperatorCount(id)})`;
-            btn.title = `切换到 ${label}`;
+            btn.title = formatAccountSklandTitle(id);
             btn.classList.toggle('active', id === activeAccountId);
+
+            const syncMetaEl = btn.closest('.prts-account-row')?.querySelector('.prts-account-sync-meta');
+            if (syncMetaEl) {
+                const syncText = formatSklandSyncSummary(getAccountSklandSyncMeta(id));
+                syncMetaEl.textContent = syncText;
+                syncMetaEl.classList.toggle('is-visible', Boolean(syncText));
+            }
         });
 
         document.querySelectorAll('[data-prts-config-key]').forEach(input => {
@@ -157,9 +165,11 @@
 
         const cleaned = String(rawLabel).replace(/[\x00-\x1F\x7F]/g, '').trim();
         accountMeta = normalizeAccountMeta(accountMeta);
+        const currentMeta = accountMeta[accountId] || {};
         accountMeta[accountId] = {
             label: normalizeAccountLabel(cleaned, accountId),
-            labelSource: cleaned ? 'manual' : 'default'
+            labelSource: cleaned ? 'manual' : 'default',
+            ...(currentMeta.skland ? { skland: currentMeta.skland } : {})
         };
         saveAccountsData();
         refreshAccountStateUi();
@@ -174,10 +184,68 @@
         accountMeta = normalizeAccountMeta(accountMeta);
         if (accountMeta[accountId]?.labelSource === 'manual') return;
 
+        const currentMeta = accountMeta[accountId] || {};
         accountMeta[accountId] = {
+            ...currentMeta,
             label: sklandLabel,
             labelSource: 'skland'
         };
+    }
+
+    function getAccountSklandSyncMeta(id) {
+        const accountId = normalizeAccountId(id);
+        return normalizeSklandSyncMeta(accountMeta?.[accountId]?.skland);
+    }
+
+    function updateAccountSklandSyncMeta(id, syncMeta) {
+        const accountId = normalizeAccountId(id);
+        const skland = normalizeSklandSyncMeta(syncMeta);
+        if (!skland) return null;
+
+        accountMeta = normalizeAccountMeta(accountMeta);
+        const currentMeta = accountMeta[accountId] || { label: getDefaultAccountLabel(accountId), labelSource: 'default' };
+        accountMeta[accountId] = {
+            ...currentMeta,
+            skland
+        };
+        return skland;
+    }
+
+    function getAccountSklandImportSummary(id) {
+        const accountId = normalizeAccountId(id);
+        const skland = getAccountSklandSyncMeta(accountId);
+        if (!skland) return null;
+
+        return {
+            accountId,
+            accountLabel: getAccountLabel(accountId),
+            ...skland
+        };
+    }
+
+    function formatAccountSklandTitle(id) {
+        const accountId = normalizeAccountId(id);
+        const label = getAccountLabel(accountId);
+        const lines = [
+            `切换到 ${label}`,
+            `${getAccountOperatorCount(accountId)} 名干员`
+        ];
+        const skland = getAccountSklandSyncMeta(accountId);
+        const sklandSummary = formatSklandSyncSummary(skland, { includeDetail: true });
+        if (sklandSummary) lines.push(sklandSummary);
+        return lines.join('\n');
+    }
+
+    function migrateLegacySklandImportSummary() {
+        const summary = normalizeSklandImportSummary(safeJsonParse(GM_getValue(SKLAND_LAST_IMPORT_KEY) || '', null));
+        if (!summary) return false;
+
+        const accountId = normalizeAccountId(summary.accountId);
+        accountMeta = normalizeAccountMeta(accountMeta);
+        if (accountMeta[accountId]?.skland) return false;
+
+        updateAccountSklandSyncMeta(accountId, summary);
+        return true;
     }
 
     function getBackupPreferences() {

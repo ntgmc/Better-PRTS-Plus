@@ -109,6 +109,7 @@
 
         const body = document.createElement('div');
         body.className = 'prts-skland-body';
+        const defaultStatusText = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
@@ -126,6 +127,7 @@
             btn.onclick = () => {
                 targetAccountId = id;
                 renderSklandAccountButtons(accountButtons, targetAccountId);
+                renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
             };
             accountButtons.push(btn);
             accountRow.appendChild(btn);
@@ -142,7 +144,7 @@
         status.className = 'prts-skland-status';
         status.setAttribute('role', 'status');
         status.setAttribute('aria-live', 'polite');
-        status.textContent = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
+        status.textContent = defaultStatusText;
         body.appendChild(status);
 
         const link = document.createElement('a');
@@ -172,19 +174,27 @@
         };
 
         renderSklandAccountButtons(accountButtons, targetAccountId);
-        const lastSummary = readSklandLastImportSummary();
-        if (lastSummary) setSklandPanelStatus(status, `最近导入：
-${formatSklandImportSummary(lastSummary)}`, 'success');
+        renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
 
         panel.appendChild(body);
         document.body.appendChild(panel);
+    }
+
+    function renderSklandSelectedAccountStatus(status, accountId, fallbackText) {
+        const summary = getAccountSklandImportSummary(accountId);
+        if (summary) {
+            setSklandPanelStatus(status, `该账号上次同步：
+${formatSklandImportSummary(summary)}`, 'success');
+            return;
+        }
+        setSklandPanelStatus(status, fallbackText, '');
     }
 
     function renderSklandAccountButtons(buttons, activeId) {
         buttons.forEach((btn, index) => {
             const id = ACCOUNT_IDS[index];
             btn.textContent = getAccountLabel(id);
-            btn.title = `${getAccountLabel(id)} / ${getAccountOperatorCount(id)} 名干员`;
+            btn.title = formatAccountSklandTitle(id);
             btn.classList.toggle('active', id === activeId);
         });
     }
@@ -199,23 +209,18 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
 
     function readSklandLastImportSummary() {
         const parsed = safeJsonParse(GM_getValue(SKLAND_LAST_IMPORT_KEY) || '', null);
-        if (!isPlainRecord(parsed)) return null;
-        return {
-            accountId: normalizeAccountId(parsed.accountId),
-            accountLabel: stringValue(parsed.accountLabel),
-            operatorCount: Number.isFinite(Number(parsed.operatorCount)) ? Number(parsed.operatorCount) : 0,
-            nickname: stringValue(parsed.nickname),
-            uid: stringValue(parsed.uid),
-            importedAt: stringValue(parsed.importedAt)
-        };
+        return normalizeSklandImportSummary(parsed);
     }
 
     function formatSklandImportSummary(summary) {
-        const timeText = summary.importedAt ? new Date(summary.importedAt).toLocaleString() : '';
-        const accountLabel = summary.accountLabel || getAccountLabel(summary.accountId);
+        const normalized = normalizeSklandImportSummary(summary);
+        if (!normalized) return '';
+
+        const timeText = formatSklandSyncTime(normalized.importedAt);
+        const accountLabel = normalized.accountLabel || getAccountLabel(normalized.accountId);
         const lines = [
-            `${accountLabel} 已导入 ${summary.operatorCount} 名干员。`,
-            `${summary.nickname || '博士'} / UID ${summary.uid || '未知'}`
+            `${accountLabel} 已导入 ${normalized.operatorCount} 名干员。`,
+            `${normalized.nickname || '博士'} / UID ${normalized.uid || '未知'}`
         ];
         if (timeText) lines.push(timeText);
         return lines.join('\n');
@@ -346,6 +351,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             const row = document.createElement('div');
             row.className = 'prts-account-row';
 
+            const accountCell = document.createElement('div');
+            accountCell.className = 'prts-account-cell';
+
             const accBtn = document.createElement('button');
             accBtn.type = 'button';
             accBtn.className = 'prts-btn prts-acc-btn';
@@ -354,6 +362,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
                 e.stopPropagation();
                 switchAccount(i);
             };
+
+            const syncMeta = document.createElement('span');
+            syncMeta.className = 'prts-account-sync-meta';
 
             const renameBtn = document.createElement('button');
             renameBtn.type = 'button';
@@ -365,7 +376,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
                 renameAccount(i);
             };
 
-            row.appendChild(accBtn);
+            accountCell.appendChild(accBtn);
+            accountCell.appendChild(syncMeta);
+            row.appendChild(accountCell);
             row.appendChild(renameBtn);
             accBtnGroup.appendChild(row);
         }

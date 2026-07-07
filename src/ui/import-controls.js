@@ -402,6 +402,21 @@
         const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: 'account', ariaLabel: `当前账号 ${btnAccountText}，点击切换账号`, onClick: cycleAccount });
         controlBar.appendChild(btnAccount);
 
+        const activeSklandSync = getAccountSklandSyncMeta(activeAccountId);
+        let accountSyncChip = document.getElementById('prts-account-sync-chip');
+        if (activeSklandSync) {
+            if (!accountSyncChip) {
+                accountSyncChip = document.createElement('span');
+                accountSyncChip.id = 'prts-account-sync-chip';
+                accountSyncChip.className = 'prts-account-sync-chip';
+            }
+            accountSyncChip.textContent = formatSklandSyncSummary(activeSklandSync, { compact: true });
+            accountSyncChip.title = formatSklandSyncSummary(activeSklandSync, { includeDetail: true });
+            controlBar.appendChild(accountSyncChip);
+        } else if (accountSyncChip) {
+            accountSyncChip.remove();
+        }
+
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
         const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'import', ariaLabel: importText, onClick: handleImport });

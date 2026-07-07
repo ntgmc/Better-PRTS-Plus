@@ -81,7 +81,12 @@
     /* [V12.0/3.1.0] 多账号悬浮面板小按钮专属样式 */
     .prts-account-list { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
     .prts-account-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+    .prts-account-cell { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 3px; }
     .prts-acc-btn { flex: 1 1 auto !important; min-width: 0 !important; justify-content: flex-start !important; padding: 5px 8px !important; border: 1px solid #cbd5e1 !important; margin: 0 !important; border-radius: 4px !important; transition: all 0.2s; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
+    .prts-account-cell .prts-acc-btn { width: 100% !important; }
+    .prts-account-sync-meta { display: none; min-width: 0; padding-left: 2px; font-size: 11px; line-height: 1.35; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .prts-account-sync-meta.is-visible { display: block; }
+    .prts-account-sync-chip { display: inline-flex; align-items: center; max-width: 100%; min-height: 26px; padding: 3px 8px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .prts-account-rename { flex: 0 0 auto; border: 1px solid #cbd5e1; border-radius: 4px; background: transparent; color: #64748b; cursor: pointer; font-size: 12px; padding: 4px 6px; line-height: 1.2; }
     .prts-account-rename:hover { color: #2563eb; border-color: #93c5fd; background-color: rgba(147, 197, 253, 0.16); }
     .prts-panel-actions { display: flex; gap: 8px; margin-top: 8px; width: 100%; }
@@ -560,12 +565,31 @@
         flex: 0 0 auto;
     }
     .prts-account-row { gap: var(--prts-space-2); }
+    .prts-account-cell {
+        display: flex;
+        flex: 1 1 auto;
+        min-width: 0;
+        flex-direction: column;
+        gap: 3px;
+    }
     .prts-acc-btn, .prts-account-rename {
         min-height: 34px !important;
         border-color: var(--prts-color-border) !important;
         border-radius: var(--prts-radius-md) !important;
         color: var(--prts-color-text-muted) !important;
         background: var(--prts-color-surface) !important;
+    }
+    .prts-account-cell .prts-acc-btn {
+        width: 100% !important;
+    }
+    .prts-account-sync-meta {
+        color: var(--prts-color-text-subtle);
+    }
+    .prts-account-sync-chip {
+        border-color: var(--prts-color-primary);
+        background: var(--prts-color-primary-soft);
+        color: var(--prts-color-primary);
+        flex: 0 1 auto;
     }
     .prts-acc-btn.active {
         background: var(--prts-color-primary) !important;

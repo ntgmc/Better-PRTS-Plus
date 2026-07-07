@@ -21,6 +21,9 @@ globalThis.__testExports = {
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
   parseImportedOperatorNames,
+  normalizeAccountMeta,
+  normalizeSklandSyncMeta,
+  normalizeSklandImportSummary,
   matchOperatorGroups,
   parseAccountsBackup,
   convertSklandPlayerInfoToNames
@@ -58,6 +61,9 @@ const {
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
   parseImportedOperatorNames,
+  normalizeAccountMeta,
+  normalizeSklandSyncMeta,
+  normalizeSklandImportSummary,
   matchOperatorGroups,
   parseAccountsBackup,
   convertSklandPlayerInfoToNames
@@ -134,6 +140,70 @@ test('parseAccountsBackup rejects single-account operator lists', () => {
   assert.throws(() => parseAccountsBackup(['Amiya']), /单账号/);
 });
 
+test('normalizeAccountMeta keeps legacy account metadata valid', () => {
+  const meta = normalizeAccountMeta({
+    1: { label: '主号', labelSource: 'manual' },
+    2: { label: '', labelSource: 'manual' }
+  });
+
+  assert.strictEqual(meta[1].label, '主号');
+  assert.strictEqual(meta[1].labelSource, 'manual');
+  assert.strictEqual(meta[1].skland, undefined);
+  assert.strictEqual(meta[2].labelSource, 'default');
+});
+
+test('normalizeSklandSyncMeta cleans and preserves valid per-account sync metadata', () => {
+  const meta = normalizeSklandSyncMeta({
+    uid: ' 123456789\x00 ',
+    nickname: ' 博士\x7f ',
+    importedAt: '2026-07-07T01:02:03.000Z',
+    operatorCount: '42.9'
+  });
+
+  assert.deepStrictEqual(hostObject(meta), {
+    uid: '123456789',
+    nickname: '博士',
+    importedAt: '2026-07-07T01:02:03.000Z',
+    operatorCount: 42
+  });
+});
+
+test('normalizeSklandSyncMeta tolerates empty identity and rejects invalid time', () => {
+  assert.deepStrictEqual(hostObject(normalizeSklandSyncMeta({
+    uid: '',
+    nickname: '',
+    importedAt: '2026-07-07T01:02:03.000Z',
+    operatorCount: -10
+  })), {
+    uid: '',
+    nickname: '',
+    importedAt: '2026-07-07T01:02:03.000Z',
+    operatorCount: 0
+  });
+  assert.strictEqual(normalizeSklandSyncMeta({
+    uid: '123',
+    nickname: '博士',
+    importedAt: 'not-a-date',
+    operatorCount: 1
+  }), null);
+});
+
+test('normalizeSklandImportSummary normalizes legacy global summary shape', () => {
+  const summary = normalizeSklandImportSummary({
+    accountId: '3',
+    accountLabel: '三号',
+    uid: '10001',
+    nickname: 'Doctor',
+    importedAt: '2026-07-07T01:02:03.000Z',
+    operatorCount: 12
+  });
+
+  assert.strictEqual(summary.accountId, 3);
+  assert.strictEqual(summary.accountLabel, '三号');
+  assert.strictEqual(summary.uid, '10001');
+  assert.strictEqual(summary.operatorCount, 12);
+});
+
 test('parseAccountsBackup normalizes data and preferences', () => {
   const backup = parseAccountsBackup({
     type: ACCOUNT_BACKUP_TYPE,
@@ -141,7 +211,16 @@ test('parseAccountsBackup normalizes data and preferences', () => {
     activeAccountId: '2',
     accountsData: { 1: ['A', 'A', ''], 2: ['B'], 3: null },
     accountMeta: {
-      2: { label: '<b>主号</b>', labelSource: 'manual' }
+      2: {
+        label: '<b>主号</b>',
+        labelSource: 'manual',
+        skland: {
+          uid: '98765',
+          nickname: '主号博士',
+          importedAt: '2026-07-07T01:02:03.000Z',
+          operatorCount: 396
+        }
+      }
     },
     preferences: {
       filterMode: 'PERFECT',
@@ -156,6 +235,12 @@ test('parseAccountsBackup normalizes data and preferences', () => {
   assert.deepStrictEqual(hostArray(backup.accountsData[2]), ['B']);
   assert.strictEqual(backup.accountMeta[2].label, '<b>主号</b>');
   assert.strictEqual(backup.accountMeta[2].labelSource, 'manual');
+  assert.deepStrictEqual(hostObject(backup.accountMeta[2].skland), {
+    uid: '98765',
+    nickname: '主号博士',
+    importedAt: '2026-07-07T01:02:03.000Z',
+    operatorCount: 396
+  });
   assert.strictEqual(backup.preferences.filterMode, 'PERFECT');
   assert.strictEqual(backup.preferences.displayMode, 'HIDE');
   assert.strictEqual(backup.preferences.config.visuals, false);

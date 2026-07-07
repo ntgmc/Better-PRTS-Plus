@@ -64,20 +64,27 @@
         const binding = await getSklandArknightsBinding(credential, refreshed.token, refreshed.timestamp);
         const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const names = convertSklandPlayerInfoToNames(playerInfo);
+        const importedAt = new Date().toISOString();
 
         accountsData[targetAccountId] = names;
         activeAccountId = targetAccountId;
         updateAccountLabelFromSkland(targetAccountId, binding.nickname);
+        const skland = updateAccountSklandSyncMeta(targetAccountId, {
+            uid: binding.uid,
+            nickname: binding.nickname,
+            importedAt,
+            operatorCount: names.length
+        });
         saveAccountsData();
         ownedOpsSet = new Set(names);
 
         const summary = {
             accountId: targetAccountId,
             accountLabel: getAccountLabel(targetAccountId),
-            operatorCount: names.length,
-            nickname: binding.nickname,
-            uid: binding.uid,
-            importedAt: new Date().toISOString()
+            operatorCount: skland?.operatorCount ?? names.length,
+            nickname: skland?.nickname || binding.nickname,
+            uid: skland?.uid || binding.uid,
+            importedAt: skland?.importedAt || importedAt
         };
         GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(summary));
         return summary;
@@ -421,4 +428,3 @@
         }
         return output;
     }
-

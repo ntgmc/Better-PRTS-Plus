@@ -269,6 +269,14 @@ Write-Host "Checking account metadata and backup flow..."
 foreach ($requiredFunction in @(
     "createDefaultAccountMeta",
     "normalizeAccountMeta",
+    "normalizeSklandSyncMeta",
+    "normalizeSklandImportSummary",
+    "getAccountSklandSyncMeta",
+    "updateAccountSklandSyncMeta",
+    "getAccountSklandImportSummary",
+    "formatSklandSyncTime",
+    "formatSklandSyncSummary",
+    "formatAccountSklandTitle",
     "getAccountLabel",
     "renameAccount",
     "updateAccountLabelFromSkland",
@@ -291,8 +299,27 @@ if ($userScript -notmatch "function loadOwnedOps\(\)[\s\S]*parsed\.accountMeta[\
 if ($userScript -notmatch "function importSklandOperatorsToAccount\([^)]*\)[\s\S]*updateAccountLabelFromSkland\(targetAccountId, binding\.nickname\)") {
     throw "Skland import should update account labels from nickname"
 }
+if ($userScript -notmatch "function importSklandOperatorsToAccount\([^)]*\)[\s\S]*updateAccountSklandSyncMeta\(targetAccountId,[\s\S]*uid: binding\.uid[\s\S]*nickname: binding\.nickname[\s\S]*operatorCount: names\.length") {
+    throw "Skland import should persist per-account Skland sync metadata"
+}
+if ($userScript -notmatch "function migrateLegacySklandImportSummary\(\)[\s\S]*SKLAND_LAST_IMPORT_KEY[\s\S]*updateAccountSklandSyncMeta") {
+    throw "Legacy global Skland import summaries should migrate into account metadata"
+}
 if ($userScript -notmatch "function updateAccountLabelFromSkland\([\s\S]*labelSource === 'manual'[\s\S]*return") {
     throw "Skland import should preserve manually renamed accounts"
+}
+if ($userScript -notmatch "function updateAccountLabelFromSkland\([\s\S]*\.\.\.currentMeta[\s\S]*label: sklandLabel") {
+    throw "Skland nickname updates should preserve existing account metadata"
+}
+if ($userScript -notmatch "function renameAccount\([^)]*\)[\s\S]*currentMeta\.skland[\s\S]*skland: currentMeta\.skland") {
+    throw "Manual account renames should preserve Skland sync metadata"
+}
+if ($userScript -notmatch "function injectFilterControls\(\)[\s\S]*getAccountSklandSyncMeta\(activeAccountId\)[\s\S]*prts-account-sync-chip") {
+    throw "Filter toolbar should show current account Skland sync status from account metadata"
+}
+if ($userScript -notmatch "function createSklandImportPanel\(\)[\s\S]*renderSklandSelectedAccountStatus\(status, targetAccountId" -or
+    $userScript -match "const lastSummary = readSklandLastImportSummary") {
+    throw "Skland import panel should show selected account sync status instead of the global last import summary"
 }
 if ($userScript -notmatch "const ACCOUNT_BACKUP_TYPE = 'Better-PRTS-Plus\.accounts-backup'" -or
     $userScript -notmatch "const ACCOUNT_BACKUP_VERSION = 1") {

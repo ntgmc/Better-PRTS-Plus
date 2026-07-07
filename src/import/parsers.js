@@ -61,6 +61,56 @@
         return ['default', 'manual', 'skland'].includes(source) ? source : 'default';
     }
 
+    function normalizeSklandSyncText(value, maxLength = 64) {
+        return stringValue(value).replace(/[\x00-\x1F\x7F]/g, '').slice(0, maxLength);
+    }
+
+    function normalizeSklandSyncMeta(value) {
+        if (!isPlainRecord(value)) return null;
+
+        const importedAtText = normalizeSklandSyncText(value.importedAt);
+        const importedAtDate = new Date(importedAtText);
+        if (!importedAtText || Number.isNaN(importedAtDate.getTime())) return null;
+
+        const operatorCount = Number(value.operatorCount);
+        return {
+            uid: normalizeSklandSyncText(value.uid),
+            nickname: normalizeSklandSyncText(value.nickname),
+            importedAt: importedAtDate.toISOString(),
+            operatorCount: Number.isFinite(operatorCount) && operatorCount > 0 ? Math.floor(operatorCount) : 0
+        };
+    }
+
+    function normalizeSklandImportSummary(value) {
+        if (!isPlainRecord(value)) return null;
+        const skland = normalizeSklandSyncMeta(value);
+        if (!skland) return null;
+
+        return {
+            accountId: normalizeAccountId(value.accountId),
+            accountLabel: stringValue(value.accountLabel),
+            ...skland
+        };
+    }
+
+    function formatSklandSyncTime(importedAt) {
+        const date = new Date(stringValue(importedAt));
+        return Number.isNaN(date.getTime()) ? '' : date.toLocaleString();
+    }
+
+    function formatSklandSyncSummary(meta, options = {}) {
+        const skland = normalizeSklandSyncMeta(meta);
+        if (!skland) return '';
+
+        const timeText = formatSklandSyncTime(skland.importedAt);
+        const separator = options.compact ? ' ' : '：';
+        const lines = [timeText ? `来自森空岛 · 上次同步${separator}${timeText}` : '来自森空岛'];
+        if (options.includeDetail) {
+            lines.push(`${skland.nickname || '博士'} / UID ${skland.uid || '未知'} / ${skland.operatorCount} 名干员`);
+        }
+        return lines.join('\n');
+    }
+
     function normalizeAccountMeta(value) {
         const normalized = createDefaultAccountMeta();
         if (!value || typeof value !== 'object') return normalized;
@@ -77,7 +127,10 @@
             if (label === getDefaultAccountLabel(id) && labelSource !== 'skland') {
                 labelSource = 'default';
             }
-            normalized[id] = { label, labelSource };
+            const nextMeta = { label, labelSource };
+            const skland = normalizeSklandSyncMeta(raw.skland);
+            if (skland) nextMeta.skland = skland;
+            normalized[id] = nextMeta;
         });
         return normalized;
     }
@@ -166,4 +219,3 @@
         if (typeof value === 'number' && Number.isFinite(value)) return String(value);
         return '';
     }
-
