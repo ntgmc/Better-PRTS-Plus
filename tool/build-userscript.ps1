@@ -19,6 +19,7 @@ $sourceFiles = @(
     "src/import/skland.js",
     "src/dom/card-resolution.js",
     "src/styles/styles.js",
+    "src/ui/dom-helpers.js",
     "src/filter/operation-matching.js",
     "src/import/accounts.js",
     "src/ui/import-controls.js",

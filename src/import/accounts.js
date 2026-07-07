@@ -141,10 +141,18 @@
         if (forceFilterUpdate || currentFilterMode !== 'NONE') requestFilterUpdate();
     }
 
-    function renameAccount(id) {
+    async function renameAccount(id) {
         const accountId = normalizeAccountId(id);
         const currentLabel = getAccountLabel(accountId);
-        const rawLabel = window.prompt(`重命名账号 ${accountId}`, currentLabel);
+        const rawLabel = await showPrtsPrompt({
+            title: `重命名账号 ${accountId}`,
+            message: '输入新的账号昵称，留空会恢复默认名称。',
+            inputLabel: '账号昵称',
+            defaultValue: currentLabel,
+            maxLength: ACCOUNT_LABEL_MAX_LENGTH,
+            confirmText: '保存',
+            cancelText: '取消'
+        });
         if (rawLabel === null) return;
 
         const cleaned = String(rawLabel).replace(/[\x00-\x1F\x7F]/g, '').trim();
@@ -155,6 +163,7 @@
         };
         saveAccountsData();
         refreshAccountStateUi();
+        showPrtsToast('账号名称已更新', 'success', `${getAccountLabel(accountId)} / ${getAccountOperatorCount(accountId)} 名干员`);
     }
 
     function updateAccountLabelFromSkland(id, nickname) {
@@ -230,10 +239,10 @@
             const backup = buildAccountsBackup();
             const fileName = `better-prts-plus-backup-${formatBackupTimestamp(new Date())}.json`;
             downloadJsonFile(fileName, backup);
-            alert(`✅ 已导出全部配置：${fileName}`);
+            showPrtsToast('已导出全部配置', 'success', fileName);
         } catch (error) {
             console.error('[Better PRTS] 导出全部配置失败', error);
-            alert('❌ 导出全部配置失败: ' + (error instanceof Error ? error.message : '未知错误'));
+            showPrtsToast('导出全部配置失败', 'error', error instanceof Error ? error.message : '未知错误');
         }
     }
 
@@ -334,26 +343,35 @@
             if (!file) return;
 
             if (file.size > ACCOUNT_BACKUP_MAX_BYTES) {
-                alert('❌ 配置文件过大，请选择 Better-PRTS-Plus 导出的备份文件');
+                showPrtsToast('配置文件过大', 'error', '请选择 Better-PRTS-Plus 导出的备份文件。');
                 return;
             }
 
             const reader = new FileReader();
-            reader.onload = event => {
+            reader.onload = async event => {
                 try {
                     const parsed = safeJsonParse(event.target.result, null);
                     const backup = parseAccountsBackup(parsed);
-                    if (!window.confirm(formatAccountsBackupSummary(backup))) return;
+                    const confirmed = await showPrtsConfirm({
+                        title: '导入全部配置',
+                        message: formatAccountsBackupSummary(backup),
+                        confirmText: '确认导入',
+                        cancelText: '取消',
+                        tone: 'danger'
+                    });
+                    if (!confirmed) return;
 
                     applyAccountsBackup(backup);
-                    alert('✅ 全部配置导入成功');
+                    showPrtsToast('全部配置导入成功', 'success', `${getAccountLabel(activeAccountId)} 已切换为当前账号。`);
                 } catch (error) {
                     console.error('[Better PRTS] 导入全部配置失败', error);
-                    alert('❌ 导入全部配置失败: ' + (error instanceof Error ? error.message : '未知错误'));
+                    showPrtsToast('导入全部配置失败', 'error', error instanceof Error ? error.message : '未知错误');
                 }
+            };
+            reader.onerror = () => {
+                showPrtsToast('导入全部配置失败', 'error', reader.error?.message || '无法读取文件，请重试。');
             };
             reader.readAsText(file);
         };
         input.click();
     }
-

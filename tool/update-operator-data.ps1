@@ -9,6 +9,7 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $userScriptPath = Join-Path $repoRoot "Better-PRTS-Plus.user.js"
 $operatorSourcePath = Join-Path $repoRoot "src/data/operators.generated.js"
 $operatorDataPath = Join-Path $PSScriptRoot "operator-data.generated.json"
+$operatorAuditPath = Join-Path $PSScriptRoot "operator-data-update-summary.json"
 $buildScriptPath = Join-Path $PSScriptRoot "build-userscript.ps1"
 $temporaryOperatorPattern = "^char_(50[4-9]|51[0-4]|60[0-9]|61[0-7])_"
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
@@ -24,10 +25,14 @@ function Get-StringValue($value) {
 function Get-SourceData {
     if (-not [string]::IsNullOrWhiteSpace($SourcePath)) {
         $resolvedSourcePath = Resolve-Path $SourcePath
+        $script:operatorUpdateSource = [string]$resolvedSourcePath
+        $script:operatorUpdateSourceKind = "file"
         Write-Host "Reading operator source from $resolvedSourcePath"
         return Get-Content -LiteralPath $resolvedSourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
     }
 
+    $script:operatorUpdateSource = $SourceUrl
+    $script:operatorUpdateSourceKind = "url"
     Write-Host "Downloading operator source from $SourceUrl"
     return Invoke-RestMethod -Uri $SourceUrl -TimeoutSec 30
 }
@@ -149,9 +154,143 @@ function Update-OperatorSourceBlock {
     [System.IO.File]::WriteAllText($operatorSourcePath, $updatedLegacySource, $utf8NoBom)
 }
 
+function Read-ExistingGeneratedOperators {
+    if (-not (Test-Path -LiteralPath $operatorDataPath)) {
+        return @()
+    }
+
+    $raw = Get-Content -LiteralPath $operatorDataPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if ($raw -is [System.Array]) {
+        return @($raw)
+    }
+    return @($raw)
+}
+
+function New-OperatorMap {
+    param([object[]]$operators)
+
+    $map = @{}
+    foreach ($operator in $operators) {
+        $id = Get-StringValue $operator.id
+        if (-not [string]::IsNullOrWhiteSpace($id)) {
+            $map[$id] = $operator
+        }
+    }
+    return $map
+}
+
+function New-OperatorAuditSummary {
+    param(
+        [object[]]$PreviousOperators,
+        [object[]]$CurrentOperators
+    )
+
+    $previousMap = New-OperatorMap -operators $PreviousOperators
+    $currentMap = New-OperatorMap -operators $CurrentOperators
+    $added = [System.Collections.Generic.List[object]]::new()
+    $removed = [System.Collections.Generic.List[object]]::new()
+    $renamed = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($operator in $CurrentOperators) {
+        $id = Get-StringValue $operator.id
+        if (-not $previousMap.ContainsKey($id)) {
+            $added.Add([pscustomobject]@{
+                id = $id
+                name = Get-StringValue $operator.name
+            })
+            continue
+        }
+
+        $previousName = Get-StringValue $previousMap[$id].name
+        $currentName = Get-StringValue $operator.name
+        if ($previousName -ne $currentName) {
+            $renamed.Add([pscustomobject]@{
+                id = $id
+                oldName = $previousName
+                newName = $currentName
+            })
+        }
+    }
+
+    foreach ($operator in $PreviousOperators) {
+        $id = Get-StringValue $operator.id
+        if (-not $currentMap.ContainsKey($id)) {
+            $removed.Add([pscustomobject]@{
+                id = $id
+                name = Get-StringValue $operator.name
+            })
+        }
+    }
+
+    return [pscustomobject]@{
+        source = $script:operatorUpdateSource
+        sourceKind = $script:operatorUpdateSourceKind
+        generatedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+        previousCount = $PreviousOperators.Count
+        newCount = $CurrentOperators.Count
+        delta = $CurrentOperators.Count - $PreviousOperators.Count
+        addedCount = $added.Count
+        removedCount = $removed.Count
+        renamedCount = $renamed.Count
+        added = @($added.ToArray())
+        removed = @($removed.ToArray())
+        renamed = @($renamed.ToArray())
+    }
+}
+
+function Format-OperatorAuditNames {
+    param(
+        [object[]]$items,
+        [string]$nameProperty = "name"
+    )
+
+    if ($items.Count -eq 0) {
+        return "none"
+    }
+
+    $names = @($items | Select-Object -First 12 | ForEach-Object {
+        $name = Get-StringValue $_.$nameProperty
+        $id = Get-StringValue $_.id
+        if ($name) { "$name ($id)" } else { $id }
+    })
+    if ($items.Count -gt 12) {
+        $names += "... +$($items.Count - 12) more"
+    }
+    return $names -join ", "
+}
+
+function Write-OperatorAuditSummary {
+    param([object]$summary)
+
+    $auditJson = $summary | ConvertTo-Json -Depth 6
+    $auditJson = Convert-NewLine $auditJson "`r`n"
+    [System.IO.File]::WriteAllText($operatorAuditPath, "$auditJson`r`n", $utf8NoBom)
+
+    Write-Host "Operator data audit:"
+    Write-Host "  Source: $($summary.source)"
+    Write-Host "  Generated at UTC: $($summary.generatedAtUtc)"
+    Write-Host "  Count: $($summary.previousCount) -> $($summary.newCount) (delta $($summary.delta))"
+    Write-Host "  Added: $($summary.addedCount) - $(Format-OperatorAuditNames -items $summary.added)"
+    Write-Host "  Removed: $($summary.removedCount) - $(Format-OperatorAuditNames -items $summary.removed)"
+    if ($summary.renamedCount -gt 0) {
+        $renamedPreview = @($summary.renamed | Select-Object -First 12 | ForEach-Object {
+            "$($_.oldName) -> $($_.newName) ($($_.id))"
+        }) -join ", "
+        if ($summary.renamedCount -gt 12) {
+            $renamedPreview += ", ... +$($summary.renamedCount - 12) more"
+        }
+    } else {
+        $renamedPreview = "none"
+    }
+    Write-Host "  Renamed: $($summary.renamedCount) - $renamedPreview"
+    Write-Host "  Audit summary: $operatorAuditPath"
+}
+
+$previousOperators = Read-ExistingGeneratedOperators
 $sourceData = Get-SourceData
 $operators = ConvertTo-GeneratedOperators -sourceData $sourceData
 Test-GeneratedOperators -operators $operators
+$auditSummary = New-OperatorAuditSummary -PreviousOperators $previousOperators -CurrentOperators $operators
 
 $json = $operators | ConvertTo-Json -Depth 4
 $json = Convert-NewLine $json "`r`n"
@@ -159,8 +298,10 @@ $json = Convert-NewLine $json "`r`n"
 
 Update-OperatorSourceBlock -operators $operators
 & $buildScriptPath
+Write-OperatorAuditSummary -summary $auditSummary
 
 Write-Host "Generated $($operators.Count) operators"
 Write-Host "Updated $operatorDataPath"
+Write-Host "Updated $operatorAuditPath"
 Write-Host "Updated $operatorSourcePath"
 Write-Host "Updated $userScriptPath"

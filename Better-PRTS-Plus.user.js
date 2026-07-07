@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      3.0.1
+// @version      3.1.0
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -80,10 +80,13 @@
     let displayMode = normalizeDisplayMode(GM_getValue(DISPLAY_MODE_KEY, 'GRAY'));
     let ownedOpsSet = new Set();
     const operationCache = new WeakMap();
+    const cardDiagnosticsCache = new WeakMap();
 
     let isProcessingFilter = false;
     let rafId = null;
     let filterDebounceTimer = null;
+    let pendingDirtyCards = null;
+    let forceNextFilterUpdate = true;
     let lastRouteKey = `${window.location.pathname}${window.location.search}`;
     let operatorImportDialogCleanup = null;
     // =========================================================================
@@ -1179,6 +1182,21 @@
     .prts-import-status.success { background: #ecfdf5; color: #047857; }
     .prts-import-status.warning { background: #fffbeb; color: #b45309; }
     .prts-import-status.error { background: #fef2f2; color: #b91c1c; }
+    #prts-modal-backdrop { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.46); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    #prts-modal { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
+    #prts-modal * { box-sizing: border-box; }
+    .prts-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid #eef2f7; }
+    .prts-modal-title { margin: 0; color: #111827; font-size: 16px; line-height: 1.45; font-weight: 700; }
+    .prts-modal-body { padding: 14px 16px 0; }
+    .prts-modal-message { color: #475569; font-size: 13px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+    .prts-modal-field { display: block; margin-top: 12px; }
+    .prts-modal-field-label { display: block; margin-bottom: 8px; color: #475569; font-size: 13px; font-weight: 700; }
+    .prts-modal-input { display: block; width: 100%; min-height: 44px; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #111827; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .prts-modal-input:focus { border-color: #2563eb; outline: 2px solid rgba(37, 99, 235, 0.2); outline-offset: 1px; }
+    .prts-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px; }
+    .prts-modal-actions .prts-import-action { min-width: 88px; }
+    .prts-import-action.primary.danger { border-color: #dc2626; background: #dc2626; color: #ffffff; }
+    .prts-import-action.primary.danger:hover, .prts-import-action.primary.danger:focus-visible { border-color: #b91c1c; background: #b91c1c; color: #ffffff; }
     body.dark #prts-import-dialog { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52); }
     body.dark .prts-import-head { border-color: #415262; }
     body.dark .prts-import-title { color: #f5f8fa; }
@@ -1194,6 +1212,11 @@
     body.dark .prts-import-status.success { background: rgba(16, 185, 129, 0.16); color: #86efac; }
     body.dark .prts-import-status.warning { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
     body.dark .prts-import-status.error { background: rgba(239, 68, 68, 0.16); color: #fca5a5; }
+    body.dark #prts-modal { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52); }
+    body.dark .prts-modal-head { border-color: #415262; }
+    body.dark .prts-modal-title { color: #f5f8fa; }
+    body.dark .prts-modal-message, body.dark .prts-modal-field-label { color: #c4d0dc; }
+    body.dark .prts-modal-input { border-color: #415262; background: #202b33; color: #f5f8fa; }
     body.high-contrast-theme #prts-import-dialog { border-color: #38383b; background: #18181c; color: #e0e0e0; }
     body.high-contrast-theme .prts-import-head { border-color: #38383b; }
     body.high-contrast-theme .prts-import-title { color: #ffffff; }
@@ -1201,11 +1224,20 @@
     body.high-contrast-theme .prts-import-textarea { border-color: #38383b; background: #2d2d30; color: #ffffff; }
     body.high-contrast-theme .prts-import-action { border-color: #38383b; background: #2d2d30; color: #e0e0e0; }
     body.high-contrast-theme .prts-import-status { background: #2d2d30; color: #d1d5db; }
+    body.high-contrast-theme #prts-modal { border-color: #38383b; background: #18181c; color: #e0e0e0; }
+    body.high-contrast-theme .prts-modal-head { border-color: #38383b; }
+    body.high-contrast-theme .prts-modal-title { color: #ffffff; }
+    body.high-contrast-theme .prts-modal-message, body.high-contrast-theme .prts-modal-field-label { color: #d1d5db; }
+    body.high-contrast-theme .prts-modal-input { border-color: #38383b; background: #2d2d30; color: #ffffff; }
     @media (max-width: 520px) {
         #prts-import-dialog-backdrop { align-items: flex-end; padding: 12px; }
         #prts-import-dialog { width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
+        #prts-modal-backdrop { align-items: flex-end; padding: 12px; }
+        #prts-modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
         .prts-import-actions { flex-direction: column; }
         .prts-import-action { width: 100%; }
+        .prts-modal-actions { flex-direction: column-reverse; }
+        .prts-modal-actions .prts-import-action { width: 100%; }
     }
     @media (prefers-reduced-motion: reduce) {
         .prts-toast { transition: none; }
@@ -1292,6 +1324,330 @@
 `;
 
     GM_addStyle(isSklandHost() ? sklandImportStyles : mergedStyles);
+    // =========================================================================
+    //                            MODULE 3.5: DOM UI HELPERS
+    // =========================================================================
+
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    let prtsModalCleanup = null;
+
+    function ensurePrtsToastContainer() {
+        let container = document.getElementById('prts-toast-container');
+        if (container) return container;
+
+        container = document.createElement('div');
+        container.id = 'prts-toast-container';
+        container.setAttribute('role', 'status');
+        container.setAttribute('aria-live', 'polite');
+        container.setAttribute('aria-atomic', 'false');
+        document.body.appendChild(container);
+        return container;
+    }
+
+    function showPrtsToast(message, type = 'info', detail = '') {
+        const container = ensurePrtsToastContainer();
+        const toastType = ['success', 'warning', 'error'].includes(type) ? type : '';
+        const toast = document.createElement('div');
+        toast.className = `prts-toast${toastType ? ` ${toastType}` : ''}`;
+
+        const title = document.createElement('div');
+        title.className = 'prts-toast-title';
+        title.textContent = message;
+        toast.appendChild(title);
+
+        if (detail) {
+            const detailEl = document.createElement('div');
+            detailEl.className = 'prts-toast-detail';
+            detailEl.textContent = detail;
+            toast.appendChild(detailEl);
+        }
+
+        container.appendChild(toast);
+        window.setTimeout(() => {
+            toast.classList.add('is-leaving');
+            window.setTimeout(() => toast.remove(), 220);
+        }, 4000);
+    }
+
+    function createSvgIconFromPath(pathData, viewBox = '0 0 16 16') {
+        const span = document.createElement('span');
+        span.className = 'bp4-icon';
+        span.setAttribute('aria-hidden', 'true');
+
+        const svg = document.createElementNS(SVG_NS, 'svg');
+        svg.setAttribute('width', '16');
+        svg.setAttribute('height', '16');
+        svg.setAttribute('viewBox', viewBox);
+        svg.setAttribute('fill', 'currentColor');
+        svg.setAttribute('focusable', 'false');
+
+        const path = document.createElementNS(SVG_NS, 'path');
+        path.setAttribute('d', String(pathData || ''));
+        svg.appendChild(path);
+        span.appendChild(svg);
+        return span;
+    }
+
+    function createSklandIconImage() {
+        try {
+            const parsed = new DOMParser().parseFromString(SKLAND_FAVICON_SVG, 'image/svg+xml');
+            const svg = parsed.documentElement;
+            if (svg?.tagName?.toLowerCase() === 'svg') {
+                const imported = document.importNode(svg, true);
+                imported.classList.add('prts-btn-icon-svg');
+                imported.setAttribute('aria-hidden', 'true');
+                imported.setAttribute('focusable', 'false');
+                return imported;
+            }
+        } catch (error) {
+            console.warn('[Better PRTS] Failed to render Skland icon', error);
+        }
+
+        return createSvgIconFromPath('M2 2h12v12H2z');
+    }
+
+    function createPrtsIcon(icon) {
+        if (!icon) return null;
+        if (icon === 'skland' || icon.type === 'skland') return createSklandIconImage();
+        if (typeof icon === 'string') return createSvgIconFromPath(icon);
+        if (icon instanceof Node) return icon.cloneNode(true);
+        return null;
+    }
+
+    function createPrtsButton({
+        id,
+        className = 'prts-btn',
+        icon = null,
+        text = '',
+        active = false,
+        disabled = false,
+        title = '',
+        ariaLabel = '',
+        onClick = null
+    } = {}) {
+        let btn = id ? document.getElementById(id) : null;
+        if (!btn || btn.tagName !== 'BUTTON') {
+            btn = document.createElement('button');
+            btn.type = 'button';
+            if (id) btn.id = id;
+        }
+
+        btn.className = className;
+        btn.classList.toggle('prts-active', active === true);
+        btn.disabled = disabled === true;
+        btn.style.opacity = disabled ? '0.5' : '1';
+        btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+
+        if (title) btn.title = title;
+        else btn.removeAttribute('title');
+
+        if (ariaLabel) btn.setAttribute('aria-label', ariaLabel);
+        else btn.removeAttribute('aria-label');
+
+        if (btn._prtsClickHandler) {
+            btn.removeEventListener('click', btn._prtsClickHandler);
+            btn._prtsClickHandler = null;
+        }
+        if (typeof onClick === 'function') {
+            btn._prtsClickHandler = onClick;
+            btn.addEventListener('click', onClick);
+        }
+
+        const children = [];
+        const iconEl = createPrtsIcon(icon);
+        if (iconEl) children.push(iconEl);
+
+        const label = document.createElement('span');
+        label.className = 'bp4-button-text';
+        label.textContent = text;
+        children.push(label);
+
+        btn.replaceChildren(...children);
+        return btn;
+    }
+
+    function createPrtsSwitch({ label, checked, onChange, configKey } = {}) {
+        const item = document.createElement('div');
+        item.className = 'prts-panel-item';
+
+        const labelText = document.createElement('span');
+        labelText.textContent = label || '';
+
+        const switchLabel = document.createElement('label');
+        switchLabel.className = 'prts-switch';
+
+        const input = document.createElement('input');
+        input.type = 'checkbox';
+        input.checked = checked === true;
+        if (configKey) input.dataset.prtsConfigKey = configKey;
+        input.onchange = event => {
+            if (typeof onChange === 'function') onChange(event.target.checked);
+        };
+
+        const slider = document.createElement('span');
+        slider.className = 'prts-slider';
+
+        switchLabel.appendChild(input);
+        switchLabel.appendChild(slider);
+        item.appendChild(labelText);
+        item.appendChild(switchLabel);
+        return item;
+    }
+
+    function closePrtsModal(resolveValue = null) {
+        if (prtsModalCleanup) {
+            prtsModalCleanup(resolveValue);
+            prtsModalCleanup = null;
+            return;
+        }
+
+        document.getElementById('prts-modal')?.remove();
+        document.getElementById('prts-modal-backdrop')?.remove();
+    }
+
+    function appendPrtsModalMessage(parent, message) {
+        if (message instanceof Node) {
+            parent.appendChild(message);
+            return;
+        }
+
+        const messageEl = document.createElement('div');
+        messageEl.className = 'prts-modal-message';
+        messageEl.textContent = String(message || '');
+        parent.appendChild(messageEl);
+    }
+
+    function showPrtsModal({
+        title,
+        message,
+        confirmText = '确定',
+        cancelText = '取消',
+        tone = '',
+        input = null
+    } = {}) {
+        return new Promise(resolve => {
+            closePrtsModal(null);
+
+            const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+            const backdrop = document.createElement('div');
+            backdrop.id = 'prts-modal-backdrop';
+
+            const dialog = document.createElement('div');
+            dialog.id = 'prts-modal';
+            dialog.setAttribute('role', 'dialog');
+            dialog.setAttribute('aria-modal', 'true');
+            dialog.setAttribute('aria-labelledby', 'prts-modal-title');
+            dialog.setAttribute('aria-describedby', 'prts-modal-message');
+
+            const head = document.createElement('div');
+            head.className = 'prts-modal-head';
+
+            const titleEl = document.createElement('h2');
+            titleEl.id = 'prts-modal-title';
+            titleEl.className = 'prts-modal-title';
+            titleEl.textContent = title || '';
+
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'prts-import-close';
+            closeBtn.setAttribute('aria-label', '关闭窗口');
+            closeBtn.textContent = '×';
+
+            head.appendChild(titleEl);
+            head.appendChild(closeBtn);
+
+            const body = document.createElement('div');
+            body.className = 'prts-modal-body';
+
+            const messageWrap = document.createElement('div');
+            messageWrap.id = 'prts-modal-message';
+            appendPrtsModalMessage(messageWrap, message);
+            body.appendChild(messageWrap);
+
+            let inputEl = null;
+            if (input) {
+                const field = document.createElement('label');
+                field.className = 'prts-modal-field';
+
+                const fieldLabel = document.createElement('span');
+                fieldLabel.className = 'prts-modal-field-label';
+                fieldLabel.textContent = input.label || '';
+
+                inputEl = document.createElement('input');
+                inputEl.type = 'text';
+                inputEl.className = 'prts-modal-input';
+                inputEl.value = input.defaultValue || '';
+                if (Number.isFinite(input.maxLength)) inputEl.maxLength = input.maxLength;
+
+                field.appendChild(fieldLabel);
+                field.appendChild(inputEl);
+                body.appendChild(field);
+            }
+
+            const actions = document.createElement('div');
+            actions.className = 'prts-modal-actions';
+
+            const cancelBtn = document.createElement('button');
+            cancelBtn.type = 'button';
+            cancelBtn.className = 'prts-import-action';
+            cancelBtn.textContent = cancelText;
+
+            const confirmBtn = document.createElement('button');
+            confirmBtn.type = 'button';
+            confirmBtn.className = `prts-import-action primary${tone ? ` ${tone}` : ''}`;
+            confirmBtn.textContent = confirmText;
+
+            actions.appendChild(cancelBtn);
+            actions.appendChild(confirmBtn);
+
+            dialog.appendChild(head);
+            dialog.appendChild(body);
+            dialog.appendChild(actions);
+            backdrop.appendChild(dialog);
+
+            const finish = value => closePrtsModal(value);
+            const handleKeydown = event => {
+                if (event.key === 'Escape') finish(null);
+                if (event.key === 'Enter' && inputEl && document.activeElement === inputEl) {
+                    event.preventDefault();
+                    finish(inputEl.value);
+                }
+            };
+
+            closeBtn.onclick = () => finish(null);
+            cancelBtn.onclick = () => finish(null);
+            confirmBtn.onclick = () => finish(inputEl ? inputEl.value : true);
+            backdrop.addEventListener('click', event => {
+                if (event.target === backdrop) finish(null);
+            });
+            document.addEventListener('keydown', handleKeydown, true);
+
+            prtsModalCleanup = value => {
+                document.removeEventListener('keydown', handleKeydown, true);
+                backdrop.remove();
+                if (previousFocus?.isConnected) previousFocus.focus();
+                resolve(value);
+            };
+
+            document.body.appendChild(backdrop);
+            window.setTimeout(() => (inputEl || confirmBtn).focus(), 0);
+        });
+    }
+
+    function showPrtsConfirm(options = {}) {
+        return showPrtsModal(options).then(value => value === true);
+    }
+
+    function showPrtsPrompt(options = {}) {
+        return showPrtsModal({
+            ...options,
+            input: {
+                label: options.inputLabel || '',
+                defaultValue: options.defaultValue || '',
+                maxLength: options.maxLength
+            }
+        }).then(value => (typeof value === 'string' ? value : null));
+    }
     // =========================================================================
     //                            MODULE 3: 工具函数与核心算法
     // =========================================================================
@@ -1627,10 +1983,18 @@
         if (forceFilterUpdate || currentFilterMode !== 'NONE') requestFilterUpdate();
     }
 
-    function renameAccount(id) {
+    async function renameAccount(id) {
         const accountId = normalizeAccountId(id);
         const currentLabel = getAccountLabel(accountId);
-        const rawLabel = window.prompt(`重命名账号 ${accountId}`, currentLabel);
+        const rawLabel = await showPrtsPrompt({
+            title: `重命名账号 ${accountId}`,
+            message: '输入新的账号昵称，留空会恢复默认名称。',
+            inputLabel: '账号昵称',
+            defaultValue: currentLabel,
+            maxLength: ACCOUNT_LABEL_MAX_LENGTH,
+            confirmText: '保存',
+            cancelText: '取消'
+        });
         if (rawLabel === null) return;
 
         const cleaned = String(rawLabel).replace(/[\x00-\x1F\x7F]/g, '').trim();
@@ -1641,6 +2005,7 @@
         };
         saveAccountsData();
         refreshAccountStateUi();
+        showPrtsToast('账号名称已更新', 'success', `${getAccountLabel(accountId)} / ${getAccountOperatorCount(accountId)} 名干员`);
     }
 
     function updateAccountLabelFromSkland(id, nickname) {
@@ -1716,10 +2081,10 @@
             const backup = buildAccountsBackup();
             const fileName = `better-prts-plus-backup-${formatBackupTimestamp(new Date())}.json`;
             downloadJsonFile(fileName, backup);
-            alert(`✅ 已导出全部配置：${fileName}`);
+            showPrtsToast('已导出全部配置', 'success', fileName);
         } catch (error) {
             console.error('[Better PRTS] 导出全部配置失败', error);
-            alert('❌ 导出全部配置失败: ' + (error instanceof Error ? error.message : '未知错误'));
+            showPrtsToast('导出全部配置失败', 'error', error instanceof Error ? error.message : '未知错误');
         }
     }
 
@@ -1820,29 +2185,38 @@
             if (!file) return;
 
             if (file.size > ACCOUNT_BACKUP_MAX_BYTES) {
-                alert('❌ 配置文件过大，请选择 Better-PRTS-Plus 导出的备份文件');
+                showPrtsToast('配置文件过大', 'error', '请选择 Better-PRTS-Plus 导出的备份文件。');
                 return;
             }
 
             const reader = new FileReader();
-            reader.onload = event => {
+            reader.onload = async event => {
                 try {
                     const parsed = safeJsonParse(event.target.result, null);
                     const backup = parseAccountsBackup(parsed);
-                    if (!window.confirm(formatAccountsBackupSummary(backup))) return;
+                    const confirmed = await showPrtsConfirm({
+                        title: '导入全部配置',
+                        message: formatAccountsBackupSummary(backup),
+                        confirmText: '确认导入',
+                        cancelText: '取消',
+                        tone: 'danger'
+                    });
+                    if (!confirmed) return;
 
                     applyAccountsBackup(backup);
-                    alert('✅ 全部配置导入成功');
+                    showPrtsToast('全部配置导入成功', 'success', `${getAccountLabel(activeAccountId)} 已切换为当前账号。`);
                 } catch (error) {
                     console.error('[Better PRTS] 导入全部配置失败', error);
-                    alert('❌ 导入全部配置失败: ' + (error instanceof Error ? error.message : '未知错误'));
+                    showPrtsToast('导入全部配置失败', 'error', error instanceof Error ? error.message : '未知错误');
                 }
+            };
+            reader.onerror = () => {
+                showPrtsToast('导入全部配置失败', 'error', reader.error?.message || '无法读取文件，请重试。');
             };
             reader.readAsText(file);
         };
         input.click();
     }
-
     // =========================================================================
     //                            MODULE 5: 业务逻辑 - 筛选、折叠与净化
     // =========================================================================
@@ -1884,44 +2258,6 @@
         statusEl.textContent = message;
         statusEl.setAttribute('role', statusType === 'error' ? 'alert' : 'status');
         statusEl.setAttribute('aria-live', statusType === 'error' ? 'assertive' : 'polite');
-    }
-
-    function ensurePrtsToastContainer() {
-        let container = document.getElementById('prts-toast-container');
-        if (container) return container;
-
-        container = document.createElement('div');
-        container.id = 'prts-toast-container';
-        container.setAttribute('role', 'status');
-        container.setAttribute('aria-live', 'polite');
-        container.setAttribute('aria-atomic', 'false');
-        document.body.appendChild(container);
-        return container;
-    }
-
-    function showPrtsToast(message, type = 'info', detail = '') {
-        const container = ensurePrtsToastContainer();
-        const toastType = ['success', 'warning', 'error'].includes(type) ? type : '';
-        const toast = document.createElement('div');
-        toast.className = `prts-toast${toastType ? ` ${toastType}` : ''}`;
-
-        const title = document.createElement('div');
-        title.className = 'prts-toast-title';
-        title.textContent = message;
-        toast.appendChild(title);
-
-        if (detail) {
-            const detailEl = document.createElement('div');
-            detailEl.className = 'prts-toast-detail';
-            detailEl.textContent = detail;
-            toast.appendChild(detailEl);
-        }
-
-        container.appendChild(toast);
-        window.setTimeout(() => {
-            toast.classList.add('is-leaving');
-            window.setTimeout(() => toast.remove(), 220);
-        }, 4000);
     }
 
     function closeOperatorImportDialog() {
@@ -2168,15 +2504,13 @@
         } catch (error) {
             opened = null;
         }
-        alert(opened
-            ? '已打开森空岛页面。请在森空岛网页登录后，使用页面右侧的 Better-PRTS-Plus 导入面板读取干员数据。'
-            : '已尝试打开森空岛页面。如果没有看到新窗口，请手动打开 https://www.skland.com/index 登录后使用 Better-PRTS-Plus 导入面板。');
-    }
-
-    function createSklandIconImage() {
-        const wrapper = document.createElement('span');
-        wrapper.innerHTML = SKLAND_FAVICON_SVG;
-        return wrapper.firstElementChild || wrapper;
+        showPrtsToast(
+            opened ? '已打开森空岛页面' : '已尝试打开森空岛页面',
+            opened ? 'success' : 'warning',
+            opened
+                ? '请在森空岛网页登录后，使用页面右侧的 Better-PRTS-Plus 导入面板读取干员数据。'
+                : '如果没有看到新窗口，请手动打开 https://www.skland.com/index 登录后使用 Better-PRTS-Plus 导入面板。'
+        );
     }
 
     function toggleDisplayMode() {
@@ -2190,7 +2524,7 @@
 
     function toggleFilter(mode) {
         if (ownedOpsSet.size === 0) {
-            alert(`请先为当前 ${getAccountLabel(activeAccountId)} 导入干员数据！`);
+            showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
             return;
         }
         currentFilterMode = (currentFilterMode === mode) ? 'NONE' : mode;
@@ -2258,61 +2592,28 @@
             support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm3.2-1.6c0-1.77-1.43-3.2-3.2-3.2-.45 0-.86.1-1.26.26.7.74 1.15 1.72 1.24 2.82.02.21.02.41 0 .62-.1 1.04-.51 1.98-1.16 2.71.37.13.75.19 1.18.19 1.77.01 3.2-1.42 3.2-3.4zM8.8 10.4H2.4c-.88 0-1.6.72-1.6 1.6v2.4h9.6V12c0-.88-.72-1.6-1.6-1.6zm-5.6 2.4h4.8v.8H3.2v-.8zm12-1.6h-4.8c.21 0 .4.03.59.07.67.15 1.29.44 1.81.85.91.71 1.5 1.81 1.57 3.04.01.1.01.18.03.28V12c0-.88-.72-1.6-1.6-1.6z',
             user: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
             sidebarToggle: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
-            skland: SKLAND_FAVICON_SVG
-        };
-
-        const renderButton = (id, text, svgPath, onClick, active = false, disabled = false) => {
-            let btn = document.getElementById(id);
-            const iconHTML = svgPath.startsWith('<svg')
-                ? svgPath
-                : `<span class="bp4-icon" aria-hidden="true" style="margin-right:6px"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="${svgPath}"></path></svg></span>`;
-            const innerHTML = `
-                ${iconHTML}
-                <span class="bp4-button-text">${text}</span>
-            `;
-
-            if (!btn) {
-                btn = document.createElement('button');
-                btn.type = "button";
-                btn.className = 'prts-btn';
-                btn.id = id;
-                btn.onclick = onClick;
-            }
-
-            if (btn.innerHTML !== innerHTML) btn.innerHTML = innerHTML;
-
-            if (active && !btn.classList.contains('prts-active')) btn.classList.add('prts-active');
-            if (!active && btn.classList.contains('prts-active')) btn.classList.remove('prts-active');
-
-            if (disabled) {
-                btn.style.opacity = '0.5';
-                btn.style.cursor = 'not-allowed';
-            } else {
-                btn.style.opacity = '1';
-                btn.style.cursor = 'pointer';
-            }
-            return btn;
+            skland: 'skland'
         };
 
         // 顺序生成元素
 
         // (1) 账号循环切换按钮
         const btnAccountText = getAccountLabel(activeAccountId);
-        const btnAccount = renderButton('btn-account', btnAccountText, paths.user, cycleAccount);
+        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: paths.user, onClick: cycleAccount });
         controlBar.appendChild(btnAccount);
 
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
-        const btnImport = renderButton('btn-import', importText, paths.import, handleImport);
+        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: paths.import, onClick: handleImport });
         controlBar.appendChild(btnImport);
 
-        const btnSklandImport = renderButton('btn-skland-import', '森空岛导入', paths.skland, handleOpenSklandImport);
+        const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: paths.skland, onClick: handleOpenSklandImport });
         controlBar.appendChild(btnSklandImport);
 
         // (3) 模式切换
         const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
         const displayModeIcon = displayMode === 'GRAY' ? paths.eyeOn : paths.eyeOff;
-        const btnSetting = renderButton('btn-setting', displayModeText, displayModeIcon, toggleDisplayMode);
+        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, onClick: toggleDisplayMode });
         controlBar.appendChild(btnSetting);
 
         // (4) 分割线
@@ -2325,18 +2626,29 @@
         controlBar.appendChild(divider);
 
         // (5) 完美阵容
-        const btnPerfect = renderButton('btn-perfect', '完美阵容', paths.perfect, () => toggleFilter('PERFECT'), currentFilterMode === 'PERFECT');
+        const btnPerfect = createPrtsButton({
+            id: 'btn-perfect',
+            text: '完美阵容',
+            icon: paths.perfect,
+            onClick: () => toggleFilter('PERFECT'),
+            active: currentFilterMode === 'PERFECT'
+        });
         controlBar.appendChild(btnPerfect);
 
         // (6) 允许助战
-        const btnSupport = renderButton('btn-support', '允许助战', paths.support, () => toggleFilter('SUPPORT'), currentFilterMode === 'SUPPORT');
+        const btnSupport = createPrtsButton({
+            id: 'btn-support',
+            text: '允许助战',
+            icon: paths.support,
+            onClick: () => toggleFilter('SUPPORT'),
+            active: currentFilterMode === 'SUPPORT'
+        });
         controlBar.appendChild(btnSupport);
 
         if (isNew && currentFilterMode !== 'NONE') {
             requestFilterUpdate();
         }
     }
-
     function findBilibiliUrl(text) {
         const match = String(text || '').match(/(?:【.*?】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+)/i);
         return match ? { fullText: match[0], url: match[1] } : null;
@@ -2428,7 +2740,30 @@
         descContainer.dataset.biliProcessed = "true";
     }
 
-    function requestFilterUpdate() {
+    function getOperationCards() {
+        return Array.from(document.querySelectorAll('ul.grid > li, .tabular-nums ul > li'));
+    }
+
+    function getCardFromMutationNode(node) {
+        const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+        if (!element) return null;
+        if (element.matches?.('ul.grid > li, .tabular-nums ul > li')) return element;
+        return element.closest?.('ul.grid > li, .tabular-nums ul > li') || null;
+    }
+
+    function queueDirtyCards(cards) {
+        if (!cards || cards.size === 0 || cards.length === 0) return;
+        if (!pendingDirtyCards) pendingDirtyCards = new Set();
+        cards.forEach(card => {
+            if (card?.isConnected) pendingDirtyCards.add(card);
+        });
+    }
+
+    function requestFilterUpdate(options = {}) {
+        if (options.forceFull !== false) {
+            forceNextFilterUpdate = true;
+        }
+        queueDirtyCards(options.dirtyCards);
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(() => {
             rafId = null;
@@ -2436,12 +2771,16 @@
         });
     }
 
-    function scheduleFilterUpdate(delay = 80) {
+    function scheduleFilterUpdate(delay = 80, options = {}) {
         if (isFilterDisabledPage()) return;
+        if (options.forceFull !== false) {
+            forceNextFilterUpdate = true;
+        }
+        queueDirtyCards(options.dirtyCards);
         if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
         filterDebounceTimer = setTimeout(() => {
             filterDebounceTimer = null;
-            requestFilterUpdate();
+            requestFilterUpdate(options);
         }, delay);
     }
 
@@ -2550,7 +2889,28 @@
 
     function isScriptOwnedNode(node) {
         if (!node || node.nodeType !== 1) return false;
-        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
+        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
+    }
+
+    function collectDirtyCardsFromMutations(mutations) {
+        const dirtyCards = new Set();
+        for (const mutation of mutations) {
+            if (isScriptOwnedNode(mutation.target)) continue;
+
+            const targetCard = getCardFromMutationNode(mutation.target);
+            if (targetCard) dirtyCards.add(targetCard);
+
+            const changedNodes = Array.from(mutation.addedNodes || []).concat(Array.from(mutation.removedNodes || []));
+            changedNodes.forEach(node => {
+                if (isScriptOwnedNode(node)) return;
+                const card = getCardFromMutationNode(node);
+                if (card) dirtyCards.add(card);
+                if (node?.nodeType === Node.ELEMENT_NODE) {
+                    node.querySelectorAll?.('ul.grid > li, .tabular-nums ul > li').forEach(childCard => dirtyCards.add(childCard));
+                }
+            });
+        }
+        return dirtyCards;
     }
 
     function hasRelevantDomMutation(mutations) {
@@ -2665,7 +3025,7 @@
                     const interactiveWrapper = tag.closest(BP_SELECTORS.popoverTarget);
                     if (interactiveWrapper) {
                         grid.appendChild(interactiveWrapper);
-                        interactiveWrapper.innerHTML = '';
+                interactiveWrapper.replaceChildren();
                         interactiveWrapper.appendChild(newItem);
                     } else {
                         const tooltipText = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
@@ -2724,7 +3084,7 @@
         });
 
         if (validOps.length > 0) {
-            content.innerHTML = '';
+            content.replaceChildren();
             const grid = document.createElement('div');
             grid.className = 'prts-popover-grid';
 
@@ -2755,106 +3115,140 @@
     /**
      * [筛选逻辑的核心应用方法] - 包含最优算法注入
      */
+    function createCardDiagnostics(source = 'none') {
+        return {
+            fiberCards: source === 'fiber' ? 1 : 0,
+            fallbackCards: source === 'fallback' ? 1 : 0,
+            noDataCards: source === 'none' ? 1 : 0
+        };
+    }
+
+    function processOperationCard(card) {
+        const cardInner = card.querySelector(BP_SELECTORS.card);
+        if (!cardInner) {
+            const diagnostics = createCardDiagnostics('none');
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
+
+        optimizeCardVisuals(card, cardInner);
+        cleanBilibiliLinks(cardInner);
+
+        const resolution = getOperationResolutionForCard(card, cardInner);
+        const operation = resolution.operation;
+        const diagnostics = hasEffectiveOperationData(operation)
+            ? createCardDiagnostics(resolution.source)
+            : createCardDiagnostics('none');
+
+        const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
+
+        if (!isAvailable && displayMode === 'HIDE') {
+            if (card.style.display !== 'none') card.style.display = 'none';
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
+
+        if (card.style.display === 'none') card.style.display = '';
+
+        const hasGrayClass = card.classList.contains('prts-card-gray');
+        if (!isAvailable && displayMode === 'GRAY') {
+            if (!hasGrayClass) card.classList.add('prts-card-gray');
+        } else if (hasGrayClass) {
+            card.classList.remove('prts-card-gray');
+        }
+
+        const existingLabel = cardInner.querySelector('.prts-status-label');
+        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1);
+
+        if (!showMissingInfo) {
+            if (existingLabel) existingLabel.remove();
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
+
+        let labelText = '';
+        let iconText = '';
+        let newClass = 'prts-status-label';
+
+        if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
+            newClass += ' prts-label-support';
+            const name = missingOps[0];
+            iconText = '👤';
+            labelText = `需助战: ${name}`;
+        } else {
+            newClass += ' prts-label-missing';
+            const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
+            iconText = '✘';
+            labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+        }
+
+        if (existingLabel) {
+            updateStatusLabel(existingLabel, newClass, iconText, labelText);
+        } else {
+            const labelDiv = document.createElement('div');
+            updateStatusLabel(labelDiv, newClass, iconText, labelText);
+
+            const descContainer = cardInner.querySelector('.prts-desc-wrapper') ||
+                                 cardInner.querySelector('.grow.text-gray-700') ||
+                                 cardInner.querySelector('.text-gray-700');
+            if (descContainer) {
+                cardInner.insertBefore(labelDiv, descContainer);
+            } else {
+                cardInner.appendChild(labelDiv);
+            }
+        }
+
+        cardDiagnosticsCache.set(card, diagnostics);
+        return diagnostics;
+    }
+
+    function aggregateCardDiagnostics(cards) {
+        const diagnostics = {
+            totalCards: cards.length,
+            fiberCards: 0,
+            fallbackCards: 0,
+            noDataCards: 0
+        };
+
+        cards.forEach(card => {
+            const cached = cardDiagnosticsCache.get(card) || processOperationCard(card);
+            diagnostics.fiberCards += cached.fiberCards;
+            diagnostics.fallbackCards += cached.fallbackCards;
+            diagnostics.noDataCards += cached.noDataCards;
+        });
+        return diagnostics;
+    }
+
     function applyFilterLogic() {
         if (isFilterDisabledPage()) {
+            pendingDirtyCards = null;
+            forceNextFilterUpdate = true;
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
             return;
         }
         isProcessingFilter = true;
 
         try {
-            let cards = document.querySelectorAll('ul.grid > li, .tabular-nums ul > li');
-            const diagnostics = {
-                totalCards: cards.length,
-                fiberCards: 0,
-                fallbackCards: 0,
-                noDataCards: 0
-            };
+            const cards = getOperationCards();
             if (cards.length === 0) {
-                setCompatibilityDiagnostics(diagnostics);
+                pendingDirtyCards = null;
+                forceNextFilterUpdate = true;
+                setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
                 return;
             }
 
-            cards.forEach(card => {
-                const cardInner = card.querySelector(BP_SELECTORS.card);
-                if (!cardInner) {
-                    diagnostics.noDataCards += 1;
-                    return;
-                }
+            const dirtyCards = pendingDirtyCards
+                ? Array.from(pendingDirtyCards).filter(card => card.isConnected)
+                : [];
+            pendingDirtyCards = null;
 
-                optimizeCardVisuals(card, cardInner);
-                cleanBilibiliLinks(cardInner);
+            const shouldProcessAll = forceNextFilterUpdate || dirtyCards.length === 0;
+            forceNextFilterUpdate = false;
 
-                const resolution = getOperationResolutionForCard(card, cardInner);
-                const operation = resolution.operation;
-                if (hasEffectiveOperationData(operation)) {
-                    if (resolution.source === 'fiber') {
-                        diagnostics.fiberCards += 1;
-                    } else {
-                        diagnostics.fallbackCards += 1;
-                    }
-                } else {
-                    diagnostics.noDataCards += 1;
-                }
+            const cardsToProcess = shouldProcessAll ? cards : dirtyCards;
+            cardsToProcess.forEach(processOperationCard);
 
-                const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
-
-                if (!isAvailable && displayMode === 'HIDE') {
-                    if (card.style.display !== 'none') card.style.display = 'none';
-                    return;
-                } else {
-                    if (card.style.display === 'none') card.style.display = '';
-                }
-
-                const hasGrayClass = card.classList.contains('prts-card-gray');
-                if (!isAvailable && displayMode === 'GRAY') {
-                    if (!hasGrayClass) card.classList.add('prts-card-gray');
-                } else {
-                    if (hasGrayClass) card.classList.remove('prts-card-gray');
-                }
-
-                const existingLabel = cardInner.querySelector('.prts-status-label');
-                const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1);
-
-                if (!showMissingInfo) {
-                    if (existingLabel) existingLabel.remove();
-                    return;
-                }
-
-                let labelText = '';
-                let iconText = '';
-                let newClass = 'prts-status-label';
-
-                if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
-                    newClass += ' prts-label-support';
-                    const name = missingOps[0];
-                    iconText = '👤';
-                    labelText = `需助战: ${name}`;
-                } else {
-                    newClass += ' prts-label-missing';
-                    const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
-                    iconText = '✘';
-                    labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
-                }
-
-                if (existingLabel) {
-                    updateStatusLabel(existingLabel, newClass, iconText, labelText);
-                } else {
-                    const labelDiv = document.createElement('div');
-                    updateStatusLabel(labelDiv, newClass, iconText, labelText);
-
-                    const descContainer = cardInner.querySelector('.prts-desc-wrapper') ||
-                                         cardInner.querySelector('.grow.text-gray-700') ||
-                                         cardInner.querySelector('.text-gray-700');
-                    if (descContainer) {
-                        cardInner.insertBefore(labelDiv, descContainer);
-                    } else {
-                        cardInner.appendChild(labelDiv);
-                    }
-                }
-            });
-
-            setCompatibilityDiagnostics(diagnostics);
+            setCompatibilityDiagnostics(aggregateCardDiagnostics(cards));
 
         } finally {
             isProcessingFilter = false;
@@ -3100,27 +3494,34 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         btn.className = 'prts-float-btn';
         btn.title = "脚本设置 (可拖拽)";
         btn.style.touchAction = 'none';
-        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z"></path></svg>`;
+        const floatSvg = document.createElementNS(SVG_NS, 'svg');
+        floatSvg.setAttribute('viewBox', '0 0 32 32');
+        floatSvg.setAttribute('aria-hidden', 'true');
+        floatSvg.setAttribute('focusable', 'false');
+        const floatPath = document.createElementNS(SVG_NS, 'path');
+        floatPath.setAttribute('d', 'M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z');
+        floatSvg.appendChild(floatPath);
+        btn.appendChild(floatSvg);
 
         const panel = document.createElement('div');
         panel.className = 'prts-settings-panel';
 
-        const createSwitch = (label, checked, onChange, configKey) => {
-            const div = document.createElement('div');
-            div.className = 'prts-panel-item';
-            div.innerHTML = `<span>${label}</span><label class="prts-switch"><input type="checkbox" ${checked ? 'checked' : ''}><span class="prts-slider"></span></label>`;
-            const input = div.querySelector('input');
-            if (configKey) input.dataset.prtsConfigKey = configKey;
-            input.onchange = (e) => onChange(e.target.checked);
-            return div;
-        };
+        const createSwitch = (label, checked, onChange, configKey) => createPrtsSwitch({ label, checked, onChange, configKey });
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
         title.tabIndex = 0;
         title.setAttribute('role', 'button');
         title.setAttribute('aria-label', '功能开关');
-        title.innerHTML = `<span style="margin-right:auto">功能开关</span><span style="font-size:12px;opacity:0.6">刷新生效</span>`;
+        const titleText = document.createElement('span');
+        titleText.textContent = '功能开关';
+        titleText.style.marginRight = 'auto';
+        const titleHint = document.createElement('span');
+        titleHint.textContent = '刷新生效';
+        titleHint.style.fontSize = '12px';
+        titleHint.style.opacity = '0.6';
+        title.appendChild(titleText);
+        title.appendChild(titleHint);
         panel.appendChild(title);
 
         let debugOptionsRevealed = CONFIG.compatDebug === true;
@@ -3211,21 +3612,12 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         panel.appendChild(accRow);
 
-        const importBtn = document.createElement('button');
-        importBtn.type = 'button';
-        importBtn.className = 'prts-btn';
+        const importBtn = createPrtsButton({ className: 'prts-btn', text: '📂 导入干员数据', onClick: handleImport });
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
-        importBtn.innerHTML = '📂 导入干员数据';
-        importBtn.onclick = handleImport;
         panel.appendChild(importBtn);
 
-        const sklandBtn = document.createElement('button');
-        sklandBtn.type = 'button';
-        sklandBtn.className = 'prts-btn';
+        const sklandBtn = createPrtsButton({ className: 'prts-btn', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
-        sklandBtn.appendChild(createSklandIconImage());
-        sklandBtn.appendChild(document.createTextNode('森空岛导入'));
-        sklandBtn.onclick = handleOpenSklandImport;
         panel.appendChild(sklandBtn);
 
         const backupActions = document.createElement('div');
@@ -3385,8 +3777,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             if (isFilterDisabledPage()) return;
 
             if (hasRelevantDomMutation(mutations)) {
+                const dirtyCards = collectDirtyCardsFromMutations(mutations);
                 syncPageScaffold();
-                scheduleFilterUpdate(80);
+                scheduleFilterUpdate(80, { forceFull: false, dirtyCards });
             }
         });
 

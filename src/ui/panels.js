@@ -238,27 +238,34 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         btn.className = 'prts-float-btn';
         btn.title = "脚本设置 (可拖拽)";
         btn.style.touchAction = 'none';
-        btn.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><path d="M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z"></path></svg>`;
+        const floatSvg = document.createElementNS(SVG_NS, 'svg');
+        floatSvg.setAttribute('viewBox', '0 0 32 32');
+        floatSvg.setAttribute('aria-hidden', 'true');
+        floatSvg.setAttribute('focusable', 'false');
+        const floatPath = document.createElementNS(SVG_NS, 'path');
+        floatPath.setAttribute('d', 'M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z');
+        floatSvg.appendChild(floatPath);
+        btn.appendChild(floatSvg);
 
         const panel = document.createElement('div');
         panel.className = 'prts-settings-panel';
 
-        const createSwitch = (label, checked, onChange, configKey) => {
-            const div = document.createElement('div');
-            div.className = 'prts-panel-item';
-            div.innerHTML = `<span>${label}</span><label class="prts-switch"><input type="checkbox" ${checked ? 'checked' : ''}><span class="prts-slider"></span></label>`;
-            const input = div.querySelector('input');
-            if (configKey) input.dataset.prtsConfigKey = configKey;
-            input.onchange = (e) => onChange(e.target.checked);
-            return div;
-        };
+        const createSwitch = (label, checked, onChange, configKey) => createPrtsSwitch({ label, checked, onChange, configKey });
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
         title.tabIndex = 0;
         title.setAttribute('role', 'button');
         title.setAttribute('aria-label', '功能开关');
-        title.innerHTML = `<span style="margin-right:auto">功能开关</span><span style="font-size:12px;opacity:0.6">刷新生效</span>`;
+        const titleText = document.createElement('span');
+        titleText.textContent = '功能开关';
+        titleText.style.marginRight = 'auto';
+        const titleHint = document.createElement('span');
+        titleHint.textContent = '刷新生效';
+        titleHint.style.fontSize = '12px';
+        titleHint.style.opacity = '0.6';
+        title.appendChild(titleText);
+        title.appendChild(titleHint);
         panel.appendChild(title);
 
         let debugOptionsRevealed = CONFIG.compatDebug === true;
@@ -349,21 +356,12 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         panel.appendChild(accRow);
 
-        const importBtn = document.createElement('button');
-        importBtn.type = 'button';
-        importBtn.className = 'prts-btn';
+        const importBtn = createPrtsButton({ className: 'prts-btn', text: '📂 导入干员数据', onClick: handleImport });
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
-        importBtn.innerHTML = '📂 导入干员数据';
-        importBtn.onclick = handleImport;
         panel.appendChild(importBtn);
 
-        const sklandBtn = document.createElement('button');
-        sklandBtn.type = 'button';
-        sklandBtn.className = 'prts-btn';
+        const sklandBtn = createPrtsButton({ className: 'prts-btn', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
-        sklandBtn.appendChild(createSklandIconImage());
-        sklandBtn.appendChild(document.createTextNode('森空岛导入'));
-        sklandBtn.onclick = handleOpenSklandImport;
         panel.appendChild(sklandBtn);
 
         const backupActions = document.createElement('div');

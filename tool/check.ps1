@@ -5,6 +5,7 @@ $userScriptPath = Join-Path $repoRoot "Better-PRTS-Plus.user.js"
 $readmePath = Join-Path $repoRoot "README.md"
 $operatorDataPath = Join-Path $PSScriptRoot "operator-data.generated.json"
 $buildScriptPath = Join-Path $PSScriptRoot "build-userscript.ps1"
+$coreTestScriptPath = Join-Path $PSScriptRoot "test-core.js"
 
 Write-Host "Checking userscript build output..."
 & $buildScriptPath -Check -NoSyntaxCheck
@@ -13,6 +14,12 @@ Write-Host "Checking userscript syntax..."
 node --check $userScriptPath
 if ($LASTEXITCODE -ne 0) {
     throw "node --check failed"
+}
+
+Write-Host "Running core function tests..."
+node $coreTestScriptPath
+if ($LASTEXITCODE -ne 0) {
+    throw "Core function tests failed"
 }
 
 $userScript = Get-Content -LiteralPath $userScriptPath -Raw -Encoding UTF8
@@ -118,6 +125,10 @@ if ($userScript -match "\\u4e00-\\u9fa5") {
 Write-Host "Checking import experience flow..."
 foreach ($requiredFunction in @(
     "showPrtsToast",
+    "createPrtsButton",
+    "createPrtsSwitch",
+    "showPrtsConfirm",
+    "showPrtsPrompt",
     "openOperatorImportDialog",
     "readOperatorImportFile",
     "applyImportedOperatorNames",
@@ -138,6 +149,12 @@ if ($handleImportFunction.Value -match "\balert\s*\(") {
 $operatorImportFlow = [regex]::Match($userScript, "function getImportErrorMessage\(\)[\s\S]*?\r?\n\s*function handleOpenSklandImport\(\)").Value
 if ($operatorImportFlow -match "\balert\s*\(") {
     throw "Operator import flow should use toast/status feedback instead of alerts"
+}
+if ($userScript -match "\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML") {
+    throw "Script UI should be rendered with DOM nodes instead of HTML string assignment"
+}
+if ($userScript -match "\b(?:alert|prompt|confirm)\s*\(") {
+    throw "Blocking browser dialogs should be replaced with Toast/Modal feedback"
 }
 $diffSummaryFunction = [regex]::Match($userScript, "function formatOperatorImportDiff\([^)]*\)[\s\S]*?\r?\n\s*function setOperatorImportStatus")
 $summaryTokens = @(
@@ -165,6 +182,8 @@ foreach ($ownedSelector in @(
     "#prts-toast-container",
     "#prts-import-dialog",
     "#prts-import-dialog-backdrop",
+    "#prts-modal",
+    "#prts-modal-backdrop",
     ".prts-import-status"
 )) {
     if ($userScript -notmatch [regex]::Escape($ownedSelector)) {
@@ -197,10 +216,10 @@ if ($userScript -notmatch "function hmacSha256Hex" -or $userScript -notmatch "fu
     throw "Missing Skland request signing helpers"
 }
 if ($userScript -notmatch "const SKLAND_FAVICON_SVG = '<svg" -or
-    $userScript -notmatch "skland:\s*SKLAND_FAVICON_SVG" -or
+    $userScript -notmatch "skland:\s*'skland'" -or
     $userScript -notmatch 'viewBox="0 0 16 16"' -or
-    $userScript -notmatch "svgPath\.startsWith\('<svg'\)" -or
-    $userScript -notmatch "function createSklandIconImage") {
+    $userScript -notmatch "function createSklandIconImage" -or
+    $userScript -notmatch "new DOMParser\(\)\.parseFromString\(SKLAND_FAVICON_SVG") {
     throw "Skland import buttons should use the inline Skland favicon SVG"
 }
 if ($userScript -match "M17\.9 4\.9") {
@@ -281,7 +300,7 @@ if ($userScript -notmatch "function getOperationResolutionForCard") {
 if ($userScript -notmatch "source: 'fiber'" -or $userScript -notmatch "source: 'fallback'") {
     throw "Operation resolution should distinguish Fiber and fallback sources"
 }
-if ($userScript -match "card\.innerText|cloneNode\(true\)") {
+if ($userScript -match "card\.innerText|card\.cloneNode\(true\)") {
     throw "Card cache signatures should not include script UI or clone entire cards"
 }
 if ($userScript -notmatch "function getCardSignature[\s\S]*prts-status-label[\s\S]*prts-video-box") {
@@ -334,6 +353,18 @@ if ($userScript -notmatch "function handleRouteChange") {
 }
 if ($userScript -notmatch "function hasRelevantDomMutation") {
     throw "Missing relevant DOM mutation filter"
+}
+foreach ($requiredDirtyFilterToken in @(
+    "const cardDiagnosticsCache = new WeakMap\(\)",
+    "let pendingDirtyCards = null",
+    "function collectDirtyCardsFromMutations",
+    "function processOperationCard",
+    "function aggregateCardDiagnostics",
+    "forceFull: false, dirtyCards"
+)) {
+    if ($userScript -notmatch $requiredDirtyFilterToken) {
+        throw "Missing dirty-card filter refresh support: $requiredDirtyFilterToken"
+    }
 }
 Write-Host "Checking Blueprint v4/v6 compatibility selectors..."
 foreach ($selector in @(

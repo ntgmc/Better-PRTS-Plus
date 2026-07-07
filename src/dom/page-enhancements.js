@@ -89,7 +89,30 @@
         descContainer.dataset.biliProcessed = "true";
     }
 
-    function requestFilterUpdate() {
+    function getOperationCards() {
+        return Array.from(document.querySelectorAll('ul.grid > li, .tabular-nums ul > li'));
+    }
+
+    function getCardFromMutationNode(node) {
+        const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+        if (!element) return null;
+        if (element.matches?.('ul.grid > li, .tabular-nums ul > li')) return element;
+        return element.closest?.('ul.grid > li, .tabular-nums ul > li') || null;
+    }
+
+    function queueDirtyCards(cards) {
+        if (!cards || cards.size === 0 || cards.length === 0) return;
+        if (!pendingDirtyCards) pendingDirtyCards = new Set();
+        cards.forEach(card => {
+            if (card?.isConnected) pendingDirtyCards.add(card);
+        });
+    }
+
+    function requestFilterUpdate(options = {}) {
+        if (options.forceFull !== false) {
+            forceNextFilterUpdate = true;
+        }
+        queueDirtyCards(options.dirtyCards);
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(() => {
             rafId = null;
@@ -97,12 +120,16 @@
         });
     }
 
-    function scheduleFilterUpdate(delay = 80) {
+    function scheduleFilterUpdate(delay = 80, options = {}) {
         if (isFilterDisabledPage()) return;
+        if (options.forceFull !== false) {
+            forceNextFilterUpdate = true;
+        }
+        queueDirtyCards(options.dirtyCards);
         if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
         filterDebounceTimer = setTimeout(() => {
             filterDebounceTimer = null;
-            requestFilterUpdate();
+            requestFilterUpdate(options);
         }, delay);
     }
 
@@ -211,7 +238,28 @@
 
     function isScriptOwnedNode(node) {
         if (!node || node.nodeType !== 1) return false;
-        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
+        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
+    }
+
+    function collectDirtyCardsFromMutations(mutations) {
+        const dirtyCards = new Set();
+        for (const mutation of mutations) {
+            if (isScriptOwnedNode(mutation.target)) continue;
+
+            const targetCard = getCardFromMutationNode(mutation.target);
+            if (targetCard) dirtyCards.add(targetCard);
+
+            const changedNodes = Array.from(mutation.addedNodes || []).concat(Array.from(mutation.removedNodes || []));
+            changedNodes.forEach(node => {
+                if (isScriptOwnedNode(node)) return;
+                const card = getCardFromMutationNode(node);
+                if (card) dirtyCards.add(card);
+                if (node?.nodeType === Node.ELEMENT_NODE) {
+                    node.querySelectorAll?.('ul.grid > li, .tabular-nums ul > li').forEach(childCard => dirtyCards.add(childCard));
+                }
+            });
+        }
+        return dirtyCards;
     }
 
     function hasRelevantDomMutation(mutations) {
@@ -326,7 +374,7 @@
                     const interactiveWrapper = tag.closest(BP_SELECTORS.popoverTarget);
                     if (interactiveWrapper) {
                         grid.appendChild(interactiveWrapper);
-                        interactiveWrapper.innerHTML = '';
+                interactiveWrapper.replaceChildren();
                         interactiveWrapper.appendChild(newItem);
                     } else {
                         const tooltipText = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
@@ -385,7 +433,7 @@
         });
 
         if (validOps.length > 0) {
-            content.innerHTML = '';
+            content.replaceChildren();
             const grid = document.createElement('div');
             grid.className = 'prts-popover-grid';
 
@@ -416,106 +464,140 @@
     /**
      * [筛选逻辑的核心应用方法] - 包含最优算法注入
      */
+    function createCardDiagnostics(source = 'none') {
+        return {
+            fiberCards: source === 'fiber' ? 1 : 0,
+            fallbackCards: source === 'fallback' ? 1 : 0,
+            noDataCards: source === 'none' ? 1 : 0
+        };
+    }
+
+    function processOperationCard(card) {
+        const cardInner = card.querySelector(BP_SELECTORS.card);
+        if (!cardInner) {
+            const diagnostics = createCardDiagnostics('none');
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
+
+        optimizeCardVisuals(card, cardInner);
+        cleanBilibiliLinks(cardInner);
+
+        const resolution = getOperationResolutionForCard(card, cardInner);
+        const operation = resolution.operation;
+        const diagnostics = hasEffectiveOperationData(operation)
+            ? createCardDiagnostics(resolution.source)
+            : createCardDiagnostics('none');
+
+        const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
+
+        if (!isAvailable && displayMode === 'HIDE') {
+            if (card.style.display !== 'none') card.style.display = 'none';
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
+
+        if (card.style.display === 'none') card.style.display = '';
+
+        const hasGrayClass = card.classList.contains('prts-card-gray');
+        if (!isAvailable && displayMode === 'GRAY') {
+            if (!hasGrayClass) card.classList.add('prts-card-gray');
+        } else if (hasGrayClass) {
+            card.classList.remove('prts-card-gray');
+        }
+
+        const existingLabel = cardInner.querySelector('.prts-status-label');
+        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1);
+
+        if (!showMissingInfo) {
+            if (existingLabel) existingLabel.remove();
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
+
+        let labelText = '';
+        let iconText = '';
+        let newClass = 'prts-status-label';
+
+        if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
+            newClass += ' prts-label-support';
+            const name = missingOps[0];
+            iconText = '👤';
+            labelText = `需助战: ${name}`;
+        } else {
+            newClass += ' prts-label-missing';
+            const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
+            iconText = '✘';
+            labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+        }
+
+        if (existingLabel) {
+            updateStatusLabel(existingLabel, newClass, iconText, labelText);
+        } else {
+            const labelDiv = document.createElement('div');
+            updateStatusLabel(labelDiv, newClass, iconText, labelText);
+
+            const descContainer = cardInner.querySelector('.prts-desc-wrapper') ||
+                                 cardInner.querySelector('.grow.text-gray-700') ||
+                                 cardInner.querySelector('.text-gray-700');
+            if (descContainer) {
+                cardInner.insertBefore(labelDiv, descContainer);
+            } else {
+                cardInner.appendChild(labelDiv);
+            }
+        }
+
+        cardDiagnosticsCache.set(card, diagnostics);
+        return diagnostics;
+    }
+
+    function aggregateCardDiagnostics(cards) {
+        const diagnostics = {
+            totalCards: cards.length,
+            fiberCards: 0,
+            fallbackCards: 0,
+            noDataCards: 0
+        };
+
+        cards.forEach(card => {
+            const cached = cardDiagnosticsCache.get(card) || processOperationCard(card);
+            diagnostics.fiberCards += cached.fiberCards;
+            diagnostics.fallbackCards += cached.fallbackCards;
+            diagnostics.noDataCards += cached.noDataCards;
+        });
+        return diagnostics;
+    }
+
     function applyFilterLogic() {
         if (isFilterDisabledPage()) {
+            pendingDirtyCards = null;
+            forceNextFilterUpdate = true;
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
             return;
         }
         isProcessingFilter = true;
 
         try {
-            let cards = document.querySelectorAll('ul.grid > li, .tabular-nums ul > li');
-            const diagnostics = {
-                totalCards: cards.length,
-                fiberCards: 0,
-                fallbackCards: 0,
-                noDataCards: 0
-            };
+            const cards = getOperationCards();
             if (cards.length === 0) {
-                setCompatibilityDiagnostics(diagnostics);
+                pendingDirtyCards = null;
+                forceNextFilterUpdate = true;
+                setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
                 return;
             }
 
-            cards.forEach(card => {
-                const cardInner = card.querySelector(BP_SELECTORS.card);
-                if (!cardInner) {
-                    diagnostics.noDataCards += 1;
-                    return;
-                }
+            const dirtyCards = pendingDirtyCards
+                ? Array.from(pendingDirtyCards).filter(card => card.isConnected)
+                : [];
+            pendingDirtyCards = null;
 
-                optimizeCardVisuals(card, cardInner);
-                cleanBilibiliLinks(cardInner);
+            const shouldProcessAll = forceNextFilterUpdate || dirtyCards.length === 0;
+            forceNextFilterUpdate = false;
 
-                const resolution = getOperationResolutionForCard(card, cardInner);
-                const operation = resolution.operation;
-                if (hasEffectiveOperationData(operation)) {
-                    if (resolution.source === 'fiber') {
-                        diagnostics.fiberCards += 1;
-                    } else {
-                        diagnostics.fallbackCards += 1;
-                    }
-                } else {
-                    diagnostics.noDataCards += 1;
-                }
+            const cardsToProcess = shouldProcessAll ? cards : dirtyCards;
+            cardsToProcess.forEach(processOperationCard);
 
-                const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
-
-                if (!isAvailable && displayMode === 'HIDE') {
-                    if (card.style.display !== 'none') card.style.display = 'none';
-                    return;
-                } else {
-                    if (card.style.display === 'none') card.style.display = '';
-                }
-
-                const hasGrayClass = card.classList.contains('prts-card-gray');
-                if (!isAvailable && displayMode === 'GRAY') {
-                    if (!hasGrayClass) card.classList.add('prts-card-gray');
-                } else {
-                    if (hasGrayClass) card.classList.remove('prts-card-gray');
-                }
-
-                const existingLabel = cardInner.querySelector('.prts-status-label');
-                const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1);
-
-                if (!showMissingInfo) {
-                    if (existingLabel) existingLabel.remove();
-                    return;
-                }
-
-                let labelText = '';
-                let iconText = '';
-                let newClass = 'prts-status-label';
-
-                if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
-                    newClass += ' prts-label-support';
-                    const name = missingOps[0];
-                    iconText = '👤';
-                    labelText = `需助战: ${name}`;
-                } else {
-                    newClass += ' prts-label-missing';
-                    const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
-                    iconText = '✘';
-                    labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
-                }
-
-                if (existingLabel) {
-                    updateStatusLabel(existingLabel, newClass, iconText, labelText);
-                } else {
-                    const labelDiv = document.createElement('div');
-                    updateStatusLabel(labelDiv, newClass, iconText, labelText);
-
-                    const descContainer = cardInner.querySelector('.prts-desc-wrapper') ||
-                                         cardInner.querySelector('.grow.text-gray-700') ||
-                                         cardInner.querySelector('.text-gray-700');
-                    if (descContainer) {
-                        cardInner.insertBefore(labelDiv, descContainer);
-                    } else {
-                        cardInner.appendChild(labelDiv);
-                    }
-                }
-            });
-
-            setCompatibilityDiagnostics(diagnostics);
+            setCompatibilityDiagnostics(aggregateCardDiagnostics(cards));
 
         } finally {
             isProcessingFilter = false;

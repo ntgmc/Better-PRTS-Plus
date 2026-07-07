@@ -41,44 +41,6 @@
         statusEl.setAttribute('aria-live', statusType === 'error' ? 'assertive' : 'polite');
     }
 
-    function ensurePrtsToastContainer() {
-        let container = document.getElementById('prts-toast-container');
-        if (container) return container;
-
-        container = document.createElement('div');
-        container.id = 'prts-toast-container';
-        container.setAttribute('role', 'status');
-        container.setAttribute('aria-live', 'polite');
-        container.setAttribute('aria-atomic', 'false');
-        document.body.appendChild(container);
-        return container;
-    }
-
-    function showPrtsToast(message, type = 'info', detail = '') {
-        const container = ensurePrtsToastContainer();
-        const toastType = ['success', 'warning', 'error'].includes(type) ? type : '';
-        const toast = document.createElement('div');
-        toast.className = `prts-toast${toastType ? ` ${toastType}` : ''}`;
-
-        const title = document.createElement('div');
-        title.className = 'prts-toast-title';
-        title.textContent = message;
-        toast.appendChild(title);
-
-        if (detail) {
-            const detailEl = document.createElement('div');
-            detailEl.className = 'prts-toast-detail';
-            detailEl.textContent = detail;
-            toast.appendChild(detailEl);
-        }
-
-        container.appendChild(toast);
-        window.setTimeout(() => {
-            toast.classList.add('is-leaving');
-            window.setTimeout(() => toast.remove(), 220);
-        }, 4000);
-    }
-
     function closeOperatorImportDialog() {
         if (operatorImportDialogCleanup) {
             operatorImportDialogCleanup();
@@ -323,15 +285,13 @@
         } catch (error) {
             opened = null;
         }
-        alert(opened
-            ? '已打开森空岛页面。请在森空岛网页登录后，使用页面右侧的 Better-PRTS-Plus 导入面板读取干员数据。'
-            : '已尝试打开森空岛页面。如果没有看到新窗口，请手动打开 https://www.skland.com/index 登录后使用 Better-PRTS-Plus 导入面板。');
-    }
-
-    function createSklandIconImage() {
-        const wrapper = document.createElement('span');
-        wrapper.innerHTML = SKLAND_FAVICON_SVG;
-        return wrapper.firstElementChild || wrapper;
+        showPrtsToast(
+            opened ? '已打开森空岛页面' : '已尝试打开森空岛页面',
+            opened ? 'success' : 'warning',
+            opened
+                ? '请在森空岛网页登录后，使用页面右侧的 Better-PRTS-Plus 导入面板读取干员数据。'
+                : '如果没有看到新窗口，请手动打开 https://www.skland.com/index 登录后使用 Better-PRTS-Plus 导入面板。'
+        );
     }
 
     function toggleDisplayMode() {
@@ -345,7 +305,7 @@
 
     function toggleFilter(mode) {
         if (ownedOpsSet.size === 0) {
-            alert(`请先为当前 ${getAccountLabel(activeAccountId)} 导入干员数据！`);
+            showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
             return;
         }
         currentFilterMode = (currentFilterMode === mode) ? 'NONE' : mode;
@@ -413,61 +373,28 @@
             support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm3.2-1.6c0-1.77-1.43-3.2-3.2-3.2-.45 0-.86.1-1.26.26.7.74 1.15 1.72 1.24 2.82.02.21.02.41 0 .62-.1 1.04-.51 1.98-1.16 2.71.37.13.75.19 1.18.19 1.77.01 3.2-1.42 3.2-3.4zM8.8 10.4H2.4c-.88 0-1.6.72-1.6 1.6v2.4h9.6V12c0-.88-.72-1.6-1.6-1.6zm-5.6 2.4h4.8v.8H3.2v-.8zm12-1.6h-4.8c.21 0 .4.03.59.07.67.15 1.29.44 1.81.85.91.71 1.5 1.81 1.57 3.04.01.1.01.18.03.28V12c0-.88-.72-1.6-1.6-1.6z',
             user: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
             sidebarToggle: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
-            skland: SKLAND_FAVICON_SVG
-        };
-
-        const renderButton = (id, text, svgPath, onClick, active = false, disabled = false) => {
-            let btn = document.getElementById(id);
-            const iconHTML = svgPath.startsWith('<svg')
-                ? svgPath
-                : `<span class="bp4-icon" aria-hidden="true" style="margin-right:6px"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="${svgPath}"></path></svg></span>`;
-            const innerHTML = `
-                ${iconHTML}
-                <span class="bp4-button-text">${text}</span>
-            `;
-
-            if (!btn) {
-                btn = document.createElement('button');
-                btn.type = "button";
-                btn.className = 'prts-btn';
-                btn.id = id;
-                btn.onclick = onClick;
-            }
-
-            if (btn.innerHTML !== innerHTML) btn.innerHTML = innerHTML;
-
-            if (active && !btn.classList.contains('prts-active')) btn.classList.add('prts-active');
-            if (!active && btn.classList.contains('prts-active')) btn.classList.remove('prts-active');
-
-            if (disabled) {
-                btn.style.opacity = '0.5';
-                btn.style.cursor = 'not-allowed';
-            } else {
-                btn.style.opacity = '1';
-                btn.style.cursor = 'pointer';
-            }
-            return btn;
+            skland: 'skland'
         };
 
         // 顺序生成元素
 
         // (1) 账号循环切换按钮
         const btnAccountText = getAccountLabel(activeAccountId);
-        const btnAccount = renderButton('btn-account', btnAccountText, paths.user, cycleAccount);
+        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: paths.user, onClick: cycleAccount });
         controlBar.appendChild(btnAccount);
 
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
-        const btnImport = renderButton('btn-import', importText, paths.import, handleImport);
+        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: paths.import, onClick: handleImport });
         controlBar.appendChild(btnImport);
 
-        const btnSklandImport = renderButton('btn-skland-import', '森空岛导入', paths.skland, handleOpenSklandImport);
+        const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: paths.skland, onClick: handleOpenSklandImport });
         controlBar.appendChild(btnSklandImport);
 
         // (3) 模式切换
         const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
         const displayModeIcon = displayMode === 'GRAY' ? paths.eyeOn : paths.eyeOff;
-        const btnSetting = renderButton('btn-setting', displayModeText, displayModeIcon, toggleDisplayMode);
+        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, onClick: toggleDisplayMode });
         controlBar.appendChild(btnSetting);
 
         // (4) 分割线
@@ -480,15 +407,26 @@
         controlBar.appendChild(divider);
 
         // (5) 完美阵容
-        const btnPerfect = renderButton('btn-perfect', '完美阵容', paths.perfect, () => toggleFilter('PERFECT'), currentFilterMode === 'PERFECT');
+        const btnPerfect = createPrtsButton({
+            id: 'btn-perfect',
+            text: '完美阵容',
+            icon: paths.perfect,
+            onClick: () => toggleFilter('PERFECT'),
+            active: currentFilterMode === 'PERFECT'
+        });
         controlBar.appendChild(btnPerfect);
 
         // (6) 允许助战
-        const btnSupport = renderButton('btn-support', '允许助战', paths.support, () => toggleFilter('SUPPORT'), currentFilterMode === 'SUPPORT');
+        const btnSupport = createPrtsButton({
+            id: 'btn-support',
+            text: '允许助战',
+            icon: paths.support,
+            onClick: () => toggleFilter('SUPPORT'),
+            active: currentFilterMode === 'SUPPORT'
+        });
         controlBar.appendChild(btnSupport);
 
         if (isNew && currentFilterMode !== 'NONE') {
             requestFilterUpdate();
         }
     }
-

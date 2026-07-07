@@ -22,8 +22,9 @@
             if (isFilterDisabledPage()) return;
 
             if (hasRelevantDomMutation(mutations)) {
+                const dirtyCards = collectDirtyCardsFromMutations(mutations);
                 syncPageScaffold();
-                scheduleFilterUpdate(80);
+                scheduleFilterUpdate(80, { forceFull: false, dirtyCards });
             }
         });
 

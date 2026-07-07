@@ -313,6 +313,21 @@
     .prts-import-status.success { background: #ecfdf5; color: #047857; }
     .prts-import-status.warning { background: #fffbeb; color: #b45309; }
     .prts-import-status.error { background: #fef2f2; color: #b91c1c; }
+    #prts-modal-backdrop { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.46); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    #prts-modal { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
+    #prts-modal * { box-sizing: border-box; }
+    .prts-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid #eef2f7; }
+    .prts-modal-title { margin: 0; color: #111827; font-size: 16px; line-height: 1.45; font-weight: 700; }
+    .prts-modal-body { padding: 14px 16px 0; }
+    .prts-modal-message { color: #475569; font-size: 13px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; }
+    .prts-modal-field { display: block; margin-top: 12px; }
+    .prts-modal-field-label { display: block; margin-bottom: 8px; color: #475569; font-size: 13px; font-weight: 700; }
+    .prts-modal-input { display: block; width: 100%; min-height: 44px; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #111827; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .prts-modal-input:focus { border-color: #2563eb; outline: 2px solid rgba(37, 99, 235, 0.2); outline-offset: 1px; }
+    .prts-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px; }
+    .prts-modal-actions .prts-import-action { min-width: 88px; }
+    .prts-import-action.primary.danger { border-color: #dc2626; background: #dc2626; color: #ffffff; }
+    .prts-import-action.primary.danger:hover, .prts-import-action.primary.danger:focus-visible { border-color: #b91c1c; background: #b91c1c; color: #ffffff; }
     body.dark #prts-import-dialog { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52); }
     body.dark .prts-import-head { border-color: #415262; }
     body.dark .prts-import-title { color: #f5f8fa; }
@@ -328,6 +343,11 @@
     body.dark .prts-import-status.success { background: rgba(16, 185, 129, 0.16); color: #86efac; }
     body.dark .prts-import-status.warning { background: rgba(245, 158, 11, 0.16); color: #fcd34d; }
     body.dark .prts-import-status.error { background: rgba(239, 68, 68, 0.16); color: #fca5a5; }
+    body.dark #prts-modal { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52); }
+    body.dark .prts-modal-head { border-color: #415262; }
+    body.dark .prts-modal-title { color: #f5f8fa; }
+    body.dark .prts-modal-message, body.dark .prts-modal-field-label { color: #c4d0dc; }
+    body.dark .prts-modal-input { border-color: #415262; background: #202b33; color: #f5f8fa; }
     body.high-contrast-theme #prts-import-dialog { border-color: #38383b; background: #18181c; color: #e0e0e0; }
     body.high-contrast-theme .prts-import-head { border-color: #38383b; }
     body.high-contrast-theme .prts-import-title { color: #ffffff; }
@@ -335,11 +355,20 @@
     body.high-contrast-theme .prts-import-textarea { border-color: #38383b; background: #2d2d30; color: #ffffff; }
     body.high-contrast-theme .prts-import-action { border-color: #38383b; background: #2d2d30; color: #e0e0e0; }
     body.high-contrast-theme .prts-import-status { background: #2d2d30; color: #d1d5db; }
+    body.high-contrast-theme #prts-modal { border-color: #38383b; background: #18181c; color: #e0e0e0; }
+    body.high-contrast-theme .prts-modal-head { border-color: #38383b; }
+    body.high-contrast-theme .prts-modal-title { color: #ffffff; }
+    body.high-contrast-theme .prts-modal-message, body.high-contrast-theme .prts-modal-field-label { color: #d1d5db; }
+    body.high-contrast-theme .prts-modal-input { border-color: #38383b; background: #2d2d30; color: #ffffff; }
     @media (max-width: 520px) {
         #prts-import-dialog-backdrop { align-items: flex-end; padding: 12px; }
         #prts-import-dialog { width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
+        #prts-modal-backdrop { align-items: flex-end; padding: 12px; }
+        #prts-modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); }
         .prts-import-actions { flex-direction: column; }
         .prts-import-action { width: 100%; }
+        .prts-modal-actions { flex-direction: column-reverse; }
+        .prts-modal-actions .prts-import-action { width: 100%; }
     }
     @media (prefers-reduced-motion: reduce) {
         .prts-toast { transition: none; }
