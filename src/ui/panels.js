@@ -160,11 +160,17 @@
             importBtn.textContent = '读取中...';
             setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, 'loading');
             try {
-                const summary = await importSklandOperatorsToAccount(targetAccountId);
+                const summary = await importSklandOperatorsToAccount(targetAccountId, {
+                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, targetAccountId)
+                });
                 targetAccountId = summary.accountId;
                 renderSklandAccountButtons(accountButtons, targetAccountId);
                 setSklandPanelStatus(status, formatSklandImportSummary(summary), 'success');
             } catch (error) {
+                if (isSklandImportCancelledError(error)) {
+                    setSklandPanelStatus(status, '已取消角色选择，未修改账号数据。', '');
+                    return;
+                }
                 console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
                 setSklandPanelStatus(status, error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。', 'error');
             } finally {
@@ -178,6 +184,112 @@
 
         panel.appendChild(body);
         document.body.appendChild(panel);
+    }
+
+    async function showSklandBindingPicker(bindings, preferredUid, accountId) {
+        const availableBindings = normalizeSklandArknightsBindings(bindings);
+        if (availableBindings.length === 0) return null;
+
+        const accountLabel = getAccountLabel(accountId);
+        const lastUid = normalizeSklandSyncText(getAccountSklandSyncMeta(accountId)?.uid);
+        let selectedBinding = selectSklandBindingOption(availableBindings, preferredUid) || availableBindings[0];
+
+        const content = document.createElement('div');
+        content.className = 'prts-skland-binding-picker';
+
+        const intro = document.createElement('p');
+        intro.className = 'prts-skland-binding-intro';
+        intro.textContent = `检测到多个明日方舟角色，请选择要导入到 ${accountLabel} 的角色。`;
+        content.appendChild(intro);
+
+        const list = document.createElement('div');
+        list.className = 'prts-skland-binding-list';
+        list.setAttribute('role', 'radiogroup');
+        list.setAttribute('aria-label', '森空岛明日方舟角色');
+        content.appendChild(list);
+
+        const options = [];
+        const selectByIndex = (index, focus = false) => {
+            const next = options[index];
+            if (!next) return;
+            selectedBinding = next.binding;
+            options.forEach(option => {
+                const selected = option.binding.uid === selectedBinding.uid;
+                option.root.classList.toggle('is-selected', selected);
+                option.input.checked = selected;
+            });
+            if (focus) next.input.focus();
+        };
+
+        availableBindings.forEach((binding, index) => {
+            const option = document.createElement('label');
+            option.className = 'prts-skland-binding-option';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'prts-skland-binding';
+            input.className = 'prts-skland-binding-radio';
+            input.value = binding.uid;
+            input.checked = binding.uid === selectedBinding.uid;
+            input.onchange = () => selectByIndex(index);
+            input.onkeydown = event => {
+                if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) return;
+                event.preventDefault();
+                const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+                const nextIndex = (index + delta + availableBindings.length) % availableBindings.length;
+                selectByIndex(nextIndex, true);
+            };
+
+            const textWrap = document.createElement('span');
+            textWrap.className = 'prts-skland-binding-text';
+
+            const nameRow = document.createElement('span');
+            nameRow.className = 'prts-skland-binding-name-row';
+
+            const name = document.createElement('span');
+            name.className = 'prts-skland-binding-name';
+            name.textContent = binding.nickname || '博士';
+            nameRow.appendChild(name);
+
+            if (lastUid && binding.uid === lastUid) {
+                const badge = document.createElement('span');
+                badge.className = 'prts-skland-binding-badge';
+                badge.textContent = '上次导入';
+                nameRow.appendChild(badge);
+            } else if (binding.isDefault) {
+                const badge = document.createElement('span');
+                badge.className = 'prts-skland-binding-badge';
+                badge.textContent = '森空岛默认';
+                nameRow.appendChild(badge);
+            }
+
+            const meta = document.createElement('span');
+            meta.className = 'prts-skland-binding-meta';
+            meta.textContent = `UID ${binding.uid} / ${binding.channelName || '官方'}`;
+
+            textWrap.appendChild(nameRow);
+            textWrap.appendChild(meta);
+            option.appendChild(input);
+            option.appendChild(textWrap);
+            option.classList.toggle('is-selected', input.checked);
+            list.appendChild(option);
+            options.push({ root: option, input, binding });
+        });
+
+        const resultPromise = showPrtsModal({
+            title: '选择森空岛角色',
+            message: content,
+            confirmText: '导入所选角色',
+            cancelText: '取消'
+        });
+
+        window.setTimeout(() => {
+            const selectedOption = options.find(option => option.binding.uid === selectedBinding.uid);
+            selectedOption?.input.focus();
+        }, 20);
+
+        const confirmed = await resultPromise;
+        return confirmed === true ? selectedBinding : null;
     }
 
     function renderSklandSelectedAccountStatus(status, accountId, fallbackText) {

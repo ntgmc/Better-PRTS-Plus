@@ -1,3 +1,15 @@
+const SKLAND_IMPORT_CANCELLED_CODE = 'SKLAND_IMPORT_CANCELLED';
+
+function createSklandImportCancelledError() {
+        const error = new Error('已取消森空岛角色选择。');
+        error.code = SKLAND_IMPORT_CANCELLED_CODE;
+        return error;
+    }
+
+    function isSklandImportCancelledError(error) {
+        return Boolean(error && typeof error === 'object' && error.code === SKLAND_IMPORT_CANCELLED_CODE);
+    }
+
     function readSklandCredentialFromStorage() {
         let raw = '';
         try {
@@ -57,11 +69,13 @@
         return candidate;
     }
 
-    async function importSklandOperatorsToAccount(accountId) {
+    async function importSklandOperatorsToAccount(accountId, options = {}) {
         const targetAccountId = normalizeAccountId(accountId);
+        const importOptions = isPlainRecord(options) ? options : {};
         const credential = readSklandCredentialFromStorage();
         const refreshed = await refreshSklandToken(credential);
-        const binding = await getSklandArknightsBinding(credential, refreshed.token, refreshed.timestamp);
+        const bindingOptions = await getSklandArknightsBindingOptions(credential, refreshed.token, refreshed.timestamp);
+        const binding = await resolveSklandImportBinding(targetAccountId, bindingOptions, importOptions);
         const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const names = convertSklandPlayerInfoToNames(playerInfo);
         const importedAt = new Date().toISOString();
@@ -107,36 +121,112 @@
         };
     }
 
-    async function getSklandArknightsBinding(credential, token, timestamp) {
+    async function getSklandArknightsBindingOptions(credential, token, timestamp) {
         const data = await sklandSignedGet('/api/v1/game/player/binding', '', credential, token, timestamp);
         if (data.code !== 0 || data.message !== 'OK' || !isPlainRecord(data.data) || !Array.isArray(data.data.list)) {
             throw new Error('读取森空岛绑定角色失败，请稍后重试。');
         }
 
-        const binding = selectSklandArknightsBinding(data.data.list);
-        if (binding) return binding;
+        const bindingOptions = getSklandArknightsBindingOptionsFromList(data.data.list);
+        if (bindingOptions.bindings.length > 0) return bindingOptions;
 
         throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
     }
 
-    function selectSklandArknightsBinding(list) {
-        if (!Array.isArray(list)) return null;
+    function getSklandArknightsBindingOptionsFromList(list) {
+        if (!Array.isArray(list)) return { bindings: [], defaultUid: '' };
 
+        let lastDefaultUid = '';
         for (const item of list) {
             if (!isPlainRecord(item) || item.appCode !== 'arknights' || !Array.isArray(item.bindingList)) continue;
-            const bindingList = item.bindingList.filter(isPlainRecord);
             const defaultUid = stringValue(item.defaultUid);
-            const matched = defaultUid
-                ? bindingList.find(binding => stringValue(binding.uid) === defaultUid) || bindingList[0]
-                : bindingList.find(binding => stringValue(binding.uid));
-            const uid = defaultUid || stringValue(matched?.uid);
-            const nickname = stringValue(matched?.nickName ?? matched?.nickname ?? uid);
-            const channel = stringValue(matched?.channelName ?? matched?.channel ?? '官方');
-            if (uid && nickname) {
-                return { uid, nickname, channelName: channel || '官方' };
-            }
+            lastDefaultUid = defaultUid || lastDefaultUid;
+            const bindings = normalizeSklandArknightsBindings(item.bindingList, defaultUid);
+            if (bindings.length > 0) return { bindings, defaultUid };
         }
-        return null;
+        return { bindings: [], defaultUid: lastDefaultUid };
+    }
+
+    function normalizeSklandBindingOption(value, defaultUid = '') {
+        if (!isPlainRecord(value)) return null;
+
+        const uid = normalizeSklandSyncText(value.uid);
+        if (!uid) return null;
+
+        const defaultUidText = normalizeSklandSyncText(defaultUid);
+        const nickname = normalizeSklandSyncText(value.nickName ?? value.nickname ?? uid) || uid;
+        const channelName = normalizeSklandSyncText(value.channelName ?? value.channel ?? '官方', 32) || '官方';
+        return {
+            uid,
+            nickname,
+            channelName,
+            isDefault: defaultUidText ? uid === defaultUidText : value.isDefault === true
+        };
+    }
+
+    function normalizeSklandArknightsBindings(bindingList, defaultUid = '') {
+        if (!Array.isArray(bindingList)) return [];
+
+        const seen = new Set();
+        const bindings = [];
+        bindingList.forEach(rawBinding => {
+            const binding = normalizeSklandBindingOption(rawBinding, defaultUid);
+            if (!binding || seen.has(binding.uid)) return;
+            seen.add(binding.uid);
+            bindings.push(binding);
+        });
+        return bindings;
+    }
+
+    function selectSklandBindingOption(bindings, preferredUid = '', defaultUid = '') {
+        const normalized = normalizeSklandArknightsBindings(bindings, defaultUid);
+        if (normalized.length === 0) return null;
+
+        const preferredUidText = normalizeSklandSyncText(preferredUid);
+        if (preferredUidText) {
+            const preferred = normalized.find(binding => binding.uid === preferredUidText);
+            if (preferred) return preferred;
+        }
+
+        const defaultBinding = normalized.find(binding => binding.isDefault);
+        return defaultBinding || normalized[0];
+    }
+
+    function selectSklandArknightsBinding(list, preferredUid = '') {
+        const bindingOptions = getSklandArknightsBindingOptionsFromList(list);
+        return selectSklandBindingOption(bindingOptions.bindings, preferredUid, bindingOptions.defaultUid);
+    }
+
+    function resolveSelectedSklandBinding(selected, bindings) {
+        const uid = typeof selected === 'string' || typeof selected === 'number'
+            ? normalizeSklandSyncText(selected)
+            : normalizeSklandSyncText(selected?.uid);
+        if (!uid) return null;
+        return bindings.find(binding => binding.uid === uid) || null;
+    }
+
+    async function resolveSklandImportBinding(accountId, bindingOptions, options = {}) {
+        const bindings = normalizeSklandArknightsBindings(bindingOptions?.bindings || [], bindingOptions?.defaultUid);
+        if (bindings.length === 0) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+
+        const accountSyncMeta = getAccountSklandSyncMeta(accountId);
+        const preferredUid = normalizeSklandSyncText(options.preferredUid ?? accountSyncMeta?.uid);
+        const defaultBinding = selectSklandBindingOption(bindings, preferredUid, bindingOptions?.defaultUid);
+        if (!defaultBinding) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        if (bindings.length === 1 || typeof options.selectBinding !== 'function') return defaultBinding;
+
+        const selected = await options.selectBinding(bindings, defaultBinding, {
+            accountId: normalizeAccountId(accountId),
+            preferredUid,
+            defaultUid: normalizeSklandSyncText(bindingOptions?.defaultUid)
+        });
+        if (selected === null || selected === undefined || selected === false) {
+            throw createSklandImportCancelledError();
+        }
+
+        const resolved = resolveSelectedSklandBinding(selected, bindings);
+        if (!resolved) throw new Error('选择的森空岛角色无效，请重试。');
+        return resolved;
     }
 
     async function getSklandGamePlayerInfo(credential, token, timestamp, uid) {

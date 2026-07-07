@@ -249,6 +249,29 @@ foreach ($endpoint in @('/api/v1/auth/refresh', '/api/v1/game/player/binding', '
 if ($userScript -notmatch "function hmacSha256Hex" -or $userScript -notmatch "function md5Hex") {
     throw "Missing Skland request signing helpers"
 }
+foreach ($requiredSklandBindingFunction in @(
+    "getSklandArknightsBindingOptionsFromList",
+    "normalizeSklandArknightsBindings",
+    "selectSklandBindingOption",
+    "showSklandBindingPicker",
+    "isSklandImportCancelledError"
+)) {
+    if ($userScript -notmatch "function $requiredSklandBindingFunction") {
+        throw "Missing Skland multi-role helper: $requiredSklandBindingFunction"
+    }
+}
+if ($userScript -notmatch "function importSklandOperatorsToAccount\(accountId, options = \{\}\)[\s\S]*resolveSklandImportBinding" -or
+    $userScript -notmatch "function resolveSklandImportBinding\([^)]*\)[\s\S]*options\.selectBinding") {
+    throw "Skland import should resolve multi-role bindings through an optional selectBinding callback"
+}
+if ($userScript -notmatch "function createSklandImportPanel\(\)[\s\S]*selectBinding:[\s\S]*showSklandBindingPicker") {
+    throw "Skland import panel should open the multi-role picker when multiple roles are available"
+}
+if ($userScript -notmatch "function showSklandBindingPicker\([^)]*\)[\s\S]*prts-skland-binding-list" -or
+    $userScript -notmatch "function showSklandBindingPicker\([^)]*\)[\s\S]*type = 'radio'" -or
+    $userScript -notmatch "function showSklandBindingPicker\([^)]*\)[\s\S]*UID ") {
+    throw "Skland role picker should render accessible role choices with nickname, UID, and channel"
+}
 if ($userScript -notmatch "const SKLAND_FAVICON_SVG = '<svg" -or
     $userScript -notmatch "skland:\s*'skland'" -or
     $userScript -notmatch 'viewBox="0 0 16 16"' -or

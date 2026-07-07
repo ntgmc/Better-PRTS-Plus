@@ -367,6 +367,18 @@
         if (typeof value === 'number' && Number.isFinite(value)) return String(value);
         return '';
     }
+const SKLAND_IMPORT_CANCELLED_CODE = 'SKLAND_IMPORT_CANCELLED';
+
+function createSklandImportCancelledError() {
+        const error = new Error('已取消森空岛角色选择。');
+        error.code = SKLAND_IMPORT_CANCELLED_CODE;
+        return error;
+    }
+
+    function isSklandImportCancelledError(error) {
+        return Boolean(error && typeof error === 'object' && error.code === SKLAND_IMPORT_CANCELLED_CODE);
+    }
+
     function readSklandCredentialFromStorage() {
         let raw = '';
         try {
@@ -426,11 +438,13 @@
         return candidate;
     }
 
-    async function importSklandOperatorsToAccount(accountId) {
+    async function importSklandOperatorsToAccount(accountId, options = {}) {
         const targetAccountId = normalizeAccountId(accountId);
+        const importOptions = isPlainRecord(options) ? options : {};
         const credential = readSklandCredentialFromStorage();
         const refreshed = await refreshSklandToken(credential);
-        const binding = await getSklandArknightsBinding(credential, refreshed.token, refreshed.timestamp);
+        const bindingOptions = await getSklandArknightsBindingOptions(credential, refreshed.token, refreshed.timestamp);
+        const binding = await resolveSklandImportBinding(targetAccountId, bindingOptions, importOptions);
         const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const names = convertSklandPlayerInfoToNames(playerInfo);
         const importedAt = new Date().toISOString();
@@ -476,36 +490,112 @@
         };
     }
 
-    async function getSklandArknightsBinding(credential, token, timestamp) {
+    async function getSklandArknightsBindingOptions(credential, token, timestamp) {
         const data = await sklandSignedGet('/api/v1/game/player/binding', '', credential, token, timestamp);
         if (data.code !== 0 || data.message !== 'OK' || !isPlainRecord(data.data) || !Array.isArray(data.data.list)) {
             throw new Error('读取森空岛绑定角色失败，请稍后重试。');
         }
 
-        const binding = selectSklandArknightsBinding(data.data.list);
-        if (binding) return binding;
+        const bindingOptions = getSklandArknightsBindingOptionsFromList(data.data.list);
+        if (bindingOptions.bindings.length > 0) return bindingOptions;
 
         throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
     }
 
-    function selectSklandArknightsBinding(list) {
-        if (!Array.isArray(list)) return null;
+    function getSklandArknightsBindingOptionsFromList(list) {
+        if (!Array.isArray(list)) return { bindings: [], defaultUid: '' };
 
+        let lastDefaultUid = '';
         for (const item of list) {
             if (!isPlainRecord(item) || item.appCode !== 'arknights' || !Array.isArray(item.bindingList)) continue;
-            const bindingList = item.bindingList.filter(isPlainRecord);
             const defaultUid = stringValue(item.defaultUid);
-            const matched = defaultUid
-                ? bindingList.find(binding => stringValue(binding.uid) === defaultUid) || bindingList[0]
-                : bindingList.find(binding => stringValue(binding.uid));
-            const uid = defaultUid || stringValue(matched?.uid);
-            const nickname = stringValue(matched?.nickName ?? matched?.nickname ?? uid);
-            const channel = stringValue(matched?.channelName ?? matched?.channel ?? '官方');
-            if (uid && nickname) {
-                return { uid, nickname, channelName: channel || '官方' };
-            }
+            lastDefaultUid = defaultUid || lastDefaultUid;
+            const bindings = normalizeSklandArknightsBindings(item.bindingList, defaultUid);
+            if (bindings.length > 0) return { bindings, defaultUid };
         }
-        return null;
+        return { bindings: [], defaultUid: lastDefaultUid };
+    }
+
+    function normalizeSklandBindingOption(value, defaultUid = '') {
+        if (!isPlainRecord(value)) return null;
+
+        const uid = normalizeSklandSyncText(value.uid);
+        if (!uid) return null;
+
+        const defaultUidText = normalizeSklandSyncText(defaultUid);
+        const nickname = normalizeSklandSyncText(value.nickName ?? value.nickname ?? uid) || uid;
+        const channelName = normalizeSklandSyncText(value.channelName ?? value.channel ?? '官方', 32) || '官方';
+        return {
+            uid,
+            nickname,
+            channelName,
+            isDefault: defaultUidText ? uid === defaultUidText : value.isDefault === true
+        };
+    }
+
+    function normalizeSklandArknightsBindings(bindingList, defaultUid = '') {
+        if (!Array.isArray(bindingList)) return [];
+
+        const seen = new Set();
+        const bindings = [];
+        bindingList.forEach(rawBinding => {
+            const binding = normalizeSklandBindingOption(rawBinding, defaultUid);
+            if (!binding || seen.has(binding.uid)) return;
+            seen.add(binding.uid);
+            bindings.push(binding);
+        });
+        return bindings;
+    }
+
+    function selectSklandBindingOption(bindings, preferredUid = '', defaultUid = '') {
+        const normalized = normalizeSklandArknightsBindings(bindings, defaultUid);
+        if (normalized.length === 0) return null;
+
+        const preferredUidText = normalizeSklandSyncText(preferredUid);
+        if (preferredUidText) {
+            const preferred = normalized.find(binding => binding.uid === preferredUidText);
+            if (preferred) return preferred;
+        }
+
+        const defaultBinding = normalized.find(binding => binding.isDefault);
+        return defaultBinding || normalized[0];
+    }
+
+    function selectSklandArknightsBinding(list, preferredUid = '') {
+        const bindingOptions = getSklandArknightsBindingOptionsFromList(list);
+        return selectSklandBindingOption(bindingOptions.bindings, preferredUid, bindingOptions.defaultUid);
+    }
+
+    function resolveSelectedSklandBinding(selected, bindings) {
+        const uid = typeof selected === 'string' || typeof selected === 'number'
+            ? normalizeSklandSyncText(selected)
+            : normalizeSklandSyncText(selected?.uid);
+        if (!uid) return null;
+        return bindings.find(binding => binding.uid === uid) || null;
+    }
+
+    async function resolveSklandImportBinding(accountId, bindingOptions, options = {}) {
+        const bindings = normalizeSklandArknightsBindings(bindingOptions?.bindings || [], bindingOptions?.defaultUid);
+        if (bindings.length === 0) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+
+        const accountSyncMeta = getAccountSklandSyncMeta(accountId);
+        const preferredUid = normalizeSklandSyncText(options.preferredUid ?? accountSyncMeta?.uid);
+        const defaultBinding = selectSklandBindingOption(bindings, preferredUid, bindingOptions?.defaultUid);
+        if (!defaultBinding) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        if (bindings.length === 1 || typeof options.selectBinding !== 'function') return defaultBinding;
+
+        const selected = await options.selectBinding(bindings, defaultBinding, {
+            accountId: normalizeAccountId(accountId),
+            preferredUid,
+            defaultUid: normalizeSklandSyncText(bindingOptions?.defaultUid)
+        });
+        if (selected === null || selected === undefined || selected === false) {
+            throw createSklandImportCancelledError();
+        }
+
+        const resolved = resolveSelectedSklandBinding(selected, bindings);
+        if (!resolved) throw new Error('选择的森空岛角色无效，请重试。');
+        return resolved;
     }
 
     async function getSklandGamePlayerInfo(credential, token, timestamp, uid) {
@@ -1474,7 +1564,7 @@
         color: var(--prts-color-text) !important;
         text-decoration: none !important;
     }
-    .prts-btn:focus-visible, .prts-import-action:focus-visible, .prts-account-rename:focus-visible, .prts-skland-close:focus-visible, .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-link:focus-visible, .prts-float-btn:focus-visible {
+    .prts-btn:focus-visible, .prts-import-action:focus-visible, .prts-account-rename:focus-visible, .prts-skland-close:focus-visible, .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-float-btn:focus-visible {
         outline: 2px solid var(--prts-color-primary) !important;
         outline-offset: 2px !important;
         box-shadow: 0 0 0 4px var(--prts-color-ring) !important;
@@ -1832,6 +1922,33 @@
     .prts-skland-status.error { background: #fef2f2; color: #b91c1c; }
     .prts-skland-link { display: inline-flex; align-items: center; margin-top: 10px; color: #2563eb; font-size: 12px; text-decoration: none; }
     .prts-skland-link:hover { text-decoration: underline; }
+    #prts-modal-backdrop { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.46); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    #prts-modal { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
+    #prts-modal * { box-sizing: border-box; }
+    .prts-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid #eef2f7; }
+    .prts-modal-title { margin: 0; color: #111827; font-size: 16px; line-height: 1.45; font-weight: 700; }
+    .prts-modal-body { padding: 14px 16px 0; }
+    .prts-modal-message { color: #475569; font-size: 13px; line-height: 1.55; white-space: normal; overflow-wrap: anywhere; }
+    .prts-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px; }
+    .prts-modal-actions .prts-import-action { min-width: 88px; }
+    .prts-import-close { flex: 0 0 auto; width: 44px; min-height: 44px; border: none; border-radius: 4px; background: transparent; color: #64748b; cursor: pointer; font-size: 24px; line-height: 1; }
+    .prts-import-close:hover, .prts-import-close:focus-visible { background: #f1f5f9; color: #0f172a; outline: none; }
+    .prts-import-action { min-height: 44px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #334155; cursor: pointer; padding: 0 14px; font-size: 13px; font-weight: 700; }
+    .prts-import-action:hover, .prts-import-action:focus-visible { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; outline: none; }
+    .prts-import-action.primary { border-color: #2563eb; background: #2563eb; color: #ffffff; }
+    .prts-import-action.primary:hover, .prts-import-action.primary:focus-visible { border-color: #1d4ed8; background: #1d4ed8; color: #ffffff; }
+    .prts-skland-binding-picker { display: flex; flex-direction: column; gap: 10px; }
+    .prts-skland-binding-intro { margin: 0; color: #475569; font-size: 13px; line-height: 1.55; }
+    .prts-skland-binding-list { display: flex; flex-direction: column; gap: 8px; max-height: min(320px, calc(100vh - 220px)); overflow: auto; padding: 2px; }
+    .prts-skland-binding-option { display: flex; align-items: flex-start; gap: 10px; min-height: 58px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #111827; cursor: pointer; transition: border-color 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1); }
+    .prts-skland-binding-option:hover { border-color: #93c5fd; background: #f8fafc; }
+    .prts-skland-binding-option.is-selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }
+    .prts-skland-binding-radio { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #2563eb; cursor: pointer; }
+    .prts-skland-binding-text { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 4px; }
+    .prts-skland-binding-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+    .prts-skland-binding-name { min-width: 0; color: #111827; font-size: 14px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
+    .prts-skland-binding-badge { flex: 0 0 auto; padding: 2px 6px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 11px; line-height: 1.2; font-weight: 700; }
+    .prts-skland-binding-meta { color: #64748b; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
     :root {
         --prts-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
         --prts-color-primary: #2563eb;
@@ -1892,7 +2009,49 @@
     }
     .prts-skland-head { border-color: var(--prts-color-border-soft) !important; }
     .prts-skland-title { color: var(--prts-color-text) !important; }
-    .prts-skland-subtitle, .prts-skland-label { color: var(--prts-color-text-muted) !important; }
+    .prts-skland-subtitle, .prts-skland-label, .prts-skland-binding-intro { color: var(--prts-color-text-muted) !important; }
+    #prts-modal-backdrop { background: rgba(15, 23, 42, 0.52) !important; }
+    #prts-modal {
+        border-color: var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-lg) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    .prts-modal-head { border-color: var(--prts-color-border-soft) !important; }
+    .prts-modal-title { color: var(--prts-color-text) !important; }
+    .prts-modal-message { color: var(--prts-color-text-muted) !important; }
+    .prts-import-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--prts-color-text-subtle) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-import-close .bp4-icon { width: 16px; height: 16px; }
+    .prts-import-close:hover, .prts-import-close:focus-visible {
+        background: var(--prts-color-surface-hover) !important;
+        color: var(--prts-color-text) !important;
+    }
+    .prts-import-action {
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text-muted) !important;
+        font-family: var(--prts-font-sans) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-import-action:hover, .prts-import-action:focus-visible {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary) !important;
+    }
+    .prts-import-action.primary {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary) !important;
+        color: #ffffff !important;
+    }
     .prts-skland-close {
         display: inline-flex;
         align-items: center;
@@ -1934,16 +2093,45 @@
     }
     .prts-skland-status.loading { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary) !important; }
     .prts-skland-link { color: var(--prts-color-primary) !important; }
-    .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible {
+    .prts-skland-binding-option {
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        transition: border-color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-skland-binding-option:hover {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-surface-hover) !important;
+    }
+    .prts-skland-binding-option.is-selected {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        box-shadow: 0 0 0 3px var(--prts-color-ring) !important;
+    }
+    .prts-skland-binding-radio { accent-color: var(--prts-color-primary); }
+    .prts-skland-binding-name { color: var(--prts-color-text) !important; }
+    .prts-skland-binding-meta { color: var(--prts-color-text-subtle) !important; }
+    .prts-skland-binding-badge {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary) !important;
+    }
+    .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-import-close:focus-visible, .prts-import-action:focus-visible {
         outline: 2px solid var(--prts-color-primary);
         outline-offset: 2px;
         box-shadow: 0 0 0 4px var(--prts-color-ring);
     }
     @media (max-width: 520px) {
         #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; }
+        #prts-modal-backdrop { align-items: flex-end; padding: 12px; }
+        #prts-modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: var(--prts-radius-lg) var(--prts-radius-lg) 0 0 !important; }
+        .prts-modal-actions { flex-direction: column-reverse; }
+        .prts-modal-actions .prts-import-action { width: 100%; }
+        .prts-skland-binding-list { max-height: min(360px, calc(100vh - 260px)); }
     }
     @media (prefers-reduced-motion: reduce) {
-        .prts-skland-close, .prts-skland-primary { transition: none !important; }
+        .prts-skland-close, .prts-skland-primary, .prts-skland-binding-option, .prts-import-close, .prts-import-action { transition: none !important; }
     }
 `;
 
@@ -4236,11 +4424,17 @@
             importBtn.textContent = '读取中...';
             setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, 'loading');
             try {
-                const summary = await importSklandOperatorsToAccount(targetAccountId);
+                const summary = await importSklandOperatorsToAccount(targetAccountId, {
+                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, targetAccountId)
+                });
                 targetAccountId = summary.accountId;
                 renderSklandAccountButtons(accountButtons, targetAccountId);
                 setSklandPanelStatus(status, formatSklandImportSummary(summary), 'success');
             } catch (error) {
+                if (isSklandImportCancelledError(error)) {
+                    setSklandPanelStatus(status, '已取消角色选择，未修改账号数据。', '');
+                    return;
+                }
                 console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
                 setSklandPanelStatus(status, error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。', 'error');
             } finally {
@@ -4254,6 +4448,112 @@
 
         panel.appendChild(body);
         document.body.appendChild(panel);
+    }
+
+    async function showSklandBindingPicker(bindings, preferredUid, accountId) {
+        const availableBindings = normalizeSklandArknightsBindings(bindings);
+        if (availableBindings.length === 0) return null;
+
+        const accountLabel = getAccountLabel(accountId);
+        const lastUid = normalizeSklandSyncText(getAccountSklandSyncMeta(accountId)?.uid);
+        let selectedBinding = selectSklandBindingOption(availableBindings, preferredUid) || availableBindings[0];
+
+        const content = document.createElement('div');
+        content.className = 'prts-skland-binding-picker';
+
+        const intro = document.createElement('p');
+        intro.className = 'prts-skland-binding-intro';
+        intro.textContent = `检测到多个明日方舟角色，请选择要导入到 ${accountLabel} 的角色。`;
+        content.appendChild(intro);
+
+        const list = document.createElement('div');
+        list.className = 'prts-skland-binding-list';
+        list.setAttribute('role', 'radiogroup');
+        list.setAttribute('aria-label', '森空岛明日方舟角色');
+        content.appendChild(list);
+
+        const options = [];
+        const selectByIndex = (index, focus = false) => {
+            const next = options[index];
+            if (!next) return;
+            selectedBinding = next.binding;
+            options.forEach(option => {
+                const selected = option.binding.uid === selectedBinding.uid;
+                option.root.classList.toggle('is-selected', selected);
+                option.input.checked = selected;
+            });
+            if (focus) next.input.focus();
+        };
+
+        availableBindings.forEach((binding, index) => {
+            const option = document.createElement('label');
+            option.className = 'prts-skland-binding-option';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'prts-skland-binding';
+            input.className = 'prts-skland-binding-radio';
+            input.value = binding.uid;
+            input.checked = binding.uid === selectedBinding.uid;
+            input.onchange = () => selectByIndex(index);
+            input.onkeydown = event => {
+                if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) return;
+                event.preventDefault();
+                const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+                const nextIndex = (index + delta + availableBindings.length) % availableBindings.length;
+                selectByIndex(nextIndex, true);
+            };
+
+            const textWrap = document.createElement('span');
+            textWrap.className = 'prts-skland-binding-text';
+
+            const nameRow = document.createElement('span');
+            nameRow.className = 'prts-skland-binding-name-row';
+
+            const name = document.createElement('span');
+            name.className = 'prts-skland-binding-name';
+            name.textContent = binding.nickname || '博士';
+            nameRow.appendChild(name);
+
+            if (lastUid && binding.uid === lastUid) {
+                const badge = document.createElement('span');
+                badge.className = 'prts-skland-binding-badge';
+                badge.textContent = '上次导入';
+                nameRow.appendChild(badge);
+            } else if (binding.isDefault) {
+                const badge = document.createElement('span');
+                badge.className = 'prts-skland-binding-badge';
+                badge.textContent = '森空岛默认';
+                nameRow.appendChild(badge);
+            }
+
+            const meta = document.createElement('span');
+            meta.className = 'prts-skland-binding-meta';
+            meta.textContent = `UID ${binding.uid} / ${binding.channelName || '官方'}`;
+
+            textWrap.appendChild(nameRow);
+            textWrap.appendChild(meta);
+            option.appendChild(input);
+            option.appendChild(textWrap);
+            option.classList.toggle('is-selected', input.checked);
+            list.appendChild(option);
+            options.push({ root: option, input, binding });
+        });
+
+        const resultPromise = showPrtsModal({
+            title: '选择森空岛角色',
+            message: content,
+            confirmText: '导入所选角色',
+            cancelText: '取消'
+        });
+
+        window.setTimeout(() => {
+            const selectedOption = options.find(option => option.binding.uid === selectedBinding.uid);
+            selectedOption?.input.focus();
+        }, 20);
+
+        const confirmed = await resultPromise;
+        return confirmed === true ? selectedBinding : null;
     }
 
     function renderSklandSelectedAccountStatus(status, accountId, fallbackText) {

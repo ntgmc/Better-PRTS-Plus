@@ -26,6 +26,9 @@ globalThis.__testExports = {
   normalizeSklandImportSummary,
   matchOperatorGroups,
   parseAccountsBackup,
+  getSklandArknightsBindingOptionsFromList,
+  normalizeSklandArknightsBindings,
+  selectSklandBindingOption,
   selectSklandArknightsBinding,
   convertSklandPlayerInfoToNames
 };
@@ -67,6 +70,9 @@ const {
   normalizeSklandImportSummary,
   matchOperatorGroups,
   parseAccountsBackup,
+  getSklandArknightsBindingOptionsFromList,
+  normalizeSklandArknightsBindings,
+  selectSklandBindingOption,
   selectSklandArknightsBinding,
   convertSklandPlayerInfoToNames
 } = context.__testExports;
@@ -255,6 +261,103 @@ test('parseAccountsBackup rejects incompatible backup schema', () => {
   assert.throws(() => parseAccountsBackup({ type: ACCOUNT_BACKUP_TYPE, version: 999 }), /备份格式/);
 });
 
+test('getSklandArknightsBindingOptionsFromList normalizes multiple Arknights bindings', () => {
+  const options = getSklandArknightsBindingOptionsFromList([
+    {
+      appCode: 'endfield',
+      bindingList: [
+        { uid: 'endfield-uid', nickname: '终末地博士', channelName: '鹰角网络' }
+      ]
+    },
+    {
+      appCode: 'arknights',
+      defaultUid: '222222222',
+      bindingList: [
+        { uid: '111111111', nickName: '官服博士', channelName: '官服' },
+        { uid: '', nickName: '空 UID', channelName: '官服' },
+        { uid: '222222222', nickname: 'B服博士', channel: 'B服' },
+        { uid: '222222222', nickname: '重复博士', channelName: 'B服' }
+      ]
+    }
+  ]);
+
+  assert.strictEqual(options.defaultUid, '222222222');
+  assert.deepStrictEqual(hostObject(options.bindings), [
+    {
+      uid: '111111111',
+      nickname: '官服博士',
+      channelName: '官服',
+      isDefault: false
+    },
+    {
+      uid: '222222222',
+      nickname: 'B服博士',
+      channelName: 'B服',
+      isDefault: true
+    }
+  ]);
+});
+
+test('normalizeSklandArknightsBindings keeps only valid real UID bindings', () => {
+  const bindings = normalizeSklandArknightsBindings([
+    { uid: 10001, nickName: '', channelName: '' },
+    { uid: '', nickName: '空 UID' },
+    { uid: 10001, nickName: '重复 UID' },
+    { uid: '10002', nickname: '博士\x00', channel: '渠道服' }
+  ], '10002');
+
+  assert.deepStrictEqual(hostObject(bindings), [
+    {
+      uid: '10001',
+      nickname: '10001',
+      channelName: '官方',
+      isDefault: false
+    },
+    {
+      uid: '10002',
+      nickname: '博士',
+      channelName: '渠道服',
+      isDefault: true
+    }
+  ]);
+});
+
+test('selectSklandBindingOption prefers the saved account UID', () => {
+  const binding = selectSklandBindingOption([
+    { uid: '111111111', nickname: '官服博士', channelName: '官服', isDefault: true },
+    { uid: '222222222', nickname: 'B服博士', channelName: 'B服', isDefault: false }
+  ], '222222222');
+
+  assert.deepStrictEqual(hostObject(binding), {
+    uid: '222222222',
+    nickname: 'B服博士',
+    channelName: 'B服',
+    isDefault: false
+  });
+});
+
+test('selectSklandBindingOption falls back to Skland default then first binding', () => {
+  assert.deepStrictEqual(hostObject(selectSklandBindingOption([
+    { uid: '111111111', nickname: '官服博士', channelName: '官服' },
+    { uid: '222222222', nickname: 'B服博士', channelName: 'B服' }
+  ], '999999999', '222222222')), {
+    uid: '222222222',
+    nickname: 'B服博士',
+    channelName: 'B服',
+    isDefault: true
+  });
+
+  assert.deepStrictEqual(hostObject(selectSklandBindingOption([
+    { uid: '111111111', nickname: '官服博士', channelName: '官服' },
+    { uid: '222222222', nickname: 'B服博士', channelName: 'B服' }
+  ], '999999999', '333333333')), {
+    uid: '111111111',
+    nickname: '官服博士',
+    channelName: '官服',
+    isDefault: false
+  });
+});
+
 test('selectSklandArknightsBinding uses matching non-empty defaultUid', () => {
   const binding = selectSklandArknightsBinding([
     {
@@ -276,7 +379,8 @@ test('selectSklandArknightsBinding uses matching non-empty defaultUid', () => {
   assert.deepStrictEqual(hostObject(binding), {
     uid: '123456789',
     nickname: '雪糕我只吃铃兰的#5776',
-    channelName: '官服'
+    channelName: '官服',
+    isDefault: true
   });
 });
 
@@ -294,7 +398,8 @@ test('selectSklandArknightsBinding falls back to bindingList uid for empty defau
   assert.deepStrictEqual(hostObject(binding), {
     uid: '987654321',
     nickname: '晓晗#7658',
-    channelName: '官服'
+    channelName: '官服',
+    isDefault: false
   });
 });
 
@@ -313,11 +418,12 @@ test('selectSklandArknightsBinding treats blank defaultUid as missing', () => {
   assert.deepStrictEqual(hostObject(binding), {
     uid: '456789123',
     nickname: 'Doctor',
-    channelName: '渠道服'
+    channelName: '渠道服',
+    isDefault: false
   });
 });
 
-test('selectSklandArknightsBinding keeps defaultUid with first arknights binding metadata when no uid matches', () => {
+test('selectSklandArknightsBinding does not synthesize mismatched defaultUid roles', () => {
   const binding = selectSklandArknightsBinding([
     {
       appCode: 'arknights',
@@ -330,9 +436,10 @@ test('selectSklandArknightsBinding keeps defaultUid with first arknights binding
   ]);
 
   assert.deepStrictEqual(hostObject(binding), {
-    uid: '333333333',
+    uid: '111111111',
     nickname: '第一个博士',
-    channelName: '官服'
+    channelName: '官服',
+    isDefault: false
   });
 });
 
