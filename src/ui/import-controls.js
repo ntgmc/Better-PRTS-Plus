@@ -120,6 +120,7 @@
             return;
         }
 
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const backdrop = document.createElement('div');
         backdrop.id = 'prts-import-dialog-backdrop';
 
@@ -148,7 +149,7 @@
         closeBtn.type = 'button';
         closeBtn.className = 'prts-import-close';
         closeBtn.setAttribute('aria-label', '关闭导入窗口');
-        closeBtn.textContent = '×';
+        closeBtn.appendChild(createPrtsIcon('close'));
         closeBtn.onclick = closeOperatorImportDialog;
 
         head.appendChild(headingWrap);
@@ -262,11 +263,25 @@
 
         const handleKeydown = event => {
             if (event.key === 'Escape') closeOperatorImportDialog();
+            if (event.key === 'Tab') {
+                const focusable = getFocusableDialogElements(dialog);
+                if (focusable.length === 0) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
         };
         document.addEventListener('keydown', handleKeydown, true);
         operatorImportDialogCleanup = () => {
             document.removeEventListener('keydown', handleKeydown, true);
             backdrop.remove();
+            if (previousFocus?.isConnected) previousFocus.focus();
         };
 
         document.body.appendChild(backdrop);
@@ -336,6 +351,8 @@
 
         perfectBtn.classList.remove('prts-active');
         supportBtn.classList.remove('prts-active');
+        perfectBtn.setAttribute('aria-pressed', currentFilterMode === 'PERFECT' ? 'true' : 'false');
+        supportBtn.setAttribute('aria-pressed', currentFilterMode === 'SUPPORT' ? 'true' : 'false');
 
         if (currentFilterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
         else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
@@ -360,6 +377,8 @@
             controlBar = document.createElement('div');
             controlBar.id = 'prts-filter-bar';
         }
+        controlBar.setAttribute('role', 'toolbar');
+        controlBar.setAttribute('aria-label', 'Better-PRTS-Plus 筛选工具栏');
 
         if (searchRow.nextElementSibling !== controlBar) {
             searchRow.parentNode.insertBefore(controlBar, searchRow.nextElementSibling);
@@ -380,21 +399,21 @@
 
         // (1) 账号循环切换按钮
         const btnAccountText = getAccountLabel(activeAccountId);
-        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: paths.user, onClick: cycleAccount });
+        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: 'account', ariaLabel: `当前账号 ${btnAccountText}，点击切换账号`, onClick: cycleAccount });
         controlBar.appendChild(btnAccount);
 
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
-        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: paths.import, onClick: handleImport });
+        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'import', ariaLabel: importText, onClick: handleImport });
         controlBar.appendChild(btnImport);
 
-        const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: paths.skland, onClick: handleOpenSklandImport });
+        const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: 'skland', onClick: handleOpenSklandImport });
         controlBar.appendChild(btnSklandImport);
 
         // (3) 模式切换
         const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
-        const displayModeIcon = displayMode === 'GRAY' ? paths.eyeOn : paths.eyeOff;
-        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, onClick: toggleDisplayMode });
+        const displayModeIcon = displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
+        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
         controlBar.appendChild(btnSetting);
 
         // (4) 分割线
@@ -410,9 +429,10 @@
         const btnPerfect = createPrtsButton({
             id: 'btn-perfect',
             text: '完美阵容',
-            icon: paths.perfect,
+            icon: 'check',
             onClick: () => toggleFilter('PERFECT'),
-            active: currentFilterMode === 'PERFECT'
+            active: currentFilterMode === 'PERFECT',
+            pressed: currentFilterMode === 'PERFECT'
         });
         controlBar.appendChild(btnPerfect);
 
@@ -420,9 +440,10 @@
         const btnSupport = createPrtsButton({
             id: 'btn-support',
             text: '允许助战',
-            icon: paths.support,
+            icon: 'support',
             onClick: () => toggleFilter('SUPPORT'),
-            active: currentFilterMode === 'SUPPORT'
+            active: currentFilterMode === 'SUPPORT',
+            pressed: currentFilterMode === 'SUPPORT'
         });
         controlBar.appendChild(btnSupport);
 

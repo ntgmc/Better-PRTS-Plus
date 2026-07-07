@@ -110,19 +110,19 @@
         return getOperationResolutionForCard(card, cardInner).operation;
     }
 
-    function updateStatusLabel(label, className, iconText, text) {
-        const state = `${className}|${iconText}|${text}`;
+    function updateStatusLabel(label, className, icon, text) {
+        const state = `${className}|${icon}|${text}`;
         if (label.dataset.prtsStatusState === state) return;
 
         label.className = className;
+        label.setAttribute('aria-label', text);
         label.replaceChildren();
 
-        const icon = document.createElement('span');
-        icon.className = 'bp4-icon';
-        icon.style.marginRight = '6px';
-        icon.textContent = iconText;
+        const iconEl = createPrtsIcon(icon) || document.createElement('span');
+        iconEl.classList.add('prts-status-icon');
+        iconEl.setAttribute('aria-hidden', 'true');
 
-        label.appendChild(icon);
+        label.appendChild(iconEl);
         label.appendChild(document.createTextNode(text));
         label.dataset.prtsStatusState = state;
     }

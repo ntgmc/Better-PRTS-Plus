@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-3.1.0-blue.svg?style=flat-square)
+![Version](https://img.shields.io/badge/Version-3.2.0-blue.svg?style=flat-square)
 ![License](https://img.shields.io/badge/License-GPL--3.0-red.svg?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Tampermonkey-green.svg?style=flat-square)
 [![GreasyFork](https://img.shields.io/badge/Release-GreasyFork-orange.svg?style=flat-square)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)
@@ -57,8 +57,8 @@
 ## 📖 使用教程
 
 ### 第一步：导入您的干员数据
-1.  点击页面右侧的 **⚙️ 悬浮球**。
-2.  点击 **“📂 导入干员数据”**。
+1.  点击页面右侧的 **设置悬浮按钮**。
+2.  点击 **“导入干员数据”**。
 3.  在导入窗口中选择 `.json` / `.txt` 文件，或直接粘贴 JSON/TXT 文本后点击 **“导入粘贴内容”**。
     > **提示**：脚本兼容 MAA 导出的 JSON 格式。TXT 支持每行一个干员名字；导入成功后会显示“新增 / 移除 / 当前总数”摘要，方便确认结果。
 

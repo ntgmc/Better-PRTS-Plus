@@ -127,6 +127,7 @@ foreach ($requiredFunction in @(
     "showPrtsToast",
     "createPrtsButton",
     "createPrtsSwitch",
+    "getFocusableDialogElements",
     "showPrtsConfirm",
     "showPrtsPrompt",
     "openOperatorImportDialog",
@@ -138,6 +139,39 @@ foreach ($requiredFunction in @(
     if ($userScript -notmatch "function $requiredFunction") {
         throw "Missing import experience helper: $requiredFunction"
     }
+}
+$forbiddenUiGlyphs = @(
+    [string]::Concat([char]0xD83D, [char]0xDDBC, [char]0xFE0F),
+    [string]::Concat([char]0xD83D, [char]0xDD17),
+    [string]::Concat([char]0xD83D, [char]0xDDC2, [char]0xFE0F),
+    [string]::Concat([char]0xD83D, [char]0xDC64),
+    [string]::Concat([char]0xD83D, [char]0xDCC2),
+    [string]::Concat([char]0x2699, [char]0xFE0F),
+    [string]::Concat([char]0x2718)
+)
+foreach ($glyph in $forbiddenUiGlyphs) {
+    if ($userScript.Contains($glyph)) {
+        throw "Script UI should use registered SVG icons instead of legacy emoji/text glyph controls"
+    }
+}
+foreach ($requiredUiToken in @(
+    "const PRTS_ICON_PATHS",
+    "--prts-color-primary",
+    "--prts-space-2",
+    "--prts-z-float",
+    "controlBar.setAttribute('role', 'toolbar')",
+    "aria-pressed",
+    "btn.setAttribute('aria-expanded', 'false')",
+    "panel.id = 'prts-settings-panel'",
+    "createPrtsIcon('close')",
+    "@media (prefers-reduced-motion: reduce)"
+)) {
+    if ($userScript -notmatch [regex]::Escape($requiredUiToken)) {
+        throw "Missing UI optimization token or accessibility hook: $requiredUiToken"
+    }
+}
+if ($userScript -notmatch "function createFloatingBall\(\)[\s\S]*document\.createElement\('button'\)[\s\S]*prts-float-btn") {
+    throw "Floating settings control should be rendered as an accessible button"
 }
 $handleImportFunction = [regex]::Match($userScript, "function handleImport\(\)\s*\{[\s\S]*?\r?\n\s*\}")
 if (-not $handleImportFunction.Success -or $handleImportFunction.Value -notmatch "openOperatorImportDialog\(\)") {

@@ -851,19 +851,19 @@
         return getOperationResolutionForCard(card, cardInner).operation;
     }
 
-    function updateStatusLabel(label, className, iconText, text) {
-        const state = `${className}|${iconText}|${text}`;
+    function updateStatusLabel(label, className, icon, text) {
+        const state = `${className}|${icon}|${text}`;
         if (label.dataset.prtsStatusState === state) return;
 
         label.className = className;
+        label.setAttribute('aria-label', text);
         label.replaceChildren();
 
-        const icon = document.createElement('span');
-        icon.className = 'bp4-icon';
-        icon.style.marginRight = '6px';
-        icon.textContent = iconText;
+        const iconEl = createPrtsIcon(icon) || document.createElement('span');
+        iconEl.classList.add('prts-status-icon');
+        iconEl.setAttribute('aria-hidden', 'true');
 
-        label.appendChild(icon);
+        label.appendChild(iconEl);
         label.appendChild(document.createTextNode(text));
         label.dataset.prtsStatusState = state;
     }
@@ -1286,6 +1286,417 @@
     body.high-contrast-theme input:checked + .prts-slider { background-color: #2563eb; }
 
 
+    /* Unified script UI tokens and accessibility polish */
+    :root {
+        --prts-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        --prts-color-primary: #2563eb;
+        --prts-color-primary-hover: #1d4ed8;
+        --prts-color-primary-soft: #eff6ff;
+        --prts-color-accent: #d97706;
+        --prts-color-danger: #dc2626;
+        --prts-color-success: #047857;
+        --prts-color-warning: #b45309;
+        --prts-color-surface: #ffffff;
+        --prts-color-surface-muted: #f8fafc;
+        --prts-color-surface-hover: #f1f5f9;
+        --prts-color-text: #111827;
+        --prts-color-text-muted: #475569;
+        --prts-color-text-subtle: #64748b;
+        --prts-color-border: #cbd5e1;
+        --prts-color-border-soft: #e5e7eb;
+        --prts-color-ring: rgba(37, 99, 235, 0.28);
+        --prts-space-1: 4px;
+        --prts-space-2: 8px;
+        --prts-space-3: 12px;
+        --prts-space-4: 16px;
+        --prts-space-5: 20px;
+        --prts-radius-sm: 4px;
+        --prts-radius-md: 6px;
+        --prts-radius-lg: 8px;
+        --prts-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
+        --prts-shadow-md: 0 10px 30px rgba(15, 23, 42, 0.18);
+        --prts-shadow-lg: 0 18px 48px rgba(15, 23, 42, 0.28);
+        --prts-duration-fast: 160ms;
+        --prts-duration-base: 220ms;
+        --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --prts-z-float: 2147483644;
+        --prts-z-toast: 2147483647;
+        --prts-z-dialog: 2147483646;
+        --prts-z-modal: 2147483647;
+    }
+    body.dark {
+        --prts-color-primary: #60a5fa;
+        --prts-color-primary-hover: #93c5fd;
+        --prts-color-primary-soft: rgba(96, 165, 250, 0.16);
+        --prts-color-accent: #f59e0b;
+        --prts-color-danger: #f87171;
+        --prts-color-success: #86efac;
+        --prts-color-warning: #fcd34d;
+        --prts-color-surface: #30404d;
+        --prts-color-surface-muted: #202b33;
+        --prts-color-surface-hover: rgba(138, 155, 168, 0.15);
+        --prts-color-text: #f5f8fa;
+        --prts-color-text-muted: #c4d0dc;
+        --prts-color-text-subtle: #8a9baa;
+        --prts-color-border: #415262;
+        --prts-color-border-soft: #415262;
+        --prts-color-ring: rgba(96, 165, 250, 0.32);
+        --prts-shadow-md: 0 10px 30px rgba(0, 0, 0, 0.45);
+        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.52);
+    }
+    body.high-contrast-theme {
+        --prts-color-primary: #60a5fa;
+        --prts-color-primary-hover: #93c5fd;
+        --prts-color-primary-soft: rgba(96, 165, 250, 0.18);
+        --prts-color-accent: #f59e0b;
+        --prts-color-danger: #fca5a5;
+        --prts-color-success: #bbf7d0;
+        --prts-color-warning: #fde68a;
+        --prts-color-surface: #18181c;
+        --prts-color-surface-muted: #2d2d30;
+        --prts-color-surface-hover: rgba(138, 155, 168, 0.18);
+        --prts-color-text: #ffffff;
+        --prts-color-text-muted: #e0e0e0;
+        --prts-color-text-subtle: #d1d5db;
+        --prts-color-border: #38383b;
+        --prts-color-border-soft: #38383b;
+        --prts-color-ring: rgba(96, 165, 250, 0.38);
+        --prts-shadow-md: 0 10px 30px rgba(0, 0, 0, 0.55);
+        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
+    }
+    #prts-filter-bar {
+        gap: var(--prts-space-1) !important;
+        padding: var(--prts-space-1) 0 !important;
+        margin-top: var(--prts-space-2) !important;
+        margin-bottom: var(--prts-space-3) !important;
+        font-family: var(--prts-font-sans);
+    }
+    .prts-btn {
+        gap: 6px !important;
+        min-height: 34px !important;
+        padding: 6px 10px !important;
+        margin-right: 0 !important;
+        border: 1px solid transparent !important;
+        border-radius: var(--prts-radius-md) !important;
+        color: var(--prts-color-text-muted) !important;
+        background: transparent !important;
+        font-family: var(--prts-font-sans) !important;
+        font-weight: 600 !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out) !important;
+        touch-action: manipulation;
+    }
+    .prts-btn:hover {
+        background: var(--prts-color-surface-hover) !important;
+        color: var(--prts-color-text) !important;
+        text-decoration: none !important;
+    }
+    .prts-btn:focus-visible, .prts-import-action:focus-visible, .prts-account-rename:focus-visible, .prts-skland-close:focus-visible, .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-link:focus-visible, .prts-float-btn:focus-visible {
+        outline: 2px solid var(--prts-color-primary) !important;
+        outline-offset: 2px !important;
+        box-shadow: 0 0 0 4px var(--prts-color-ring) !important;
+    }
+    .prts-btn.prts-active, .prts-btn[aria-pressed="true"] {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary) !important;
+    }
+    .prts-btn:disabled, .prts-import-action:disabled {
+        opacity: 0.56 !important;
+        cursor: not-allowed !important;
+    }
+    .prts-btn .bp4-icon, .prts-btn-icon-img, .prts-btn-icon-svg {
+        width: 16px !important;
+        height: 16px !important;
+        margin-right: 0 !important;
+        color: currentColor !important;
+    }
+    .prts-btn .bp4-button-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .prts-panel-item-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+    .prts-panel-item-label .bp4-icon {
+        width: 16px;
+        height: 16px;
+        color: var(--prts-color-text-subtle);
+        flex: 0 0 auto;
+    }
+    .prts-account-row { gap: var(--prts-space-2); }
+    .prts-acc-btn, .prts-account-rename {
+        min-height: 34px !important;
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        color: var(--prts-color-text-muted) !important;
+        background: var(--prts-color-surface) !important;
+    }
+    .prts-acc-btn.active {
+        background: var(--prts-color-primary) !important;
+        border-color: var(--prts-color-primary) !important;
+        color: #ffffff !important;
+    }
+    .prts-divider {
+        height: 24px !important;
+        margin: 0 var(--prts-space-1) !important;
+        background: var(--prts-color-border-soft) !important;
+    }
+    .prts-status-label {
+        width: fit-content;
+        max-width: 100%;
+        gap: 6px;
+        padding: 3px 8px;
+        border-radius: var(--prts-radius-md);
+        border: 1px solid transparent;
+        line-height: 1.45 !important;
+    }
+    .prts-status-icon {
+        width: 14px;
+        height: 14px;
+        margin-right: 0 !important;
+        color: currentColor;
+        flex: 0 0 auto;
+    }
+    .prts-label-missing {
+        border-color: rgba(220, 38, 38, 0.28);
+        background: rgba(220, 38, 38, 0.08);
+        color: var(--prts-color-danger) !important;
+    }
+    .prts-label-support {
+        border-color: rgba(217, 119, 6, 0.32);
+        background: rgba(217, 119, 6, 0.1);
+        color: var(--prts-color-accent) !important;
+    }
+    .prts-desc-wrapper:focus {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        border-radius: var(--prts-radius-sm);
+    }
+    .prts-desc-wrapper:hover .prts-desc-content, .prts-desc-wrapper:focus .prts-desc-content, .prts-desc-wrapper:focus-within .prts-desc-content {
+        position: absolute;
+        top: -4px;
+        left: -8px;
+        width: calc(100% + 16px);
+        height: auto;
+        white-space: normal;
+        overflow: visible;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text-muted) !important;
+        border: 1px solid var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-md);
+        box-shadow: var(--prts-shadow-md) !important;
+    }
+    .prts-bili-link {
+        gap: 5px;
+        color: var(--prts-color-primary) !important;
+        font-weight: 600 !important;
+    }
+    .prts-bili-link:focus-visible {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        border-radius: var(--prts-radius-sm);
+    }
+    .prts-op-grid { gap: var(--prts-space-2) !important; }
+    .prts-op-item, .prts-op-text, .prts-popover-item {
+        border-radius: var(--prts-radius-md) !important;
+        border-color: var(--prts-color-border) !important;
+        background: var(--prts-color-surface-muted) !important;
+        transition: transform var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out) !important;
+    }
+    .prts-op-item:hover, .prts-op-text:hover, .prts-op-item:focus-visible, .prts-op-text:focus-visible, .prts-popover-item:focus-visible {
+        border-color: var(--prts-color-primary) !important;
+        box-shadow: 0 0 0 3px var(--prts-color-ring), var(--prts-shadow-sm) !important;
+        outline: none;
+    }
+    .prts-op-img, .prts-popover-img { border-radius: calc(var(--prts-radius-md) - 1px) !important; }
+    .prts-level-badge {
+        border-radius: var(--prts-radius-sm) !important;
+        background: var(--prts-color-primary) !important;
+        border-color: var(--prts-color-primary-hover) !important;
+        box-shadow: var(--prts-shadow-sm) !important;
+    }
+    [data-prts-tooltip]:hover::after, [data-prts-tooltip]:focus-visible::after {
+        background: var(--prts-color-text) !important;
+        color: var(--prts-color-surface) !important;
+        border-radius: var(--prts-radius-md) !important;
+        box-shadow: var(--prts-shadow-md) !important;
+    }
+    [data-prts-tooltip]:hover::before, [data-prts-tooltip]:focus-visible::before {
+        border-color: var(--prts-color-text) transparent transparent transparent !important;
+    }
+    .prts-dialog-tag {
+        border-radius: var(--prts-radius-sm);
+        font-size: 12px;
+        line-height: 1.3;
+    }
+    #prts-toast-container {
+        z-index: var(--prts-z-toast) !important;
+        gap: var(--prts-space-2) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    .prts-toast {
+        border-color: var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-md) !important;
+    }
+    .prts-toast-detail { color: var(--prts-color-text-muted) !important; }
+    #prts-import-dialog-backdrop, #prts-modal-backdrop {
+        background: rgba(15, 23, 42, 0.52) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    #prts-import-dialog-backdrop { z-index: var(--prts-z-dialog) !important; }
+    #prts-modal-backdrop { z-index: var(--prts-z-modal) !important; }
+    #prts-import-dialog, #prts-modal {
+        border-color: var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-lg) !important;
+    }
+    .prts-import-head, .prts-modal-head { border-color: var(--prts-color-border-soft) !important; }
+    .prts-import-title, .prts-modal-title { color: var(--prts-color-text) !important; }
+    .prts-import-subtitle, .prts-import-label, .prts-import-help, .prts-modal-message, .prts-modal-field-label {
+        color: var(--prts-color-text-muted) !important;
+    }
+    .prts-import-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--prts-color-text-subtle) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out) !important;
+    }
+    .prts-import-close .bp4-icon {
+        width: 16px;
+        height: 16px;
+    }
+    .prts-import-close:hover {
+        background: var(--prts-color-surface-hover) !important;
+        color: var(--prts-color-text) !important;
+    }
+    .prts-import-textarea, .prts-modal-input {
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+    }
+    .prts-import-textarea:focus, .prts-modal-input:focus {
+        border-color: var(--prts-color-primary) !important;
+        outline: 2px solid var(--prts-color-ring) !important;
+        outline-offset: 1px !important;
+    }
+    .prts-import-action {
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text-muted) !important;
+        font-family: var(--prts-font-sans) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out) !important;
+    }
+    .prts-import-action:hover {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary) !important;
+    }
+    .prts-import-action.primary {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary) !important;
+        color: #ffffff !important;
+    }
+    .prts-import-status {
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface-muted) !important;
+        color: var(--prts-color-text-muted) !important;
+    }
+    #prts-compat-debug-panel {
+        z-index: calc(var(--prts-z-float) - 1) !important;
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-md) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    #prts-float-container {
+        z-index: var(--prts-z-float) !important;
+        transition: opacity var(--prts-duration-base) var(--prts-ease-out), transform var(--prts-duration-base) var(--prts-ease-out) !important;
+    }
+    .prts-float-btn {
+        padding: 0;
+        font: inherit;
+        border-color: var(--prts-color-border-soft) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text-muted) !important;
+        box-shadow: var(--prts-shadow-sm) !important;
+        touch-action: none;
+    }
+    .prts-settings-panel {
+        width: min(292px, calc(100vw - 72px)) !important;
+        max-height: min(560px, calc(100vh - 24px));
+        overflow: auto;
+        overscroll-behavior: contain;
+        padding: var(--prts-space-4) !important;
+        border-color: var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-lg) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    .prts-panel-title {
+        color: var(--prts-color-text) !important;
+        border-color: var(--prts-color-border-soft) !important;
+    }
+    .prts-panel-item { color: var(--prts-color-text-muted) !important; }
+    .prts-switch { width: 40px; height: 22px; flex: 0 0 auto; }
+    .prts-switch input:focus-visible + .prts-slider {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px var(--prts-color-ring);
+    }
+    .prts-slider {
+        background: var(--prts-color-border) !important;
+        transition: background-color var(--prts-duration-fast) var(--prts-ease-out) !important;
+    }
+    .prts-slider:before {
+        transition: transform var(--prts-duration-fast) var(--prts-ease-out) !important;
+        box-shadow: var(--prts-shadow-sm);
+    }
+    input:checked + .prts-slider { background: var(--prts-color-primary) !important; }
+    input:checked + .prts-slider:before { transform: translateX(18px) !important; }
+    @media (max-width: 520px) {
+        #prts-filter-bar { gap: var(--prts-space-2) !important; }
+        .prts-btn, .prts-acc-btn, .prts-account-rename, .prts-import-action {
+            min-height: 44px !important;
+        }
+        #prts-filter-bar .prts-btn {
+            flex: 1 1 calc(50% - var(--prts-space-2));
+            min-width: 0;
+        }
+        #prts-float-container { max-width: calc(100vw - 24px); }
+        .prts-settings-panel {
+            width: min(320px, calc(100vw - 72px)) !important;
+            max-height: calc(100vh - 24px);
+        }
+        #prts-import-dialog, #prts-modal {
+            border-radius: var(--prts-radius-lg) var(--prts-radius-lg) 0 0 !important;
+        }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        #prts-float-container, #prts-float-container.is-snapping, .prts-settings-panel, .prts-btn, .prts-import-action, .prts-toast, .prts-op-item, .prts-op-text, .prts-popover-item, .prts-slider, .prts-slider:before {
+            transition: none !important;
+        }
+        .prts-toast.is-leaving, .prts-op-item:hover, .prts-op-text:hover {
+            transform: none !important;
+        }
+    }
+
     /* 10. 侧边栏折叠布局 */
     .prts-sidebar-hidden-layout > div:nth-child(1) {
         width: 100% !important;
@@ -1318,8 +1729,118 @@
     .prts-skland-status.error { background: #fef2f2; color: #b91c1c; }
     .prts-skland-link { display: inline-flex; align-items: center; margin-top: 10px; color: #2563eb; font-size: 12px; text-decoration: none; }
     .prts-skland-link:hover { text-decoration: underline; }
+    :root {
+        --prts-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        --prts-color-primary: #2563eb;
+        --prts-color-primary-hover: #1d4ed8;
+        --prts-color-primary-soft: #eff6ff;
+        --prts-color-surface: #ffffff;
+        --prts-color-surface-muted: #f8fafc;
+        --prts-color-surface-hover: #f1f5f9;
+        --prts-color-text: #111827;
+        --prts-color-text-muted: #475569;
+        --prts-color-text-subtle: #64748b;
+        --prts-color-border: #cbd5e1;
+        --prts-color-border-soft: #e5e7eb;
+        --prts-color-ring: rgba(37, 99, 235, 0.28);
+        --prts-radius-md: 6px;
+        --prts-radius-lg: 8px;
+        --prts-shadow-lg: 0 18px 48px rgba(15, 23, 42, 0.28);
+        --prts-duration-fast: 160ms;
+        --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    body.dark {
+        --prts-color-primary: #60a5fa;
+        --prts-color-primary-hover: #93c5fd;
+        --prts-color-primary-soft: rgba(96, 165, 250, 0.16);
+        --prts-color-surface: #30404d;
+        --prts-color-surface-muted: #202b33;
+        --prts-color-surface-hover: rgba(138, 155, 168, 0.15);
+        --prts-color-text: #f5f8fa;
+        --prts-color-text-muted: #c4d0dc;
+        --prts-color-text-subtle: #8a9baa;
+        --prts-color-border: #415262;
+        --prts-color-border-soft: #415262;
+        --prts-color-ring: rgba(96, 165, 250, 0.32);
+        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.52);
+    }
+    body.high-contrast-theme {
+        --prts-color-primary: #60a5fa;
+        --prts-color-primary-hover: #93c5fd;
+        --prts-color-primary-soft: rgba(96, 165, 250, 0.18);
+        --prts-color-surface: #18181c;
+        --prts-color-surface-muted: #2d2d30;
+        --prts-color-surface-hover: rgba(138, 155, 168, 0.18);
+        --prts-color-text: #ffffff;
+        --prts-color-text-muted: #e0e0e0;
+        --prts-color-text-subtle: #d1d5db;
+        --prts-color-border: #38383b;
+        --prts-color-border-soft: #38383b;
+        --prts-color-ring: rgba(96, 165, 250, 0.38);
+        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
+    }
+    #prts-skland-import-panel {
+        border-color: var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-lg) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    .prts-skland-head { border-color: var(--prts-color-border-soft) !important; }
+    .prts-skland-title { color: var(--prts-color-text) !important; }
+    .prts-skland-subtitle, .prts-skland-label { color: var(--prts-color-text-muted) !important; }
+    .prts-skland-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+        color: var(--prts-color-text-subtle) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-skland-close .bp4-icon { width: 16px; height: 16px; }
+    .prts-skland-close:hover, .prts-skland-close:focus-visible {
+        background: var(--prts-color-surface-hover) !important;
+        color: var(--prts-color-text) !important;
+    }
+    .prts-skland-account {
+        min-height: 44px;
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text-muted) !important;
+    }
+    .prts-skland-account.active {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary) !important;
+        color: #ffffff !important;
+    }
+    .prts-skland-primary {
+        min-height: 44px;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-primary) !important;
+        transition: background-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-skland-primary:hover { background: var(--prts-color-primary-hover) !important; }
+    .prts-skland-primary:disabled { opacity: 0.6; cursor: wait; }
+    .prts-skland-status {
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface-muted) !important;
+        color: var(--prts-color-text-muted) !important;
+    }
+    .prts-skland-status.loading { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary) !important; }
+    .prts-skland-link { color: var(--prts-color-primary) !important; }
+    .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px var(--prts-color-ring);
+    }
     @media (max-width: 520px) {
-        #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: 12px; width: auto; }
+        #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .prts-skland-close, .prts-skland-primary { transition: none !important; }
     }
 `;
 
@@ -1330,6 +1851,32 @@
 
     const SVG_NS = 'http://www.w3.org/2000/svg';
     let prtsModalCleanup = null;
+
+    const PRTS_ICON_PATHS = {
+        account: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
+        archive: 'M2 2h12v3H2V2zm1 4h10v8H3V6zm3 2v1.5h4V8H6z',
+        check: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
+        close: 'M3.72 2.28 8 6.56l4.28-4.28 1.44 1.44L9.44 8l4.28 4.28-1.44 1.44L8 9.44l-4.28 4.28-1.44-1.44L6.56 8 2.28 3.72z',
+        download: 'M8 11.5 3.75 7.25l1.1-1.1L7.2 8.5V1h1.6v7.5l2.35-2.35 1.1 1.1L8 11.5zM2 13h12v1.6H2V13z',
+        eyeOff: 'M6.41 7.83c-.03.39.07.79.31 1.12.24.34.59.58.98.68.39.1.81.02 1.15-.21.34-.23.59-.57.7-.96.1-.39.02-.8-.21-1.15-.16-.23-.38-.42-.64-.53L6.41 7.83z M2.05 2.64 1.03 3.66l12.9 12.07 1.02-1.02-2.08-2.09C14.05 11.84 15 10.72 16 8c0 0-3-5-8-5-1.23 0-2.36.3-3.37.8L2.05 2.64zM8 12c-2.21 0-4-1.79-4-4 0-.2.02-.39.05-.58l5.04 5.04C8.74 12.56 8.37 12 8 12z',
+        eyeOn: 'M8 3C3 3 0 8 0 8s3 5 8 5 8-5 8-5-3-5-8-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z M8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
+        filter: 'M1 2h14L9.5 8v5.5L6.5 15V8L1 2z',
+        import: 'M11 6h3l-6 6-6-6h3V1h6v5zm-9 8v2h12v-2h-2v1H4v-1H2z',
+        layout: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
+        link: 'M6.2 10.6 5.1 9.5l4.4-4.4 1.1 1.1-4.4 4.4zm-1.6 2.2c-1 0-1.9-.4-2.6-1.1-1.4-1.4-1.4-3.8 0-5.2l2.2-2.2 1.1 1.1-2.2 2.2c-.8.8-.8 2.2 0 3 .8.8 2.2.8 3 0l1.1 1.1c-.7.7-1.6 1.1-2.6 1.1zm7.2-1.1-1.1-1.1 2.2-2.2c.8-.8.8-2.2 0-3-.8-.8-2.2-.8-3 0L8.8 4.3c1.4-1.4 3.8-1.4 5.2 0 1.4 1.4 1.4 3.8 0 5.2l-2.2 2.2z',
+        missing: 'M8 1.4 15.2 14H.8L8 1.4zm0 3.1L3.5 12.4h9L8 4.5zm-.8 2.4h1.6v2.9H7.2V6.9zm0 3.8h1.6v1.5H7.2v-1.5z',
+        operators: 'M5.5 7.2A2.6 2.6 0 1 1 5.5 2a2.6 2.6 0 0 1 0 5.2zM1 13.5c.3-2.7 2.1-4.4 4.5-4.4s4.2 1.7 4.5 4.4H1zm10.6-4.3a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4zm-.8 4.3c-.1-1.2-.5-2.2-1.1-3 .5-.2 1.1-.3 1.9-.3 1.9 0 3.3 1.2 3.5 3.3h-4.3z',
+        save: 'M2 1h10l2 2v12H2V1zm2 2v4h7V3H4zm1 8v2h6v-2H5z',
+        settings: 'M9.5 1 10 3l1.8.8 1.8-.9 1.5 2.6-1.7 1.2c.1.4.1.8.1 1.3s0 .9-.1 1.3l1.7 1.2-1.5 2.6-1.8-.9-1.8.8-.5 2h-3l-.5-2-1.8-.8-1.8.9L.9 10.5l1.7-1.2C2.5 8.9 2.5 8.5 2.5 8s0-.9.1-1.3L.9 5.5l1.5-2.6 1.8.9L6 3l.5-2h3zM8 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2z',
+        support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm6.4 6.4H.8V12c0-.88.72-1.6 1.6-1.6h9.6c.88 0 1.6.72 1.6 1.6v2.4z',
+        upload: 'M8 4.5 3.75 8.75l1.1 1.1L7.2 7.5V15h1.6V7.5l2.35 2.35 1.1-1.1L8 4.5zM2 1h12v1.6H2V1z',
+        video: 'M2 3h8c.55 0 1 .45 1 1v2l3-2v8l-3-2v2c0 .55-.45 1-1 1H2c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1z'
+    };
+
+    function getFocusableDialogElements(root) {
+        return Array.from(root.querySelectorAll('a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+            .filter(element => element instanceof HTMLElement && element.getClientRects().length > 0);
+    }
 
     function ensurePrtsToastContainer() {
         let container = document.getElementById('prts-toast-container');
@@ -1409,7 +1956,8 @@
     function createPrtsIcon(icon) {
         if (!icon) return null;
         if (icon === 'skland' || icon.type === 'skland') return createSklandIconImage();
-        if (typeof icon === 'string') return createSvgIconFromPath(icon);
+        if (typeof icon === 'string') return createSvgIconFromPath(PRTS_ICON_PATHS[icon] || icon);
+        if (icon.path) return createSvgIconFromPath(icon.path, icon.viewBox || '0 0 16 16');
         if (icon instanceof Node) return icon.cloneNode(true);
         return null;
     }
@@ -1423,6 +1971,10 @@
         disabled = false,
         title = '',
         ariaLabel = '',
+        ariaControls = '',
+        ariaDescribedBy = '',
+        expanded = null,
+        pressed = null,
         onClick = null
     } = {}) {
         let btn = id ? document.getElementById(id) : null;
@@ -1435,14 +1987,26 @@
         btn.className = className;
         btn.classList.toggle('prts-active', active === true);
         btn.disabled = disabled === true;
-        btn.style.opacity = disabled ? '0.5' : '1';
-        btn.style.cursor = disabled ? 'not-allowed' : 'pointer';
+        btn.style.opacity = '';
+        btn.style.cursor = '';
 
         if (title) btn.title = title;
         else btn.removeAttribute('title');
 
         if (ariaLabel) btn.setAttribute('aria-label', ariaLabel);
         else btn.removeAttribute('aria-label');
+
+        if (ariaControls) btn.setAttribute('aria-controls', ariaControls);
+        else btn.removeAttribute('aria-controls');
+
+        if (ariaDescribedBy) btn.setAttribute('aria-describedby', ariaDescribedBy);
+        else btn.removeAttribute('aria-describedby');
+
+        if (expanded !== null) btn.setAttribute('aria-expanded', expanded === true ? 'true' : 'false');
+        else btn.removeAttribute('aria-expanded');
+
+        if (pressed !== null) btn.setAttribute('aria-pressed', pressed === true ? 'true' : 'false');
+        else btn.removeAttribute('aria-pressed');
 
         if (btn._prtsClickHandler) {
             btn.removeEventListener('click', btn._prtsClickHandler);
@@ -1466,12 +2030,17 @@
         return btn;
     }
 
-    function createPrtsSwitch({ label, checked, onChange, configKey } = {}) {
+    function createPrtsSwitch({ label, checked, onChange, configKey, icon = null } = {}) {
         const item = document.createElement('div');
         item.className = 'prts-panel-item';
 
         const labelText = document.createElement('span');
-        labelText.textContent = label || '';
+        labelText.className = 'prts-panel-item-label';
+        const iconEl = createPrtsIcon(icon);
+        if (iconEl) labelText.appendChild(iconEl);
+        const textEl = document.createElement('span');
+        textEl.textContent = label || '';
+        labelText.appendChild(textEl);
 
         const switchLabel = document.createElement('label');
         switchLabel.className = 'prts-switch';
@@ -1480,12 +2049,14 @@
         input.type = 'checkbox';
         input.checked = checked === true;
         if (configKey) input.dataset.prtsConfigKey = configKey;
+        if (label) input.setAttribute('aria-label', label);
         input.onchange = event => {
             if (typeof onChange === 'function') onChange(event.target.checked);
         };
 
         const slider = document.createElement('span');
         slider.className = 'prts-slider';
+        slider.setAttribute('aria-hidden', 'true');
 
         switchLabel.appendChild(input);
         switchLabel.appendChild(slider);
@@ -1551,7 +2122,7 @@
             closeBtn.type = 'button';
             closeBtn.className = 'prts-import-close';
             closeBtn.setAttribute('aria-label', '关闭窗口');
-            closeBtn.textContent = '×';
+            closeBtn.appendChild(createPrtsIcon('close'));
 
             head.appendChild(titleEl);
             head.appendChild(closeBtn);
@@ -1608,6 +2179,19 @@
             const finish = value => closePrtsModal(value);
             const handleKeydown = event => {
                 if (event.key === 'Escape') finish(null);
+                if (event.key === 'Tab') {
+                    const focusable = getFocusableDialogElements(dialog);
+                    if (focusable.length === 0) return;
+                    const first = focusable[0];
+                    const last = focusable[focusable.length - 1];
+                    if (event.shiftKey && document.activeElement === first) {
+                        event.preventDefault();
+                        last.focus();
+                    } else if (!event.shiftKey && document.activeElement === last) {
+                        event.preventDefault();
+                        first.focus();
+                    }
+                }
                 if (event.key === 'Enter' && inputEl && document.activeElement === inputEl) {
                     event.preventDefault();
                     finish(inputEl.value);
@@ -2339,6 +2923,7 @@
             return;
         }
 
+        const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const backdrop = document.createElement('div');
         backdrop.id = 'prts-import-dialog-backdrop';
 
@@ -2367,7 +2952,7 @@
         closeBtn.type = 'button';
         closeBtn.className = 'prts-import-close';
         closeBtn.setAttribute('aria-label', '关闭导入窗口');
-        closeBtn.textContent = '×';
+        closeBtn.appendChild(createPrtsIcon('close'));
         closeBtn.onclick = closeOperatorImportDialog;
 
         head.appendChild(headingWrap);
@@ -2481,11 +3066,25 @@
 
         const handleKeydown = event => {
             if (event.key === 'Escape') closeOperatorImportDialog();
+            if (event.key === 'Tab') {
+                const focusable = getFocusableDialogElements(dialog);
+                if (focusable.length === 0) return;
+                const first = focusable[0];
+                const last = focusable[focusable.length - 1];
+                if (event.shiftKey && document.activeElement === first) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && document.activeElement === last) {
+                    event.preventDefault();
+                    first.focus();
+                }
+            }
         };
         document.addEventListener('keydown', handleKeydown, true);
         operatorImportDialogCleanup = () => {
             document.removeEventListener('keydown', handleKeydown, true);
             backdrop.remove();
+            if (previousFocus?.isConnected) previousFocus.focus();
         };
 
         document.body.appendChild(backdrop);
@@ -2555,6 +3154,8 @@
 
         perfectBtn.classList.remove('prts-active');
         supportBtn.classList.remove('prts-active');
+        perfectBtn.setAttribute('aria-pressed', currentFilterMode === 'PERFECT' ? 'true' : 'false');
+        supportBtn.setAttribute('aria-pressed', currentFilterMode === 'SUPPORT' ? 'true' : 'false');
 
         if (currentFilterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
         else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
@@ -2579,6 +3180,8 @@
             controlBar = document.createElement('div');
             controlBar.id = 'prts-filter-bar';
         }
+        controlBar.setAttribute('role', 'toolbar');
+        controlBar.setAttribute('aria-label', 'Better-PRTS-Plus 筛选工具栏');
 
         if (searchRow.nextElementSibling !== controlBar) {
             searchRow.parentNode.insertBefore(controlBar, searchRow.nextElementSibling);
@@ -2599,21 +3202,21 @@
 
         // (1) 账号循环切换按钮
         const btnAccountText = getAccountLabel(activeAccountId);
-        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: paths.user, onClick: cycleAccount });
+        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: 'account', ariaLabel: `当前账号 ${btnAccountText}，点击切换账号`, onClick: cycleAccount });
         controlBar.appendChild(btnAccount);
 
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
-        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: paths.import, onClick: handleImport });
+        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'import', ariaLabel: importText, onClick: handleImport });
         controlBar.appendChild(btnImport);
 
-        const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: paths.skland, onClick: handleOpenSklandImport });
+        const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: 'skland', onClick: handleOpenSklandImport });
         controlBar.appendChild(btnSklandImport);
 
         // (3) 模式切换
         const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
-        const displayModeIcon = displayMode === 'GRAY' ? paths.eyeOn : paths.eyeOff;
-        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, onClick: toggleDisplayMode });
+        const displayModeIcon = displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
+        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
         controlBar.appendChild(btnSetting);
 
         // (4) 分割线
@@ -2629,9 +3232,10 @@
         const btnPerfect = createPrtsButton({
             id: 'btn-perfect',
             text: '完美阵容',
-            icon: paths.perfect,
+            icon: 'check',
             onClick: () => toggleFilter('PERFECT'),
-            active: currentFilterMode === 'PERFECT'
+            active: currentFilterMode === 'PERFECT',
+            pressed: currentFilterMode === 'PERFECT'
         });
         controlBar.appendChild(btnPerfect);
 
@@ -2639,9 +3243,10 @@
         const btnSupport = createPrtsButton({
             id: 'btn-support',
             text: '允许助战',
-            icon: paths.support,
+            icon: 'support',
             onClick: () => toggleFilter('SUPPORT'),
-            active: currentFilterMode === 'SUPPORT'
+            active: currentFilterMode === 'SUPPORT',
+            pressed: currentFilterMode === 'SUPPORT'
         });
         controlBar.appendChild(btnSupport);
 
@@ -2715,6 +3320,8 @@
         descContainer.classList.add('prts-desc-wrapper');
         descContainer.classList.remove('grow');
         descContainer.style.width = '100%';
+        descContainer.tabIndex = 0;
+        descContainer.setAttribute('aria-label', '作业描述');
 
         if (videoUrl) {
             const btnContainer = document.createElement('div');
@@ -2725,9 +3332,8 @@
             linkBtn.target = "_blank";
             linkBtn.rel = "noopener noreferrer";
             linkBtn.className = 'prts-bili-link';
-            const icon = document.createElement('span');
-            icon.className = 'bp4-icon bp4-icon-video';
-            linkBtn.appendChild(icon);
+            linkBtn.setAttribute('aria-label', '打开参考视频');
+            linkBtn.appendChild(createPrtsIcon('video'));
             linkBtn.appendChild(document.createTextNode('参考视频'));
             linkBtn.onclick = (e) => e.stopPropagation();
 
@@ -3005,12 +3611,17 @@
                         img.src = `/assets/operator-avatars/webp96/${opId}.webp`;
                         img.className = 'prts-op-img';
                         img.loading = "lazy";
+                        img.alt = nameKey;
+                        newItem.title = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
+                        newItem.setAttribute('aria-label', newItem.title);
                         newItem.appendChild(img);
                     } else if (nameKey.length > 0) {
                         reportUnknownOperatorName(nameKey, { source: 'card', example: cleanText });
                         newItem = document.createElement('div');
                         newItem.className = 'prts-op-text';
                         newItem.innerText = nameKey;
+                        newItem.title = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
+                        newItem.setAttribute('aria-label', newItem.title);
                     }
 
                     if (newItem && extraInfo) {
@@ -3024,12 +3635,16 @@
 
                     const interactiveWrapper = tag.closest(BP_SELECTORS.popoverTarget);
                     if (interactiveWrapper) {
+                        if (!interactiveWrapper.hasAttribute('tabindex')) interactiveWrapper.tabIndex = 0;
+                        interactiveWrapper.title = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
+                        interactiveWrapper.setAttribute('aria-label', interactiveWrapper.title);
                         grid.appendChild(interactiveWrapper);
                 interactiveWrapper.replaceChildren();
                         interactiveWrapper.appendChild(newItem);
                     } else {
                         const tooltipText = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
                         newItem.setAttribute('data-prts-tooltip', tooltipText);
+                        newItem.tabIndex = 0;
                         grid.appendChild(newItem);
                         tag.style.display = 'none';
                     }
@@ -3092,10 +3707,13 @@
                 const item = document.createElement('div');
                 item.className = 'prts-popover-item';
                 item.title = `${op.name} ${op.skill ? '(技能 ' + op.skill + ')' : ''}`;
+                item.tabIndex = 0;
+                item.setAttribute('aria-label', item.title);
 
                 const img = document.createElement('img');
                 img.src = `/assets/operator-avatars/webp96/${op.id}.webp`;
                 img.className = 'prts-popover-img';
+                img.alt = op.name;
 
                 item.appendChild(img);
                 if (op.skill) {
@@ -3173,12 +3791,12 @@
         if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
             newClass += ' prts-label-support';
             const name = missingOps[0];
-            iconText = '👤';
+            iconText = 'support';
             labelText = `需助战: ${name}`;
         } else {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
-            iconText = '✘';
+            iconText = 'missing';
             labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
 
@@ -3355,7 +3973,8 @@
         closeBtn.type = 'button';
         closeBtn.className = 'prts-skland-close';
         closeBtn.title = '关闭';
-        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', '关闭森空岛导入面板');
+        closeBtn.appendChild(createPrtsIcon('close'));
         closeBtn.onclick = () => panel.remove();
 
         head.appendChild(headingWrap);
@@ -3395,6 +4014,8 @@
 
         const status = document.createElement('div');
         status.className = 'prts-skland-status';
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
         status.textContent = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
         body.appendChild(status);
 
@@ -3409,7 +4030,7 @@
         importBtn.onclick = async () => {
             importBtn.disabled = true;
             importBtn.textContent = '读取中...';
-            setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, '');
+            setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, 'loading');
             try {
                 const summary = await importSklandOperatorsToAccount(targetAccountId);
                 targetAccountId = summary.accountId;
@@ -3445,6 +4066,8 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
     function setSklandPanelStatus(status, text, type) {
         status.className = 'prts-skland-status';
         if (type) status.classList.add(type);
+        status.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        status.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
         status.textContent = text;
     }
 
@@ -3490,9 +4113,13 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             container.classList.add('snap-left');
         }
 
-        const btn = document.createElement('div');
+        const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = 'prts-float-btn';
         btn.title = "脚本设置 (可拖拽)";
+        btn.setAttribute('aria-label', '打开脚本设置面板，可拖拽');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.setAttribute('aria-controls', 'prts-settings-panel');
         btn.style.touchAction = 'none';
         const floatSvg = document.createElementNS(SVG_NS, 'svg');
         floatSvg.setAttribute('viewBox', '0 0 32 32');
@@ -3504,9 +4131,12 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         btn.appendChild(floatSvg);
 
         const panel = document.createElement('div');
+        panel.id = 'prts-settings-panel';
         panel.className = 'prts-settings-panel';
+        panel.setAttribute('role', 'region');
+        panel.setAttribute('aria-label', 'Better-PRTS-Plus 设置');
 
-        const createSwitch = (label, checked, onChange, configKey) => createPrtsSwitch({ label, checked, onChange, configKey });
+        const createSwitch = (label, checked, onChange, configKey, icon) => createPrtsSwitch({ label, checked, onChange, configKey, icon });
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
@@ -3544,16 +4174,16 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             }
         });
 
-        panel.appendChild(createSwitch('🖼️ 作业卡片美化', CONFIG.visuals, (val) => {
+        panel.appendChild(createSwitch('作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
-        }, 'visuals'));
-        panel.appendChild(createSwitch('🔗 视频链接优化', CONFIG.cleanLink, (val) => {
+        }, 'visuals', 'operators'));
+        panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
-        }, 'cleanLink'));
+        }, 'cleanLink', 'link'));
 
-        panel.appendChild(createSwitch('🗂️ 折叠侧边栏', CONFIG.hideSidebar, (val) => {
+        panel.appendChild(createSwitch('折叠侧边栏', CONFIG.hideSidebar, (val) => {
             CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
-        }, 'hideSidebar'));
+        }, 'hideSidebar', 'layout'));
 
         debugOptions.appendChild(createSwitch('兼容诊断', CONFIG.compatDebug, (val) => {
             CONFIG.compatDebug = val;
@@ -3564,7 +4194,7 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             } else {
                 removeCompatibilityDiagnosticsPanel();
             }
-        }, 'compatDebug'));
+        }, 'compatDebug', 'filter'));
         panel.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
@@ -3576,7 +4206,11 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         accRow.style.alignItems = 'stretch';
 
         const accTitle = document.createElement('span');
-        accTitle.textContent = '👤 切换账号';
+        accTitle.className = 'prts-panel-item-label';
+        accTitle.appendChild(createPrtsIcon('account'));
+        const accTitleText = document.createElement('span');
+        accTitleText.textContent = '切换账号';
+        accTitle.appendChild(accTitleText);
         accRow.appendChild(accTitle);
 
         const accBtnGroup = document.createElement('div');
@@ -3612,7 +4246,7 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         panel.appendChild(accRow);
 
-        const importBtn = createPrtsButton({ className: 'prts-btn', text: '📂 导入干员数据', onClick: handleImport });
+        const importBtn = createPrtsButton({ className: 'prts-btn', icon: 'import', text: '导入干员数据', onClick: handleImport });
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
         panel.appendChild(importBtn);
 
@@ -3623,17 +4257,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
 
-        const exportBtn = document.createElement('button');
-        exportBtn.type = 'button';
-        exportBtn.className = 'prts-btn';
-        exportBtn.textContent = '导出全部配置';
-        exportBtn.onclick = handleExportAccountsBackup;
+        const exportBtn = createPrtsButton({ className: 'prts-btn', icon: 'download', text: '导出全部配置', onClick: handleExportAccountsBackup });
 
-        const importBackupBtn = document.createElement('button');
-        importBackupBtn.type = 'button';
-        importBackupBtn.className = 'prts-btn';
-        importBackupBtn.textContent = '导入全部配置';
-        importBackupBtn.onclick = handleImportAccountsBackup;
+        const importBackupBtn = createPrtsButton({ className: 'prts-btn', icon: 'upload', text: '导入全部配置', onClick: handleImportAccountsBackup });
 
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
@@ -3744,13 +4370,21 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         document.addEventListener('pointerup', finishDrag);
         document.addEventListener('pointercancel', finishDrag);
 
+        const setFloatOpen = isOpen => {
+            container.classList.toggle('prts-float-open', isOpen);
+            btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        };
+
         btn.onclick = (e) => {
             e.stopPropagation();
-            if (!hasMoved) container.classList.toggle('prts-float-open');
+            if (!hasMoved) setFloatOpen(!container.classList.contains('prts-float-open'));
         };
         panel.onclick = (e) => e.stopPropagation();
         document.addEventListener('click', () => {
-            if (!isDragging) container.classList.remove('prts-float-open');
+            if (!isDragging) setFloatOpen(false);
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') setFloatOpen(false);
         });
     }
     // =========================================================================

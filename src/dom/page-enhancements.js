@@ -64,6 +64,8 @@
         descContainer.classList.add('prts-desc-wrapper');
         descContainer.classList.remove('grow');
         descContainer.style.width = '100%';
+        descContainer.tabIndex = 0;
+        descContainer.setAttribute('aria-label', '作业描述');
 
         if (videoUrl) {
             const btnContainer = document.createElement('div');
@@ -74,9 +76,8 @@
             linkBtn.target = "_blank";
             linkBtn.rel = "noopener noreferrer";
             linkBtn.className = 'prts-bili-link';
-            const icon = document.createElement('span');
-            icon.className = 'bp4-icon bp4-icon-video';
-            linkBtn.appendChild(icon);
+            linkBtn.setAttribute('aria-label', '打开参考视频');
+            linkBtn.appendChild(createPrtsIcon('video'));
             linkBtn.appendChild(document.createTextNode('参考视频'));
             linkBtn.onclick = (e) => e.stopPropagation();
 
@@ -354,12 +355,17 @@
                         img.src = `/assets/operator-avatars/webp96/${opId}.webp`;
                         img.className = 'prts-op-img';
                         img.loading = "lazy";
+                        img.alt = nameKey;
+                        newItem.title = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
+                        newItem.setAttribute('aria-label', newItem.title);
                         newItem.appendChild(img);
                     } else if (nameKey.length > 0) {
                         reportUnknownOperatorName(nameKey, { source: 'card', example: cleanText });
                         newItem = document.createElement('div');
                         newItem.className = 'prts-op-text';
                         newItem.innerText = nameKey;
+                        newItem.title = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
+                        newItem.setAttribute('aria-label', newItem.title);
                     }
 
                     if (newItem && extraInfo) {
@@ -373,12 +379,16 @@
 
                     const interactiveWrapper = tag.closest(BP_SELECTORS.popoverTarget);
                     if (interactiveWrapper) {
+                        if (!interactiveWrapper.hasAttribute('tabindex')) interactiveWrapper.tabIndex = 0;
+                        interactiveWrapper.title = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
+                        interactiveWrapper.setAttribute('aria-label', interactiveWrapper.title);
                         grid.appendChild(interactiveWrapper);
                 interactiveWrapper.replaceChildren();
                         interactiveWrapper.appendChild(newItem);
                     } else {
                         const tooltipText = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
                         newItem.setAttribute('data-prts-tooltip', tooltipText);
+                        newItem.tabIndex = 0;
                         grid.appendChild(newItem);
                         tag.style.display = 'none';
                     }
@@ -441,10 +451,13 @@
                 const item = document.createElement('div');
                 item.className = 'prts-popover-item';
                 item.title = `${op.name} ${op.skill ? '(技能 ' + op.skill + ')' : ''}`;
+                item.tabIndex = 0;
+                item.setAttribute('aria-label', item.title);
 
                 const img = document.createElement('img');
                 img.src = `/assets/operator-avatars/webp96/${op.id}.webp`;
                 img.className = 'prts-popover-img';
+                img.alt = op.name;
 
                 item.appendChild(img);
                 if (op.skill) {
@@ -522,12 +535,12 @@
         if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
             newClass += ' prts-label-support';
             const name = missingOps[0];
-            iconText = '👤';
+            iconText = 'support';
             labelText = `需助战: ${name}`;
         } else {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
-            iconText = '✘';
+            iconText = 'missing';
             labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
 

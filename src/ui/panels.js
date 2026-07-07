@@ -99,7 +99,8 @@
         closeBtn.type = 'button';
         closeBtn.className = 'prts-skland-close';
         closeBtn.title = '关闭';
-        closeBtn.textContent = '×';
+        closeBtn.setAttribute('aria-label', '关闭森空岛导入面板');
+        closeBtn.appendChild(createPrtsIcon('close'));
         closeBtn.onclick = () => panel.remove();
 
         head.appendChild(headingWrap);
@@ -139,6 +140,8 @@
 
         const status = document.createElement('div');
         status.className = 'prts-skland-status';
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
         status.textContent = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
         body.appendChild(status);
 
@@ -153,7 +156,7 @@
         importBtn.onclick = async () => {
             importBtn.disabled = true;
             importBtn.textContent = '读取中...';
-            setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, '');
+            setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, 'loading');
             try {
                 const summary = await importSklandOperatorsToAccount(targetAccountId);
                 targetAccountId = summary.accountId;
@@ -189,6 +192,8 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
     function setSklandPanelStatus(status, text, type) {
         status.className = 'prts-skland-status';
         if (type) status.classList.add(type);
+        status.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        status.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
         status.textContent = text;
     }
 
@@ -234,9 +239,13 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             container.classList.add('snap-left');
         }
 
-        const btn = document.createElement('div');
+        const btn = document.createElement('button');
+        btn.type = 'button';
         btn.className = 'prts-float-btn';
         btn.title = "脚本设置 (可拖拽)";
+        btn.setAttribute('aria-label', '打开脚本设置面板，可拖拽');
+        btn.setAttribute('aria-expanded', 'false');
+        btn.setAttribute('aria-controls', 'prts-settings-panel');
         btn.style.touchAction = 'none';
         const floatSvg = document.createElementNS(SVG_NS, 'svg');
         floatSvg.setAttribute('viewBox', '0 0 32 32');
@@ -248,9 +257,12 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         btn.appendChild(floatSvg);
 
         const panel = document.createElement('div');
+        panel.id = 'prts-settings-panel';
         panel.className = 'prts-settings-panel';
+        panel.setAttribute('role', 'region');
+        panel.setAttribute('aria-label', 'Better-PRTS-Plus 设置');
 
-        const createSwitch = (label, checked, onChange, configKey) => createPrtsSwitch({ label, checked, onChange, configKey });
+        const createSwitch = (label, checked, onChange, configKey, icon) => createPrtsSwitch({ label, checked, onChange, configKey, icon });
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
@@ -288,16 +300,16 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             }
         });
 
-        panel.appendChild(createSwitch('🖼️ 作业卡片美化', CONFIG.visuals, (val) => {
+        panel.appendChild(createSwitch('作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
-        }, 'visuals'));
-        panel.appendChild(createSwitch('🔗 视频链接优化', CONFIG.cleanLink, (val) => {
+        }, 'visuals', 'operators'));
+        panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
-        }, 'cleanLink'));
+        }, 'cleanLink', 'link'));
 
-        panel.appendChild(createSwitch('🗂️ 折叠侧边栏', CONFIG.hideSidebar, (val) => {
+        panel.appendChild(createSwitch('折叠侧边栏', CONFIG.hideSidebar, (val) => {
             CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
-        }, 'hideSidebar'));
+        }, 'hideSidebar', 'layout'));
 
         debugOptions.appendChild(createSwitch('兼容诊断', CONFIG.compatDebug, (val) => {
             CONFIG.compatDebug = val;
@@ -308,7 +320,7 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
             } else {
                 removeCompatibilityDiagnosticsPanel();
             }
-        }, 'compatDebug'));
+        }, 'compatDebug', 'filter'));
         panel.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
@@ -320,7 +332,11 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         accRow.style.alignItems = 'stretch';
 
         const accTitle = document.createElement('span');
-        accTitle.textContent = '👤 切换账号';
+        accTitle.className = 'prts-panel-item-label';
+        accTitle.appendChild(createPrtsIcon('account'));
+        const accTitleText = document.createElement('span');
+        accTitleText.textContent = '切换账号';
+        accTitle.appendChild(accTitleText);
         accRow.appendChild(accTitle);
 
         const accBtnGroup = document.createElement('div');
@@ -356,7 +372,7 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         panel.appendChild(accRow);
 
-        const importBtn = createPrtsButton({ className: 'prts-btn', text: '📂 导入干员数据', onClick: handleImport });
+        const importBtn = createPrtsButton({ className: 'prts-btn', icon: 'import', text: '导入干员数据', onClick: handleImport });
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
         panel.appendChild(importBtn);
 
@@ -367,17 +383,9 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
 
-        const exportBtn = document.createElement('button');
-        exportBtn.type = 'button';
-        exportBtn.className = 'prts-btn';
-        exportBtn.textContent = '导出全部配置';
-        exportBtn.onclick = handleExportAccountsBackup;
+        const exportBtn = createPrtsButton({ className: 'prts-btn', icon: 'download', text: '导出全部配置', onClick: handleExportAccountsBackup });
 
-        const importBackupBtn = document.createElement('button');
-        importBackupBtn.type = 'button';
-        importBackupBtn.className = 'prts-btn';
-        importBackupBtn.textContent = '导入全部配置';
-        importBackupBtn.onclick = handleImportAccountsBackup;
+        const importBackupBtn = createPrtsButton({ className: 'prts-btn', icon: 'upload', text: '导入全部配置', onClick: handleImportAccountsBackup });
 
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
@@ -488,12 +496,20 @@ ${formatSklandImportSummary(lastSummary)}`, 'success');
         document.addEventListener('pointerup', finishDrag);
         document.addEventListener('pointercancel', finishDrag);
 
+        const setFloatOpen = isOpen => {
+            container.classList.toggle('prts-float-open', isOpen);
+            btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        };
+
         btn.onclick = (e) => {
             e.stopPropagation();
-            if (!hasMoved) container.classList.toggle('prts-float-open');
+            if (!hasMoved) setFloatOpen(!container.classList.contains('prts-float-open'));
         };
         panel.onclick = (e) => e.stopPropagation();
         document.addEventListener('click', () => {
-            if (!isDragging) container.classList.remove('prts-float-open');
+            if (!isDragging) setFloatOpen(false);
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') setFloatOpen(false);
         });
     }
