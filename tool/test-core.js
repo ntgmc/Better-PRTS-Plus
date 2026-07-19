@@ -8,6 +8,8 @@ const sourceFiles = [
   'src/core/constants.js',
   'src/data/operators.generated.js',
   'src/import/parsers.js',
+  'src/core/account-state.js',
+  'src/core/filter-scheduler.js',
   'src/import/skland.js',
   'src/dom/card-resolution.js',
   'src/filter/operation-matching.js',
@@ -24,6 +26,18 @@ globalThis.__testExports = {
   normalizeAccountMeta,
   normalizeSklandSyncMeta,
   normalizeSklandImportSummary,
+  createAccountState,
+  serializeAccountState,
+  resolveStoredAccountState,
+  createAccountSwitchState,
+  createRenamedAccountState,
+  createSklandImportState,
+  createFilterUpdateCoordinator,
+  getCurrentAccountState,
+  getOwnedOpsSnapshot: () => Array.from(ownedOpsSet),
+  publishAccountState,
+  commitAccountState,
+  commitSklandImportResult,
   matchOperatorGroups,
   parseAccountsBackup,
   getSklandArknightsBindingOptionsFromList,
@@ -35,8 +49,14 @@ globalThis.__testExports = {
 `;
 
 const storage = new Map();
+const warnings = [];
+let failStorageKey = null;
 const context = {
-  console,
+  console: {
+    log: (...args) => console.log(...args),
+    error: (...args) => console.error(...args),
+    warn: (...args) => warnings.push(args)
+  },
   setTimeout,
   clearTimeout,
   TextEncoder,
@@ -53,6 +73,7 @@ const context = {
     return storage.has(key) ? storage.get(key) : fallback;
   },
   GM_setValue(key, value) {
+    if (key === failStorageKey) throw new Error(`storage failure: ${key}`);
     storage.set(key, value);
   }
 };
@@ -68,6 +89,18 @@ const {
   normalizeAccountMeta,
   normalizeSklandSyncMeta,
   normalizeSklandImportSummary,
+  createAccountState,
+  serializeAccountState,
+  resolveStoredAccountState,
+  createAccountSwitchState,
+  createRenamedAccountState,
+  createSklandImportState,
+  createFilterUpdateCoordinator,
+  getCurrentAccountState,
+  getOwnedOpsSnapshot,
+  publishAccountState,
+  commitAccountState,
+  commitSklandImportResult,
   matchOperatorGroups,
   parseAccountsBackup,
   getSklandArknightsBindingOptionsFromList,
@@ -77,14 +110,10 @@ const {
   convertSklandPlayerInfoToNames
 } = context.__testExports;
 
+const tests = [];
+
 function test(name, fn) {
-  try {
-    fn();
-    console.log(`ok - ${name}`);
-  } catch (error) {
-    console.error(`not ok - ${name}`);
-    throw error;
-  }
+  tests.push({ name, fn });
 }
 
 function hostArray(value) {
@@ -479,4 +508,233 @@ test('convertSklandPlayerInfoToNames rejects empty Skland data', () => {
   assert.throws(() => convertSklandPlayerInfoToNames({ data: { chars: [] } }), /为空/);
 });
 
-console.log('All core function tests passed.');
+test('account state serialization preserves the normalized unified schema', () => {
+  const state = createAccountState({
+    activeAccountId: 2,
+    accountsData: { 1: ['阿米娅'], 2: ['W'], 3: [] },
+    accountMeta: { 2: { label: '主账号', labelSource: 'manual' } }
+  });
+  const parsed = JSON.parse(serializeAccountState(state));
+  assert.deepStrictEqual(hostObject(createAccountState(parsed)), hostObject(state));
+  assert.deepStrictEqual(Object.keys(parsed).sort(), ['accountMeta', 'accountsData', 'activeAccountId']);
+});
+
+test('resolveStoredAccountState migrates missing metadata', () => {
+  const result = resolveStoredAccountState({
+    unifiedStore: JSON.stringify({ activeAccountId: 2, accountsData: { 1: [], 2: ['W'], 3: [] } })
+  });
+  assert.strictEqual(result.migrated, true);
+  assert.strictEqual(result.state.activeAccountId, 2);
+  assert.deepStrictEqual(hostArray(result.state.accountsData[2]), ['W']);
+  assert.strictEqual(result.state.accountMeta[2].label, '账号 2');
+});
+
+test('resolveStoredAccountState migrates legacy stores and owned records', () => {
+  const result = resolveStoredAccountState({
+    legacyAccounts: { 2: JSON.stringify(['W', 'W']) },
+    legacyActiveAccountId: 2,
+    veryOldStore: JSON.stringify([
+      { name: '阿米娅', own: true },
+      { name: '能天使', own: false }
+    ])
+  });
+  assert.strictEqual(result.migrated, true);
+  assert.deepStrictEqual(hostArray(result.state.accountsData[1]), ['阿米娅']);
+  assert.deepStrictEqual(hostArray(result.state.accountsData[2]), ['W']);
+  assert.strictEqual(result.state.activeAccountId, 2);
+});
+
+test('resolveStoredAccountState migrates a legacy Skland summary into account metadata', () => {
+  const result = resolveStoredAccountState({
+    unifiedStore: JSON.stringify({
+      activeAccountId: 1,
+      accountsData: { 1: ['阿米娅'], 2: [], 3: [] },
+      accountMeta: { 1: { label: '账号 1', labelSource: 'default' } }
+    }),
+    legacySklandSummary: JSON.stringify({
+      accountId: 1,
+      uid: '123',
+      nickname: '博士',
+      importedAt: '2026-07-19T00:00:00.000Z',
+      operatorCount: 1
+    })
+  });
+  assert.strictEqual(result.migrated, true);
+  assert.strictEqual(result.state.accountMeta[1].skland.uid, '123');
+  assert(result.diagnostics.some(item => item.code === 'migrated-skland-summary'));
+});
+
+test('resolveStoredAccountState reports corrupt unified data without exposing content', () => {
+  const result = resolveStoredAccountState({ unifiedStore: '{secret-token:bad-json' });
+  assert.strictEqual(result.migrated, false);
+  assert.strictEqual(result.state.activeAccountId, 1);
+  assert.deepStrictEqual(hostObject(result.diagnostics), [
+    { code: 'invalid-unified-store', source: 'prts_plus_accounts_data' }
+  ]);
+});
+
+test('commitAccountState leaves published state unchanged when storage fails', () => {
+  const initial = publishAccountState(createAccountState({
+    activeAccountId: 1,
+    accountsData: { 1: ['阿米娅'], 2: [], 3: [] }
+  }));
+  failStorageKey = 'prts_plus_accounts_data';
+  assert.throws(() => commitAccountState(createAccountSwitchState(initial, 2)), /storage failure/);
+  failStorageKey = null;
+  assert.deepStrictEqual(hostObject(getCurrentAccountState()), hostObject(initial));
+  assert.deepStrictEqual(hostArray(getOwnedOpsSnapshot()), ['阿米娅']);
+});
+
+test('createRenamedAccountState preserves Skland metadata', () => {
+  const initial = createAccountState({
+    accountMeta: {
+      1: {
+        label: '森空岛昵称',
+        labelSource: 'skland',
+        skland: { uid: '123', nickname: '博士', importedAt: '2026-01-01T00:00:00.000Z', operatorCount: 10 }
+      }
+    }
+  });
+  const renamed = createRenamedAccountState(initial, 1, '手动昵称');
+  assert.strictEqual(renamed.accountMeta[1].label, '手动昵称');
+  assert.strictEqual(renamed.accountMeta[1].labelSource, 'manual');
+  assert.strictEqual(renamed.accountMeta[1].skland.uid, '123');
+});
+
+test('createSklandImportState commits a complete transition and preserves manual labels', () => {
+  const initial = createAccountState({
+    activeAccountId: 1,
+    accountsData: { 1: ['阿米娅'], 2: [], 3: [] },
+    accountMeta: { 2: { label: '手动二号', labelSource: 'manual' } }
+  });
+  const result = createSklandImportState(initial, {
+    accountId: 2,
+    names: ['W', 'W', '能天使'],
+    binding: { uid: '222', nickname: '森空岛博士' },
+    importedAt: '2026-07-19T00:00:00.000Z'
+  });
+  assert.strictEqual(result.state.activeAccountId, 2);
+  assert.deepStrictEqual(hostArray(result.state.accountsData[2]), ['W', '能天使']);
+  assert.strictEqual(result.state.accountMeta[2].label, '手动二号');
+  assert.strictEqual(result.summary.operatorCount, 2);
+  assert.deepStrictEqual(hostArray(initial.accountsData[2]), []);
+});
+
+test('commitSklandImportResult treats the compatibility summary as non-critical', () => {
+  const result = createSklandImportState(createAccountState(), {
+    accountId: 3,
+    names: ['阿米娅'],
+    binding: { uid: '333', nickname: '博士三号' },
+    importedAt: '2026-07-19T00:00:00.000Z'
+  });
+  failStorageKey = 'prts_plus_skland_last_import';
+  const warningCount = warnings.length;
+  const summary = commitSklandImportResult(result);
+  failStorageKey = null;
+  assert.strictEqual(summary.accountId, 3);
+  assert.strictEqual(getCurrentAccountState().activeAccountId, 3);
+  assert(!storage.get('prts_plus_accounts_data').includes('credential'));
+  assert(!storage.get('prts_plus_accounts_data').includes('token'));
+  assert.strictEqual(warnings.length, warningCount + 1);
+});
+
+function createSchedulerHarness(run = () => {}) {
+  let nextId = 1;
+  const frames = new Map();
+  const delays = new Map();
+  const coordinator = createFilterUpdateCoordinator({
+    requestFrame(callback) {
+      const id = nextId++;
+      frames.set(id, callback);
+      return id;
+    },
+    cancelFrame(id) {
+      frames.delete(id);
+    },
+    setDelay(callback) {
+      const id = nextId++;
+      delays.set(id, callback);
+      return id;
+    },
+    clearDelay(id) {
+      delays.delete(id);
+    },
+    run
+  });
+  return { coordinator, frames, delays };
+}
+
+function runOnlyCallback(callbacks) {
+  assert.strictEqual(callbacks.size, 1);
+  const callback = callbacks.values().next().value;
+  callbacks.clear();
+  callback();
+}
+
+test('filter coordinator coalesces frames and dirty cards', () => {
+  let runs = 0;
+  const harness = createSchedulerHarness(() => { runs += 1; });
+  harness.coordinator.takeWork([]);
+  const first = { isConnected: true };
+  const second = { isConnected: true };
+  harness.coordinator.request({ forceFull: false, dirtyCards: new Set([first]) });
+  harness.coordinator.request({ forceFull: false, dirtyCards: new Set([second]) });
+  runOnlyCallback(harness.frames);
+  const work = harness.coordinator.takeWork([]);
+  assert.strictEqual(runs, 1);
+  assert.strictEqual(work.processAll, false);
+  assert.deepStrictEqual(hostArray(work.cards), [first, second]);
+});
+
+test('filter coordinator keeps full updates dominant across debounce replacement', () => {
+  const harness = createSchedulerHarness();
+  harness.coordinator.takeWork([]);
+  const dirty = { isConnected: true };
+  harness.coordinator.schedule(80, { forceFull: true });
+  harness.coordinator.schedule(40, { forceFull: false, dirtyCards: [dirty] });
+  runOnlyCallback(harness.delays);
+  runOnlyCallback(harness.frames);
+  const allCards = [{ isConnected: true }];
+  const work = harness.coordinator.takeWork(allCards);
+  assert.strictEqual(work.processAll, true);
+  assert.strictEqual(work.cards, allCards);
+});
+
+test('filter coordinator reset forces the next run to process all cards', () => {
+  const harness = createSchedulerHarness();
+  harness.coordinator.takeWork([]);
+  harness.coordinator.request({ forceFull: false, dirtyCards: [{ isConnected: true }] });
+  harness.coordinator.reset();
+  const allCards = [{ isConnected: true }];
+  const work = harness.coordinator.takeWork(allCards);
+  assert.strictEqual(work.processAll, true);
+  assert.strictEqual(work.cards, allCards);
+});
+
+test('filter coordinator can schedule again after a run throws', () => {
+  let shouldThrow = true;
+  const harness = createSchedulerHarness(() => {
+    if (shouldThrow) throw new Error('filter failure');
+  });
+  harness.coordinator.request();
+  assert.throws(() => runOnlyCallback(harness.frames), /filter failure/);
+  shouldThrow = false;
+  harness.coordinator.request();
+  assert.doesNotThrow(() => runOnlyCallback(harness.frames));
+});
+
+(async () => {
+  for (const { name, fn } of tests) {
+    try {
+      await fn();
+      console.log(`ok - ${name}`);
+    } catch (error) {
+      console.error(`not ok - ${name}`);
+      throw error;
+    }
+  }
+  console.log('All core function tests passed.');
+})().catch(error => {
+  console.error(error);
+  process.exitCode = 1;
+});

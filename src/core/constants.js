@@ -52,9 +52,5 @@
     const cardDiagnosticsCache = new WeakMap();
 
     let isProcessingFilter = false;
-    let rafId = null;
-    let filterDebounceTimer = null;
-    let pendingDirtyCards = null;
-    let forceNextFilterUpdate = true;
     let lastRouteKey = `${window.location.pathname}${window.location.search}`;
     let operatorImportDialogCleanup = null;

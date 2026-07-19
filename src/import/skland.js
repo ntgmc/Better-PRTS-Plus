@@ -79,29 +79,24 @@ function createSklandImportCancelledError() {
         const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const names = convertSklandPlayerInfoToNames(playerInfo);
         const importedAt = new Date().toISOString();
-
-        accountsData[targetAccountId] = names;
-        activeAccountId = targetAccountId;
-        updateAccountLabelFromSkland(targetAccountId, binding.nickname);
-        const skland = updateAccountSklandSyncMeta(targetAccountId, {
-            uid: binding.uid,
-            nickname: binding.nickname,
-            importedAt,
-            operatorCount: names.length
-        });
-        saveAccountsData();
-        ownedOpsSet = new Set(names);
-
-        const summary = {
+        const result = createSklandImportState(getCurrentAccountState(), {
             accountId: targetAccountId,
-            accountLabel: getAccountLabel(targetAccountId),
-            operatorCount: skland?.operatorCount ?? names.length,
-            nickname: skland?.nickname || binding.nickname,
-            uid: skland?.uid || binding.uid,
-            importedAt: skland?.importedAt || importedAt
-        };
-        GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(summary));
-        return summary;
+            names,
+            binding,
+            importedAt
+        });
+
+        return commitSklandImportResult(result);
+    }
+
+    function commitSklandImportResult(result) {
+        commitAccountState(result.state);
+        try {
+            GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(result.summary));
+        } catch (_error) {
+            console.warn('[Better PRTS] 森空岛兼容摘要保存失败，账户数据已成功保存');
+        }
+        return result.summary;
     }
 
     async function refreshSklandToken(credential) {

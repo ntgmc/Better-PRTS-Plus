@@ -101,37 +101,24 @@
         return element.closest?.('ul.grid > li, .tabular-nums ul > li') || null;
     }
 
-    function queueDirtyCards(cards) {
-        if (!cards || cards.size === 0 || cards.length === 0) return;
-        if (!pendingDirtyCards) pendingDirtyCards = new Set();
-        cards.forEach(card => {
-            if (card?.isConnected) pendingDirtyCards.add(card);
-        });
-    }
+    const filterUpdateCoordinator = createFilterUpdateCoordinator({
+        requestFrame: callback => requestAnimationFrame(callback),
+        cancelFrame: id => cancelAnimationFrame(id),
+        setDelay: (callback, delay) => setTimeout(callback, delay),
+        clearDelay: id => clearTimeout(id),
+        run: () => applyFilterLogic()
+    });
 
     function requestFilterUpdate(options = {}) {
-        if (options.forceFull !== false) {
-            forceNextFilterUpdate = true;
-        }
-        queueDirtyCards(options.dirtyCards);
-        if (rafId) cancelAnimationFrame(rafId);
-        rafId = requestAnimationFrame(() => {
-            rafId = null;
-            applyFilterLogic();
-        });
+        filterUpdateCoordinator.request(options);
     }
 
     function scheduleFilterUpdate(delay = 80, options = {}) {
-        if (isFilterDisabledPage()) return;
-        if (options.forceFull !== false) {
-            forceNextFilterUpdate = true;
+        if (isFilterDisabledPage()) {
+            filterUpdateCoordinator.reset();
+            return;
         }
-        queueDirtyCards(options.dirtyCards);
-        if (filterDebounceTimer) clearTimeout(filterDebounceTimer);
-        filterDebounceTimer = setTimeout(() => {
-            filterDebounceTimer = null;
-            requestFilterUpdate(options);
-        }, delay);
+        filterUpdateCoordinator.schedule(delay, options);
     }
 
     function syncPageScaffold() {
@@ -232,6 +219,7 @@
         if (routeKey === lastRouteKey) return false;
 
         lastRouteKey = routeKey;
+        filterUpdateCoordinator.reset();
         syncPageScaffold();
         scheduleFilterUpdate(120);
         return true;
@@ -583,8 +571,7 @@
 
     function applyFilterLogic() {
         if (isFilterDisabledPage()) {
-            pendingDirtyCards = null;
-            forceNextFilterUpdate = true;
+            filterUpdateCoordinator.reset();
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
             return;
         }
@@ -593,25 +580,18 @@
         try {
             const cards = getOperationCards();
             if (cards.length === 0) {
-                pendingDirtyCards = null;
-                forceNextFilterUpdate = true;
+                filterUpdateCoordinator.reset();
                 setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
                 return;
             }
 
-            const dirtyCards = pendingDirtyCards
-                ? Array.from(pendingDirtyCards).filter(card => card.isConnected)
-                : [];
-            pendingDirtyCards = null;
-
-            const shouldProcessAll = forceNextFilterUpdate || dirtyCards.length === 0;
-            forceNextFilterUpdate = false;
-
-            const cardsToProcess = shouldProcessAll ? cards : dirtyCards;
-            cardsToProcess.forEach(processOperationCard);
+            const work = filterUpdateCoordinator.takeWork(cards);
+            work.cards.forEach(processOperationCard);
 
             setCompatibilityDiagnostics(aggregateCardDiagnostics(cards));
-
+        } catch (error) {
+            filterUpdateCoordinator.reset();
+            throw error;
         } finally {
             isProcessingFilter = false;
         }

@@ -66,9 +66,9 @@
         const diffText = formatOperatorImportDiff(diff);
         const sourceText = sourceLabel ? `来源：${sourceLabel}` : '来源：导入内容';
 
-        accountsData[activeAccountId] = sanitizedNames;
-        saveAccountsData();
-        ownedOpsSet = new Set(sanitizedNames);
+        const nextState = getCurrentAccountState();
+        nextState.accountsData[nextState.activeAccountId] = sanitizedNames;
+        commitAccountState(nextState);
         refreshAccountStateUi();
 
         const message = `${accountLabel} 导入成功`;

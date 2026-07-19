@@ -295,14 +295,12 @@ foreach ($requiredFunction in @(
     "normalizeSklandSyncMeta",
     "normalizeSklandImportSummary",
     "getAccountSklandSyncMeta",
-    "updateAccountSklandSyncMeta",
     "getAccountSklandImportSummary",
     "formatSklandSyncTime",
     "formatSklandSyncSummary",
     "formatAccountSklandTitle",
     "getAccountLabel",
     "renameAccount",
-    "updateAccountLabelFromSkland",
     "buildAccountsBackup",
     "parseAccountsBackup",
     "applyAccountsBackup",
@@ -313,28 +311,34 @@ foreach ($requiredFunction in @(
         throw "Missing account management helper: $requiredFunction"
     }
 }
-if ($userScript -notmatch "GM_setValue\(ACCOUNTS_DATA_KEY,[\s\S]*accountMeta") {
-    throw "Account metadata should be persisted with account data"
+foreach ($requiredStateFunction in @(
+    "createAccountState",
+    "serializeAccountState",
+    "resolveStoredAccountState",
+    "createRenamedAccountState",
+    "createSklandImportState",
+    "commitAccountState"
+)) {
+    if ($userScript -notmatch "function $requiredStateFunction") {
+        throw "Missing account state boundary: $requiredStateFunction"
+    }
 }
-if ($userScript -notmatch "function loadOwnedOps\(\)[\s\S]*parsed\.accountMeta[\s\S]*normalizeAccountMeta") {
-    throw "loadOwnedOps should normalize missing or existing account metadata"
+if ($userScript -notmatch "function commitAccountState\([^)]*\)[\s\S]*GM_setValue\(ACCOUNTS_DATA_KEY, serializeAccountState\(state\)\)[\s\S]*publishAccountState\(state\)") {
+    throw "Account state should be persisted before it is published"
 }
-if ($userScript -notmatch "function importSklandOperatorsToAccount\([^)]*\)[\s\S]*updateAccountLabelFromSkland\(targetAccountId, binding\.nickname\)") {
-    throw "Skland import should update account labels from nickname"
+if ($userScript -notmatch "function loadOwnedOps\(\)[\s\S]*resolveStoredAccountState\(readAccountStorageSnapshot\(\)\)") {
+    throw "loadOwnedOps should resolve storage through the account state boundary"
 }
-if ($userScript -notmatch "function importSklandOperatorsToAccount\([^)]*\)[\s\S]*updateAccountSklandSyncMeta\(targetAccountId,[\s\S]*uid: binding\.uid[\s\S]*nickname: binding\.nickname[\s\S]*operatorCount: names\.length") {
-    throw "Skland import should persist per-account Skland sync metadata"
+if ($userScript -notmatch "function importSklandOperatorsToAccount\([^)]*\)[\s\S]*createSklandImportState\([\s\S]*commitSklandImportResult\(result\)") {
+    throw "Skland import should compute and commit one complete account transition"
 }
-if ($userScript -notmatch "function migrateLegacySklandImportSummary\(\)[\s\S]*SKLAND_LAST_IMPORT_KEY[\s\S]*updateAccountSklandSyncMeta") {
-    throw "Legacy global Skland import summaries should migrate into account metadata"
+if ($userScript -notmatch "function applyLegacySklandSummary\([^)]*\)[\s\S]*normalizeSklandSyncMeta\(summary\)") {
+    throw "Legacy global Skland summaries should migrate through the pure state layer"
 }
-if ($userScript -notmatch "function updateAccountLabelFromSkland\([\s\S]*labelSource === 'manual'[\s\S]*return") {
-    throw "Skland import should preserve manually renamed accounts"
+if ($userScript -notmatch "function createSklandImportState\([^)]*\)[\s\S]*labelSource === 'manual'[\s\S]*skland") {
+    throw "Skland state transitions should preserve manually renamed accounts"
 }
-if ($userScript -notmatch "function updateAccountLabelFromSkland\([\s\S]*\.\.\.currentMeta[\s\S]*label: sklandLabel") {
-    throw "Skland nickname updates should preserve existing account metadata"
-}
-if ($userScript -notmatch "function renameAccount\([^)]*\)[\s\S]*currentMeta\.skland[\s\S]*skland: currentMeta\.skland") {
+if ($userScript -notmatch "function createRenamedAccountState\([^)]*\)[\s\S]*currentMeta\.skland[\s\S]*skland: currentMeta\.skland") {
     throw "Manual account renames should preserve Skland sync metadata"
 }
 if ($userScript -notmatch "function injectFilterControls\(\)[\s\S]*getAccountSklandSyncMeta\(activeAccountId\)[\s\S]*prts-account-sync-chip") {
@@ -440,15 +444,20 @@ if ($userScript -notmatch "function hasRelevantDomMutation") {
 }
 foreach ($requiredDirtyFilterToken in @(
     "const cardDiagnosticsCache = new WeakMap\(\)",
-    "let pendingDirtyCards = null",
+    "function createFilterUpdateCoordinator",
+    "let pendingCards = null",
     "function collectDirtyCardsFromMutations",
     "function processOperationCard",
     "function aggregateCardDiagnostics",
+    "filterUpdateCoordinator\.takeWork\(cards\)",
     "forceFull: false, dirtyCards"
 )) {
     if ($userScript -notmatch $requiredDirtyFilterToken) {
         throw "Missing dirty-card filter refresh support: $requiredDirtyFilterToken"
     }
+}
+if ($userScript -match "let pendingDirtyCards|let forceNextFilterUpdate|let filterDebounceTimer|let rafId") {
+    throw "Filter scheduling state should remain encapsulated in createFilterUpdateCoordinator"
 }
 Write-Host "Checking Blueprint v4/v6 compatibility selectors..."
 foreach ($selector in @(

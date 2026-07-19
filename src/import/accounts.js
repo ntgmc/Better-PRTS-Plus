@@ -2,18 +2,43 @@
     //                            MODULE 4: 数据存取与账号管理
     // =========================================================================
 
-    /**
-     * 持久化保存所有多账号数据
-     */
-    function saveAccountsData() {
-        activeAccountId = normalizeAccountId(activeAccountId);
-        accountsData = normalizeAccountsData(accountsData);
-        accountMeta = normalizeAccountMeta(accountMeta);
-        GM_setValue(ACCOUNTS_DATA_KEY, JSON.stringify({
-            activeAccountId,
-            accountsData,
-            accountMeta
-        }));
+    function getCurrentAccountState() {
+        return createAccountState({ activeAccountId, accountsData, accountMeta });
+    }
+
+    function publishAccountState(value) {
+        const state = createAccountState(value);
+        activeAccountId = state.activeAccountId;
+        accountsData = state.accountsData;
+        accountMeta = state.accountMeta;
+        ownedOpsSet = new Set(accountsData[activeAccountId] || []);
+        return state;
+    }
+
+    function commitAccountState(value) {
+        const state = createAccountState(value);
+        GM_setValue(ACCOUNTS_DATA_KEY, serializeAccountState(state));
+        return publishAccountState(state);
+    }
+
+    function readAccountStorageSnapshot() {
+        const legacyAccounts = {};
+        ACCOUNT_IDS.forEach(id => {
+            legacyAccounts[id] = GM_getValue(`prts_plus_user_ops_${id}`);
+        });
+        return {
+            unifiedStore: GM_getValue(ACCOUNTS_DATA_KEY),
+            legacyAccounts,
+            legacyActiveAccountId: GM_getValue('prts_plus_active_account'),
+            veryOldStore: GM_getValue('prts_plus_user_ops'),
+            legacySklandSummary: GM_getValue(SKLAND_LAST_IMPORT_KEY)
+        };
+    }
+
+    function reportAccountStateDiagnostics(diagnostics) {
+        diagnostics.forEach(diagnostic => {
+            console.warn('[Better PRTS] 账户数据兼容诊断', diagnostic.code, diagnostic.source);
+        });
     }
 
     /**
@@ -22,55 +47,13 @@
     function loadOwnedOps() {
         currentFilterMode = normalizeFilterMode(currentFilterMode);
         displayMode = normalizeDisplayMode(displayMode);
-        accountMeta = createDefaultAccountMeta();
-        // 尝试加载主存储集合
-        const unifiedStore = GM_getValue(ACCOUNTS_DATA_KEY);
-        let migrated = false;
-
-        if (unifiedStore) {
-            try {
-                const parsed = JSON.parse(unifiedStore);
-                activeAccountId = normalizeAccountId(parsed.activeAccountId);
-                accountsData = normalizeAccountsData(parsed.accountsData);
-                accountMeta = normalizeAccountMeta(parsed.accountMeta);
-                if (!parsed.accountMeta) migrated = true;
-            } catch (e) {
-                console.error('[Better PRTS] 主数据解析失败', e);
-                activeAccountId = 1;
-                accountsData = createEmptyAccountsData();
-                accountMeta = createDefaultAccountMeta();
-            }
+        const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
+        reportAccountStateDiagnostics(resolved.diagnostics);
+        if (resolved.migrated) {
+            commitAccountState(resolved.state);
         } else {
-            // [迁移] 尝试从用户单独定义的 prts_plus_user_ops_N 中恢复
-            for (let i = 1; i <= 3; i++) {
-                const legacyVal = GM_getValue(`prts_plus_user_ops_${i}`);
-                if (legacyVal) {
-                    try { accountsData[i] = sanitizeOperatorNames(JSON.parse(legacyVal)); migrated = true; } catch(e){}
-                }
-            }
-            const activeLegacy = GM_getValue('prts_plus_active_account');
-            if (activeLegacy) activeAccountId = normalizeAccountId(activeLegacy);
-
-            // [迁移] 尝试从最远古的单账号版本恢复到账号 1
-            const veryOldVal = GM_getValue('prts_plus_user_ops');
-            if (veryOldVal && accountsData[1].length === 0) {
-                try {
-                    let ops = JSON.parse(veryOldVal);
-                    if (Array.isArray(ops)) {
-                    if (ops.length > 0 && typeof ops[0] === 'object') {
-                        ops = ops.filter(op => isOwnedOperatorRecord(op) && op.name).map(op => op.name);
-                    }
-                        accountsData[1] = sanitizeOperatorNames(ops);
-                        migrated = true;
-                    }
-                } catch(e){}
-            }
+            publishAccountState(resolved.state);
         }
-
-        if (migrateLegacySklandImportSummary()) migrated = true;
-        if (migrated) saveAccountsData(); // 如果发生了任何迁移，立即转储至新结构
-
-        ownedOpsSet = new Set(accountsData[activeAccountId] || []);
         console.log(`[Better PRTS] 已加载账号 ${activeAccountId} 的 ${ownedOpsSet.size} 名持有干员`);
     }
 
@@ -81,10 +64,7 @@
         id = normalizeAccountId(id);
         if (id === activeAccountId) return;
 
-        activeAccountId = id;
-        saveAccountsData(); // 记忆选中状态
-
-        ownedOpsSet = new Set(accountsData[activeAccountId] ||[]);
+        commitAccountState(createAccountSwitchState(getCurrentAccountState(), id));
 
         // 1. 同步悬浮窗面板内的小按钮状态
         const accBtns = document.querySelectorAll('.prts-acc-btn');
@@ -163,52 +143,14 @@
         });
         if (rawLabel === null) return;
 
-        const cleaned = String(rawLabel).replace(/[\x00-\x1F\x7F]/g, '').trim();
-        accountMeta = normalizeAccountMeta(accountMeta);
-        const currentMeta = accountMeta[accountId] || {};
-        accountMeta[accountId] = {
-            label: normalizeAccountLabel(cleaned, accountId),
-            labelSource: cleaned ? 'manual' : 'default',
-            ...(currentMeta.skland ? { skland: currentMeta.skland } : {})
-        };
-        saveAccountsData();
+        commitAccountState(createRenamedAccountState(getCurrentAccountState(), accountId, rawLabel));
         refreshAccountStateUi();
         showPrtsToast('账号名称已更新', 'success', `${getAccountLabel(accountId)} / ${getAccountOperatorCount(accountId)} 名干员`);
-    }
-
-    function updateAccountLabelFromSkland(id, nickname) {
-        const accountId = normalizeAccountId(id);
-        const sklandLabel = normalizeAccountLabel(nickname, accountId);
-        if (sklandLabel === getDefaultAccountLabel(accountId)) return;
-
-        accountMeta = normalizeAccountMeta(accountMeta);
-        if (accountMeta[accountId]?.labelSource === 'manual') return;
-
-        const currentMeta = accountMeta[accountId] || {};
-        accountMeta[accountId] = {
-            ...currentMeta,
-            label: sklandLabel,
-            labelSource: 'skland'
-        };
     }
 
     function getAccountSklandSyncMeta(id) {
         const accountId = normalizeAccountId(id);
         return normalizeSklandSyncMeta(accountMeta?.[accountId]?.skland);
-    }
-
-    function updateAccountSklandSyncMeta(id, syncMeta) {
-        const accountId = normalizeAccountId(id);
-        const skland = normalizeSklandSyncMeta(syncMeta);
-        if (!skland) return null;
-
-        accountMeta = normalizeAccountMeta(accountMeta);
-        const currentMeta = accountMeta[accountId] || { label: getDefaultAccountLabel(accountId), labelSource: 'default' };
-        accountMeta[accountId] = {
-            ...currentMeta,
-            skland
-        };
-        return skland;
     }
 
     function getAccountSklandImportSummary(id) {
@@ -236,18 +178,6 @@
         return lines.join('\n');
     }
 
-    function migrateLegacySklandImportSummary() {
-        const summary = normalizeSklandImportSummary(safeJsonParse(GM_getValue(SKLAND_LAST_IMPORT_KEY) || '', null));
-        if (!summary) return false;
-
-        const accountId = normalizeAccountId(summary.accountId);
-        accountMeta = normalizeAccountMeta(accountMeta);
-        if (accountMeta[accountId]?.skland) return false;
-
-        updateAccountSklandSyncMeta(accountId, summary);
-        return true;
-    }
-
     function getBackupPreferences() {
         return {
             filterMode: normalizeFilterMode(currentFilterMode),
@@ -262,17 +192,15 @@
     }
 
     function buildAccountsBackup() {
-        activeAccountId = normalizeAccountId(activeAccountId);
-        accountsData = normalizeAccountsData(accountsData);
-        accountMeta = normalizeAccountMeta(accountMeta);
+        const state = getCurrentAccountState();
 
         return {
             type: ACCOUNT_BACKUP_TYPE,
             version: ACCOUNT_BACKUP_VERSION,
             exportedAt: new Date().toISOString(),
-            activeAccountId,
-            accountsData,
-            accountMeta,
+            activeAccountId: state.activeAccountId,
+            accountsData: state.accountsData,
+            accountMeta: state.accountMeta,
             preferences: getBackupPreferences()
         };
     }
@@ -383,22 +311,19 @@
     }
 
     function applyAccountsBackup(backup) {
-        activeAccountId = backup.activeAccountId;
-        accountsData = normalizeAccountsData(backup.accountsData);
-        accountMeta = normalizeAccountMeta(backup.accountMeta);
+        const nextState = createAccountState(backup);
         currentFilterMode = normalizeFilterMode(backup.preferences.filterMode);
         displayMode = normalizeDisplayMode(backup.preferences.displayMode);
         CONFIG.visuals = backup.preferences.config.visuals === true;
         CONFIG.cleanLink = backup.preferences.config.cleanLink === true;
         CONFIG.hideSidebar = backup.preferences.config.hideSidebar === true;
 
-        saveAccountsData();
+        commitAccountState(nextState);
         GM_setValue(FILTER_MODE_KEY, currentFilterMode);
         GM_setValue(DISPLAY_MODE_KEY, displayMode);
         saveConfig();
         GM_setValue('prts_float_pos', JSON.stringify(backup.preferences.floatingPosition));
 
-        ownedOpsSet = new Set(accountsData[activeAccountId] || []);
         refreshAccountStateUi(true);
     }
 
