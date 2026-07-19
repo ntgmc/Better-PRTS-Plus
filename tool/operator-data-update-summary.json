@@ -1,15 +1,26 @@
 {
     "source":  "https://raw.githubusercontent.com/ZOOT-Plus/zoot-plus-frontend/refs/heads/dev/src/models/generated/operators.json",
     "sourceKind":  "url",
-    "generatedAtUtc":  "2026-07-07T11:22:06.8292071Z",
+    "generatedAtUtc":  "2026-07-19T03:38:56.4571575Z",
     "previousCount":  418,
-    "newCount":  418,
-    "delta":  0,
-    "addedCount":  0,
+    "newCount":  421,
+    "delta":  3,
+    "addedCount":  3,
     "removedCount":  0,
     "renamedCount":  0,
     "added":  [
-
+                  {
+                      "id":  "char_4229_aphris",
+                      "name":  "谬因"
+                  },
+                  {
+                      "id":  "char_4230_mcnist",
+                      "name":  "机械师"
+                  },
+                  {
+                      "id":  "char_4234_pedro",
+                      "name":  "佩德洛"
+                  }
               ],
     "removed":  [
 

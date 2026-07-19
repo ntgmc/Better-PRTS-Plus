@@ -1476,8 +1476,20 @@
         "name":  "可露希尔"
     },
     {
+        "id":  "char_4229_aphris",
+        "name":  "谬因"
+    },
+    {
         "id":  "char_422_aurora",
         "name":  "极光"
+    },
+    {
+        "id":  "char_4230_mcnist",
+        "name":  "机械师"
+    },
+    {
+        "id":  "char_4234_pedro",
+        "name":  "佩德洛"
     },
     {
         "id":  "char_423_blemsh",
