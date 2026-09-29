@@ -45,6 +45,7 @@
     function saveConfig() {
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
+        GM_setValue('prts_cfg_hide_video', CONFIG.hideVideo);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
         GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
     }
@@ -423,6 +424,9 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
         }, 'cleanLink', 'link'));
+        panel.appendChild(createSwitch('隐藏视频作业', CONFIG.hideVideo, (val) => {
+            CONFIG.hideVideo = val; saveConfig(); syncOperationTypeButtons(); requestFilterUpdate();
+        }, 'hideVideo', 'filter'));
 
         panel.appendChild(createSwitch('折叠侧边栏', CONFIG.hideSidebar, (val) => {
             CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();

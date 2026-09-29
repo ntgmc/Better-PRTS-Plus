@@ -55,6 +55,7 @@
     const CONFIG = {
         visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
         cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
+        hideVideo: GM_getValue('prts_cfg_hide_video', false), // 隐藏视频作业
         hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false), // 折叠侧边栏
         compatDebug: GM_getValue('prts_cfg_compat_debug', false)  // 兼容性诊断
     };
@@ -1347,6 +1348,16 @@ function createSklandImportCancelledError() {
 
     function getOperationForCard(card, cardInner) {
         return getOperationResolutionForCard(card, cardInner).operation;
+    }
+
+    function getCardTypeTag(cardInner, text) {
+        return Array.from(cardInner.querySelectorAll('h4 .bp4-tag, h4 .bp6-tag'))
+            .find(tag => tag.textContent.trim() === text);
+    }
+
+    function isVideoOperationCard(cardInner, operation) {
+        if (operation?.type) return operation.type === 'VIDEO';
+        return Boolean(getCardTypeTag(cardInner, '视频') || getCardTypeTag(cardInner, 'Video'));
     }
 
     function updateStatusLabel(label, className, icon, text) {
@@ -3327,6 +3338,7 @@ function createSklandImportCancelledError() {
             config: {
                 visuals: CONFIG.visuals === true,
                 cleanLink: CONFIG.cleanLink === true,
+                hideVideo: CONFIG.hideVideo === true,
                 hideSidebar: CONFIG.hideSidebar === true
             },
             floatingPosition: parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'))
@@ -3395,6 +3407,7 @@ function createSklandImportCancelledError() {
             config: {
                 visuals: rawConfig.visuals !== false,
                 cleanLink: rawConfig.cleanLink !== false,
+                hideVideo: rawConfig.hideVideo === true,
                 hideSidebar: rawConfig.hideSidebar === true
             },
             floatingPosition: parseFloatingPosition(raw.floatingPosition)
@@ -3463,6 +3476,7 @@ function createSklandImportCancelledError() {
         displayMode = normalizeDisplayMode(backup.preferences.displayMode);
         CONFIG.visuals = backup.preferences.config.visuals === true;
         CONFIG.cleanLink = backup.preferences.config.cleanLink === true;
+        CONFIG.hideVideo = backup.preferences.config.hideVideo === true;
         CONFIG.hideSidebar = backup.preferences.config.hideSidebar === true;
 
         commitAccountState(nextState);
@@ -4145,11 +4159,21 @@ function createSklandImportCancelledError() {
         filterUpdateCoordinator.schedule(delay, options);
     }
 
+    function syncOperationTypeButtons(hidden = CONFIG.hideVideo) {
+        document.querySelectorAll('.bp4-button-group.flex-wrap, .bp6-button-group.flex-wrap').forEach(group => {
+            const labels = Array.from(group.children, button => button.textContent.trim());
+            if (labels.length === 3 && labels[1] === 'PRTS' && ['视频', 'Video', 'Videos'].includes(labels[2])) {
+                group.style.display = hidden ? 'none' : '';
+            }
+        });
+    }
+
     function syncPageScaffold() {
         applySidebarCollapse();
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        syncOperationTypeButtons();
         if (isFilterDisabledPage()) {
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
         } else {
@@ -4505,6 +4529,7 @@ function createSklandImportCancelledError() {
             return diagnostics;
         }
 
+        getCardTypeTag(cardInner, 'PRTS')?.remove();
         optimizeCardVisuals(card, cardInner);
         cleanBilibiliLinks(cardInner);
 
@@ -4514,6 +4539,11 @@ function createSklandImportCancelledError() {
             ? createCardDiagnostics(resolution.source)
             : createCardDiagnostics('none');
 
+        if (CONFIG.hideVideo && isVideoOperationCard(cardInner, operation)) {
+            if (card.style.display !== 'none') card.style.display = 'none';
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
         const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
             checkOperationAvailability(operation, ownedOpsSet, currentFilterMode, accountsTraining[activeAccountId], trainingCheckEnabled);
 
@@ -4681,6 +4711,7 @@ function createSklandImportCancelledError() {
     function saveConfig() {
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
+        GM_setValue('prts_cfg_hide_video', CONFIG.hideVideo);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
         GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
     }
@@ -5059,6 +5090,9 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
         }, 'cleanLink', 'link'));
+        panel.appendChild(createSwitch('隐藏视频作业', CONFIG.hideVideo, (val) => {
+            CONFIG.hideVideo = val; saveConfig(); syncOperationTypeButtons(); requestFilterUpdate();
+        }, 'hideVideo', 'filter'));
 
         panel.appendChild(createSwitch('折叠侧边栏', CONFIG.hideSidebar, (val) => {
             CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
@@ -5335,7 +5369,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (handleRouteChange()) return;
             const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
             syncPageScaffold();
-            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
+            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled || CONFIG.hideVideo)) {
                 scheduleFilterUpdate(120);
             }
         }, 3000);

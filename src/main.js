@@ -59,7 +59,7 @@
             if (handleRouteChange()) return;
             const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
             syncPageScaffold();
-            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
+            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled || CONFIG.hideVideo)) {
                 scheduleFilterUpdate(120);
             }
         }, 3000);

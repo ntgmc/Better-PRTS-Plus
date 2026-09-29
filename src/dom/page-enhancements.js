@@ -121,11 +121,21 @@
         filterUpdateCoordinator.schedule(delay, options);
     }
 
+    function syncOperationTypeButtons(hidden = CONFIG.hideVideo) {
+        document.querySelectorAll('.bp4-button-group.flex-wrap, .bp6-button-group.flex-wrap').forEach(group => {
+            const labels = Array.from(group.children, button => button.textContent.trim());
+            if (labels.length === 3 && labels[1] === 'PRTS' && ['视频', 'Video', 'Videos'].includes(labels[2])) {
+                group.style.display = hidden ? 'none' : '';
+            }
+        });
+    }
+
     function syncPageScaffold() {
         applySidebarCollapse();
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        syncOperationTypeButtons();
         if (isFilterDisabledPage()) {
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
         } else {
@@ -481,6 +491,7 @@
             return diagnostics;
         }
 
+        getCardTypeTag(cardInner, 'PRTS')?.remove();
         optimizeCardVisuals(card, cardInner);
         cleanBilibiliLinks(cardInner);
 
@@ -490,6 +501,11 @@
             ? createCardDiagnostics(resolution.source)
             : createCardDiagnostics('none');
 
+        if (CONFIG.hideVideo && isVideoOperationCard(cardInner, operation)) {
+            if (card.style.display !== 'none') card.style.display = 'none';
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
         const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
             checkOperationAvailability(operation, ownedOpsSet, currentFilterMode, accountsTraining[activeAccountId], trainingCheckEnabled);
 

@@ -110,6 +110,16 @@
         return getOperationResolutionForCard(card, cardInner).operation;
     }
 
+    function getCardTypeTag(cardInner, text) {
+        return Array.from(cardInner.querySelectorAll('h4 .bp4-tag, h4 .bp6-tag'))
+            .find(tag => tag.textContent.trim() === text);
+    }
+
+    function isVideoOperationCard(cardInner, operation) {
+        if (operation?.type) return operation.type === 'VIDEO';
+        return Boolean(getCardTypeTag(cardInner, '视频') || getCardTypeTag(cardInner, 'Video'));
+    }
+
     function updateStatusLabel(label, className, icon, text) {
         const state = `${className}|${icon}|${text}`;
         if (label.dataset.prtsStatusState === state) return;

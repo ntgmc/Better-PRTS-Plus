@@ -14,7 +14,8 @@ const sourceFiles = [
   'src/import/skland.js',
   'src/dom/card-resolution.js',
   'src/filter/operation-matching.js',
-  'src/import/accounts.js'
+  'src/import/accounts.js',
+  'src/dom/page-enhancements.js'
 ];
 
 const source = sourceFiles
@@ -36,6 +37,9 @@ globalThis.__testExports = {
   createRenamedAccountState,
   createSklandImportState,
   createFilterUpdateCoordinator,
+  getCardTypeTag,
+  isVideoOperationCard,
+  syncOperationTypeButtons,
   getCurrentAccountState,
   getOwnedOpsSnapshot: () => Array.from(ownedOpsSet),
   publishAccountState,
@@ -104,6 +108,9 @@ const {
   createRenamedAccountState,
   createSklandImportState,
   createFilterUpdateCoordinator,
+  getCardTypeTag,
+  isVideoOperationCard,
+  syncOperationTypeButtons,
   getCurrentAccountState,
   getOwnedOpsSnapshot,
   publishAccountState,
@@ -130,6 +137,41 @@ function test(name, fn) {
 function hostArray(value) {
   return Array.from(value);
 }
+
+test('video cards use operation type or localized title tag', () => {
+  const prtsTag = { textContent: 'PRTS' };
+  const videoTag = { textContent: '视频' };
+  const cardInner = tags => ({
+    querySelectorAll(selector) {
+      assert.strictEqual(selector, 'h4 .bp4-tag, h4 .bp6-tag');
+      return tags;
+    }
+  });
+  assert.strictEqual(getCardTypeTag(cardInner([prtsTag]), 'PRTS'), prtsTag);
+  assert.strictEqual(isVideoOperationCard(cardInner([]), { type: 'VIDEO' }), true);
+  assert.strictEqual(isVideoOperationCard(cardInner([videoTag]), { type: 'PRTS' }), false);
+  assert.strictEqual(isVideoOperationCard(cardInner([prtsTag]), {}), false);
+  assert.strictEqual(isVideoOperationCard(cardInner([videoTag]), {}), true);
+  assert.strictEqual(isVideoOperationCard(cardInner([{ textContent: 'Video' }]), {}), true);
+});
+
+test('operation type buttons follow video hiding without affecting other groups', () => {
+  const group = labels => ({ children: labels.map(textContent => ({ textContent })), style: { display: '' } });
+  const typeGroup = group(['全部', 'PRTS', '视频']);
+  const sortGroup = group(['最新', '最热', '评分']);
+  context.document = {
+    querySelectorAll(selector) {
+      assert.strictEqual(selector, '.bp4-button-group.flex-wrap, .bp6-button-group.flex-wrap');
+      return [typeGroup, sortGroup];
+    }
+  };
+  syncOperationTypeButtons(true);
+  assert.strictEqual(typeGroup.style.display, 'none');
+  assert.strictEqual(sortGroup.style.display, '');
+  syncOperationTypeButtons(false);
+  assert.strictEqual(typeGroup.style.display, '');
+  delete context.document;
+});
 
 function hostObject(value) {
   return JSON.parse(JSON.stringify(value));
@@ -358,7 +400,7 @@ test('parseAccountsBackup normalizes data and preferences', () => {
     preferences: {
       filterMode: 'PERFECT',
       displayMode: 'HIDE',
-      config: { visuals: false, cleanLink: false, hideSidebar: true },
+      config: { visuals: false, cleanLink: false, hideVideo: true, hideSidebar: true },
       floatingPosition: { top: '120%', isRight: false }
     }
   });
@@ -378,8 +420,10 @@ test('parseAccountsBackup normalizes data and preferences', () => {
   assert.strictEqual(backup.preferences.displayMode, 'HIDE');
   assert.strictEqual(backup.preferences.config.visuals, false);
   assert.strictEqual(backup.preferences.config.cleanLink, false);
+  assert.strictEqual(backup.preferences.config.hideVideo, true);
   assert.strictEqual(backup.preferences.config.hideSidebar, true);
   assert.deepStrictEqual(hostObject(backup.preferences.floatingPosition), { top: '95%', isRight: false });
+  assert.strictEqual(parseAccountsBackup({ type: ACCOUNT_BACKUP_TYPE, version: ACCOUNT_BACKUP_VERSION }).preferences.config.hideVideo, false);
 });
 
 test('parseAccountsBackup rejects incompatible backup schema', () => {

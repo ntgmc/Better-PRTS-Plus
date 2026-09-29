@@ -187,6 +187,7 @@
             config: {
                 visuals: CONFIG.visuals === true,
                 cleanLink: CONFIG.cleanLink === true,
+                hideVideo: CONFIG.hideVideo === true,
                 hideSidebar: CONFIG.hideSidebar === true
             },
             floatingPosition: parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'))
@@ -255,6 +256,7 @@
             config: {
                 visuals: rawConfig.visuals !== false,
                 cleanLink: rawConfig.cleanLink !== false,
+                hideVideo: rawConfig.hideVideo === true,
                 hideSidebar: rawConfig.hideSidebar === true
             },
             floatingPosition: parseFloatingPosition(raw.floatingPosition)
@@ -323,6 +325,7 @@
         displayMode = normalizeDisplayMode(backup.preferences.displayMode);
         CONFIG.visuals = backup.preferences.config.visuals === true;
         CONFIG.cleanLink = backup.preferences.config.cleanLink === true;
+        CONFIG.hideVideo = backup.preferences.config.hideVideo === true;
         CONFIG.hideSidebar = backup.preferences.config.hideSidebar === true;
 
         commitAccountState(nextState);

@@ -24,6 +24,7 @@
     const CONFIG = {
         visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
         cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
+        hideVideo: GM_getValue('prts_cfg_hide_video', false), // 隐藏视频作业
         hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false), // 折叠侧边栏
         compatDebug: GM_getValue('prts_cfg_compat_debug', false)  // 兼容性诊断
     };
