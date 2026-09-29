@@ -28,6 +28,9 @@
         background-color: #18181c; border-color: #38383b;
     }
 
+    .prts-exact-time { font-size: 0 !important; }
+    .prts-exact-time::after { content: attr(data-prts-exact-time); font-size: 0.875rem; }
+
     /* 2. 视频链接 */
     .prts-video-box { margin-top: 2px; margin-bottom: 6px; display: flex; align-items: center; position: relative; z-index: 1; }
     .prts-bili-link {

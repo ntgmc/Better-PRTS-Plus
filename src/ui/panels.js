@@ -46,6 +46,7 @@
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
         GM_setValue('prts_cfg_hide_video', CONFIG.hideVideo);
+        GM_setValue('prts_cfg_exact_time', CONFIG.showExactTime);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
         GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
     }
@@ -421,6 +422,11 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.appendChild(createSwitch('作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
         }, 'visuals', 'operators'));
+        panel.appendChild(createSwitch('显示作业具体时间', CONFIG.showExactTime, (val) => {
+            CONFIG.showExactTime = val;
+            saveConfig();
+            requestFilterUpdate();
+        }, 'showExactTime', 'time'));
         panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
         }, 'cleanLink', 'link'));

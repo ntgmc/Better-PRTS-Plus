@@ -56,6 +56,7 @@
         visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
         cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
         hideVideo: GM_getValue('prts_cfg_hide_video', false), // 隐藏视频作业
+        showExactTime: GM_getValue('prts_cfg_exact_time', false), // 作业具体时间
         hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false), // 折叠侧边栏
         compatDebug: GM_getValue('prts_cfg_compat_debug', false)  // 兼容性诊断
     };
@@ -1406,6 +1407,9 @@ function createSklandImportCancelledError() {
         background-color: #18181c; border-color: #38383b;
     }
 
+    .prts-exact-time { font-size: 0 !important; }
+    .prts-exact-time::after { content: attr(data-prts-exact-time); font-size: 0.875rem; }
+
     /* 2. 视频链接 */
     .prts-video-box { margin-top: 2px; margin-bottom: 6px; display: flex; align-items: center; position: relative; z-index: 1; }
     .prts-bili-link {
@@ -2511,6 +2515,7 @@ function createSklandImportCancelledError() {
         settings: 'M9.5 1 10 3l1.8.8 1.8-.9 1.5 2.6-1.7 1.2c.1.4.1.8.1 1.3s0 .9-.1 1.3l1.7 1.2-1.5 2.6-1.8-.9-1.8.8-.5 2h-3l-.5-2-1.8-.8-1.8.9L.9 10.5l1.7-1.2C2.5 8.9 2.5 8.5 2.5 8s0-.9.1-1.3L.9 5.5l1.5-2.6 1.8.9L6 3l.5-2h3zM8 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2z',
         support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm6.4 6.4H.8V12c0-.88.72-1.6 1.6-1.6h9.6c.88 0 1.6.72 1.6 1.6v2.4z',
         upload: 'M8 4.5 3.75 8.75l1.1 1.1L7.2 7.5V15h1.6V7.5l2.35 2.35 1.1-1.1L8 4.5zM2 1h12v1.6H2V1z',
+        time: 'M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm1-6.41V4a1 1 0 0 0-2 0v4c0 .28.11.53.29.71l2 2a1 1 0 0 0 1.42-1.42z',
         video: 'M2 3h8c.55 0 1 .45 1 1v2l3-2v8l-3-2v2c0 .55-.45 1-1 1H2c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1z'
     };
 
@@ -3339,6 +3344,7 @@ function createSklandImportCancelledError() {
                 visuals: CONFIG.visuals === true,
                 cleanLink: CONFIG.cleanLink === true,
                 hideVideo: CONFIG.hideVideo === true,
+                showExactTime: CONFIG.showExactTime === true,
                 hideSidebar: CONFIG.hideSidebar === true
             },
             floatingPosition: parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'))
@@ -3408,6 +3414,7 @@ function createSklandImportCancelledError() {
                 visuals: rawConfig.visuals !== false,
                 cleanLink: rawConfig.cleanLink !== false,
                 hideVideo: rawConfig.hideVideo === true,
+                showExactTime: rawConfig.showExactTime === true,
                 hideSidebar: rawConfig.hideSidebar === true
             },
             floatingPosition: parseFloatingPosition(raw.floatingPosition)
@@ -3477,6 +3484,7 @@ function createSklandImportCancelledError() {
         CONFIG.visuals = backup.preferences.config.visuals === true;
         CONFIG.cleanLink = backup.preferences.config.cleanLink === true;
         CONFIG.hideVideo = backup.preferences.config.hideVideo === true;
+        CONFIG.showExactTime = backup.preferences.config.showExactTime === true;
         CONFIG.hideSidebar = backup.preferences.config.hideSidebar === true;
 
         commitAccountState(nextState);
@@ -4521,6 +4529,21 @@ function createSklandImportCancelledError() {
         };
     }
 
+    function syncOperationCardTime(cardInner) {
+        const timeText = cardInner.querySelector('.bp4-icon-time, .bp6-icon-time')?.parentElement
+            ?.querySelector('.bp4-popover2-target > span, .bp6-popover-target > span');
+        if (!timeText) return;
+        const exactTime = CONFIG.showExactTime ? extractPopoverContentFromFiber(timeText) : '';
+        timeText.classList.toggle('prts-exact-time', Boolean(exactTime));
+        if (exactTime) {
+            timeText.dataset.prtsExactTime = exactTime;
+            timeText.setAttribute('aria-label', exactTime);
+        } else {
+            delete timeText.dataset.prtsExactTime;
+            timeText.removeAttribute('aria-label');
+        }
+    }
+
     function processOperationCard(card) {
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
@@ -4530,6 +4553,7 @@ function createSklandImportCancelledError() {
         }
 
         getCardTypeTag(cardInner, 'PRTS')?.remove();
+        syncOperationCardTime(cardInner);
         optimizeCardVisuals(card, cardInner);
         cleanBilibiliLinks(cardInner);
 
@@ -4712,6 +4736,7 @@ function createSklandImportCancelledError() {
         GM_setValue('prts_cfg_visuals', CONFIG.visuals);
         GM_setValue('prts_cfg_link', CONFIG.cleanLink);
         GM_setValue('prts_cfg_hide_video', CONFIG.hideVideo);
+        GM_setValue('prts_cfg_exact_time', CONFIG.showExactTime);
         GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
         GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
     }
@@ -5087,6 +5112,11 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.appendChild(createSwitch('作业卡片美化', CONFIG.visuals, (val) => {
             CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
         }, 'visuals', 'operators'));
+        panel.appendChild(createSwitch('显示作业具体时间', CONFIG.showExactTime, (val) => {
+            CONFIG.showExactTime = val;
+            saveConfig();
+            requestFilterUpdate();
+        }, 'showExactTime', 'time'));
         panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
             CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
         }, 'cleanLink', 'link'));

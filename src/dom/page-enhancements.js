@@ -483,6 +483,21 @@
         };
     }
 
+    function syncOperationCardTime(cardInner) {
+        const timeText = cardInner.querySelector('.bp4-icon-time, .bp6-icon-time')?.parentElement
+            ?.querySelector('.bp4-popover2-target > span, .bp6-popover-target > span');
+        if (!timeText) return;
+        const exactTime = CONFIG.showExactTime ? extractPopoverContentFromFiber(timeText) : '';
+        timeText.classList.toggle('prts-exact-time', Boolean(exactTime));
+        if (exactTime) {
+            timeText.dataset.prtsExactTime = exactTime;
+            timeText.setAttribute('aria-label', exactTime);
+        } else {
+            delete timeText.dataset.prtsExactTime;
+            timeText.removeAttribute('aria-label');
+        }
+    }
+
     function processOperationCard(card) {
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
@@ -492,6 +507,7 @@
         }
 
         getCardTypeTag(cardInner, 'PRTS')?.remove();
+        syncOperationCardTime(cardInner);
         optimizeCardVisuals(card, cardInner);
         cleanBilibiliLinks(cardInner);
 
