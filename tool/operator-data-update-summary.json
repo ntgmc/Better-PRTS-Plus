@@ -1,29 +1,29 @@
 {
     "source":  "https://raw.githubusercontent.com/ZOOT-Plus/zoot-plus-frontend/refs/heads/dev/src/models/generated/operators.json",
     "sourceKind":  "url",
-    "generatedAtUtc":  "2026-08-15T16:50:44.4637976Z",
-    "previousCount":  421,
-    "newCount":  425,
+    "generatedAtUtc":  "2026-09-29T15:46:45.4155108Z",
+    "previousCount":  425,
+    "newCount":  429,
     "delta":  4,
     "addedCount":  4,
     "removedCount":  0,
     "renamedCount":  0,
     "added":  [
                   {
-                      "id":  "char_1015_aglna2",
-                      "name":  "予愿安洁莉娜"
+                      "id":  "char_4217_makoto",
+                      "name":  "结城理"
                   },
                   {
-                      "id":  "char_4235_thumpy",
-                      "name":  "珊比"
+                      "id":  "char_4218_aigis",
+                      "name":  "埃癸斯"
                   },
                   {
-                      "id":  "char_4236_tmslot",
-                      "name":  "时隙"
+                      "id":  "char_4219_yukari",
+                      "name":  "岳羽由加莉"
                   },
                   {
-                      "id":  "char_4237_jcinta",
-                      "name":  "嘉辛塔"
+                      "id":  "char_4220_kormr",
+                      "name":  "虎狼丸"
                   }
               ],
     "removed":  [

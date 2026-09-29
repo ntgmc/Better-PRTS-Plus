@@ -1444,8 +1444,24 @@
         "name":  "罗德岛隐秘队"
     },
     {
+        "id":  "char_4217_makoto",
+        "name":  "结城理"
+    },
+    {
+        "id":  "char_4218_aigis",
+        "name":  "埃癸斯"
+    },
+    {
+        "id":  "char_4219_yukari",
+        "name":  "岳羽由加莉"
+    },
+    {
         "id":  "char_421_crow",
         "name":  "羽毛笔"
+    },
+    {
+        "id":  "char_4220_kormr",
+        "name":  "虎狼丸"
     },
     {
         "id":  "char_4221_ju",
