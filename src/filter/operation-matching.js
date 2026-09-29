@@ -55,14 +55,20 @@
         return "";
     }
 
-    function matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, allowUnknownFallbackGroup) {
+    function matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, allowUnknownFallbackGroup,
+        checkTraining, unknownTraining = [], lowTraining = []) {
         const groups = requiredGroups
             .map((group, index) => {
                 const allowedNames = (group.opers || [])
                     .map(o => o.name)
                     .filter(Boolean);
-                const candidates = allowedNames
-                    .filter(name => ownedOpsSet.has(name) && !usedOwnedOps.has(name));
+                const candidates = (group.opers || [])
+                    .filter(op => ownedOpsSet.has(op.name) && !usedOwnedOps.has(op.name))
+                    .filter(op => !checkTraining || checkTraining(op).status !== 'low')
+                    .sort((left, right) => checkTraining
+                        ? Number(checkTraining(left).status === 'unknown') - Number(checkTraining(right).status === 'unknown')
+                        : 0)
+                    .map(op => op.name);
                 return {
                     index,
                     name: group.name || '未命名干员组',
@@ -93,11 +99,22 @@
         groupOrder.forEach(group => {
             if (!tryAssign(group, new Set())) {
                 missingGroups.push(`[${group.name}]`);
+                if (checkTraining) {
+                    const low = (requiredGroups[group.index].opers || [])
+                        .filter(op => ownedOpsSet.has(op.name) && checkTraining(op).status === 'low')
+                        .map(op => `${op.name}：${checkTraining(op).detail}`);
+                    if (low.length) lowTraining.push(`[${group.name}] ${low.join(' / ')}`);
+                }
             }
         });
 
         matchedByOperator.forEach((group, opName) => {
             usedOwnedOps.add(opName);
+            if (checkTraining) {
+                const op = requiredGroups[group.index].opers.find(candidate => candidate.name === opName);
+                const result = checkTraining(op);
+                if (result.status === 'unknown') unknownTraining.push(`${opName}：${result.detail}`);
+            }
         });
 
         return missingGroups;
@@ -146,36 +163,98 @@
         return requiredOps.some(hasNamedOperatorEntry) || requiredGroups.some(hasGroupEntry);
     }
 
+    function checkOperatorTraining(op, training) {
+        const requirements = op?.requirements;
+        if (!requirements || typeof requirements !== 'object') return { status: 'ok' };
+        const details = [];
+        const unknown = [];
+        const check = (label, required, actual) => {
+            if (!Number.isInteger(required) || required < 0) return;
+            if (!Number.isInteger(actual)) unknown.push(label);
+            else if (actual < required) details.push(`${label} ${actual}/${required}`);
+        };
+        const eliteText = elite => ['未精英化', '精一', '精二'][elite] || '精英化未知';
+        if (Number.isInteger(requirements.level) && requirements.level > 0) {
+            if (!Number.isInteger(training?.elite) || !Number.isInteger(training?.level)) unknown.push('等级');
+            else if (Number.isInteger(requirements.elite) && requirements.elite >= 0
+                ? training.elite < requirements.elite ||
+                  (training.elite === requirements.elite && training.level < requirements.level)
+                : training.level < requirements.level) {
+                const requiredElite = Number.isInteger(requirements.elite) ? eliteText(requirements.elite) : '';
+                details.push(`当前${eliteText(training.elite)}${training.level}级，要求${requiredElite}${requirements.level}级`);
+            }
+        }
+        if (requirements.elite > 0) {
+            if (!Number.isInteger(training?.elite)) {
+                if (!unknown.includes('等级')) unknown.push('精英化');
+            } else if (training.elite < requirements.elite && !details.some(detail => detail.startsWith('当前'))) {
+                details.push(`当前${eliteText(training.elite)}，要求${eliteText(requirements.elite)}`);
+            }
+        }
+        if (Number.isInteger(requirements.skill_level) && requirements.skill_level > 0) {
+            const skill = Number(op.skill);
+            const mastery = skill >= 1 && skill <= 3 ? training?.[`skill${skill}`] : undefined;
+            const actual = Number.isInteger(training?.mainSkill)
+                ? training.mainSkill === 7 && requirements.skill_level > 7
+                    ? Number.isInteger(mastery) ? 7 + mastery : undefined
+                    : training.mainSkill
+                : undefined;
+            if (requirements.skill_level > 7 && (!Number.isInteger(skill) || skill < 1 || skill > 3)) unknown.push('技能编号');
+            else check('技能', requirements.skill_level, actual);
+        }
+        const moduleType = { 1: 'X', 2: 'Y', 3: 'D', 4: 'A', 5: 'B' }[requirements.module];
+        if (moduleType) {
+            const moduleLevel = requirements.module_level > 0 ? requirements.module_level : 1;
+            check(`模组${moduleType}`, moduleLevel, training?.[`mod${moduleType}`]);
+        }
+        check('潜能', requirements.potential, training?.potential);
+        if (details.length) return { status: 'low', detail: details.join('、') };
+        return unknown.length ? { status: 'unknown', detail: `${unknown.join('、')}数据未知` } : { status: 'ok' };
+    }
+
     /**
      * 干员与干员组的可用性判定
      */
-    function checkOperationAvailability(operation, ownedOpsSet, filterMode) {
-        if (!ownedOpsSet || ownedOpsSet.size === 0 || filterMode === 'NONE') {
-            return { isAvailable: true, missingCount: 0, missingOps:[] };
+    function checkOperationAvailability(operation, ownedOpsSet, filterMode, training = {}, checkTraining = false) {
+        if (!ownedOpsSet || ownedOpsSet.size === 0 || (filterMode === 'NONE' && !checkTraining)) {
+            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], hasRequirements: false };
         }
 
         const { requiredOps, requiredGroups } = getParsedOperationContent(operation);
 
         if (requiredOps.length === 0 && requiredGroups.length === 0) {
-            return { isAvailable: true, missingCount: 0, missingOps:[] };
+            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], hasRequirements: false };
         }
 
         const usedOwnedOps = new Set();
         const missingDetails =[];
+        const lowTraining = [];
+        const unknownTraining = [];
+        const hasRequirements = [...requiredOps, ...requiredGroups.flatMap(group => group.opers || [])]
+            .some(op => op?.requirements && Object.values(op.requirements).some(value => Number.isInteger(value) && value > 0));
+        const evaluate = op => checkOperatorTraining(op, training[op.name]);
 
         requiredOps.forEach(op => {
             const opName = op.name;
             if (operation._isFallback && !OP_ID_MAP[opName]) return; // 忽略错抓的非干员词汇
 
             if (ownedOpsSet.has(opName)) {
-                usedOwnedOps.add(opName);
+                const result = checkTraining ? evaluate(op) : { status: 'ok' };
+                if (result.status === 'low') {
+                    missingDetails.push(opName);
+                    lowTraining.push(`${opName}：${result.detail}`);
+                } else {
+                    usedOwnedOps.add(opName);
+                    if (result.status === 'unknown') unknownTraining.push(`${opName}：${result.detail}`);
+                }
             } else {
                 missingDetails.push(opName);
             }
         });
 
         if (requiredGroups.length > 0) {
-            const missingGroups = matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, operation._isFallback);
+            const missingGroups = matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, operation._isFallback,
+                checkTraining ? evaluate : null, unknownTraining, lowTraining);
             missingDetails.push(...missingGroups);
         }
 
@@ -188,5 +267,5 @@
             isAvailable = false;
         }
 
-        return { isAvailable, missingCount, missingOps: missingDetails };
+        return { isAvailable, missingCount, missingOps: missingDetails, lowTraining, unknownTraining, hasRequirements };
     }

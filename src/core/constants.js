@@ -6,6 +6,7 @@
     const ACCOUNTS_DATA_KEY = 'prts_plus_accounts_data';
     const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 可选值: 'GRAY' | 'HIDE'
     const FILTER_MODE_KEY = 'prts_plus_filter_mode'; // 可选值: 'NONE' | 'PERFECT' | 'SUPPORT'
+    const TRAINING_CHECK_KEY = 'prts_plus_training_check';
     const SKLAND_LAST_IMPORT_KEY = 'prts_plus_skland_last_import';
     const ACCOUNT_BACKUP_TYPE = 'Better-PRTS-Plus.accounts-backup';
     const ACCOUNT_BACKUP_VERSION = 1;
@@ -43,11 +44,13 @@
     // 全局状态变量
     let activeAccountId = 1;
     let accountsData = { 1:[], 2: [], 3:[] }; // 多账号数据缓存池
+    let accountsTraining = { 1: {}, 2: {}, 3: {} };
     let accountMeta = createDefaultAccountMeta();
 
     let currentFilterMode = GM_getValue(FILTER_MODE_KEY, 'NONE');
     let displayMode = normalizeDisplayMode(GM_getValue(DISPLAY_MODE_KEY, 'GRAY'));
     let ownedOpsSet = new Set();
+    let trainingCheckEnabled = GM_getValue(TRAINING_CHECK_KEY, false) === true;
     const operationCache = new WeakMap();
     const cardDiagnosticsCache = new WeakMap();
 

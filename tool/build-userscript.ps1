@@ -15,6 +15,7 @@ $sourceFiles = @(
     "src/meta/userscript-header.js",
     "src/core/constants.js",
     "src/data/operators.generated.js",
+    "src/data/module-types.generated.js",
     "src/import/parsers.js",
     "src/core/account-state.js",
     "src/core/filter-scheduler.js",

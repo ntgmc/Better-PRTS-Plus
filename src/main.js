@@ -59,7 +59,7 @@
             if (handleRouteChange()) return;
             const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
             syncPageScaffold();
-            if (missingFilterBar && currentFilterMode !== 'NONE') {
+            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
                 scheduleFilterUpdate(120);
             }
         }, 3000);

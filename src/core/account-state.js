@@ -9,6 +9,7 @@
             accountsData: normalizeAccountsData(source.accountsData),
             accountMeta: normalizeAccountMeta(source.accountMeta)
         };
+        state.accountsTraining = normalizeAccountsTraining(source.accountsTraining, state.accountsData);
         return state;
     }
 
@@ -17,6 +18,7 @@
         return JSON.stringify({
             activeAccountId: state.activeAccountId,
             accountsData: state.accountsData,
+            accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta
         });
     }
@@ -124,7 +126,7 @@
         return createAccountState(currentState);
     }
 
-    function createSklandImportState(state, { accountId, names, binding, importedAt } = {}) {
+    function createSklandImportState(state, { accountId, names, training, binding, importedAt } = {}) {
         const currentState = createAccountState(state);
         const targetAccountId = normalizeAccountId(accountId);
         const operatorNames = sanitizeOperatorNames(names);
@@ -150,6 +152,7 @@
 
         currentState.activeAccountId = targetAccountId;
         currentState.accountsData[targetAccountId] = operatorNames;
+        currentState.accountsTraining[targetAccountId] = training || {};
         currentState.accountMeta[targetAccountId] = {
             ...currentMeta,
             label: nextLabel,

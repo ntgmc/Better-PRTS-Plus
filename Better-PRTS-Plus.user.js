@@ -37,6 +37,7 @@
     const ACCOUNTS_DATA_KEY = 'prts_plus_accounts_data';
     const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 可选值: 'GRAY' | 'HIDE'
     const FILTER_MODE_KEY = 'prts_plus_filter_mode'; // 可选值: 'NONE' | 'PERFECT' | 'SUPPORT'
+    const TRAINING_CHECK_KEY = 'prts_plus_training_check';
     const SKLAND_LAST_IMPORT_KEY = 'prts_plus_skland_last_import';
     const ACCOUNT_BACKUP_TYPE = 'Better-PRTS-Plus.accounts-backup';
     const ACCOUNT_BACKUP_VERSION = 1;
@@ -74,11 +75,13 @@
     // 全局状态变量
     let activeAccountId = 1;
     let accountsData = { 1:[], 2: [], 3:[] }; // 多账号数据缓存池
+    let accountsTraining = { 1: {}, 2: {}, 3: {} };
     let accountMeta = createDefaultAccountMeta();
 
     let currentFilterMode = GM_getValue(FILTER_MODE_KEY, 'NONE');
     let displayMode = normalizeDisplayMode(GM_getValue(DISPLAY_MODE_KEY, 'GRAY'));
     let ownedOpsSet = new Set();
+    let trainingCheckEnabled = GM_getValue(TRAINING_CHECK_KEY, false) === true;
     const operationCache = new WeakMap();
     const cardDiagnosticsCache = new WeakMap();
 
@@ -142,6 +145,24 @@
     betterPrtsDebug.getUnknownOperators = getUnknownOperatorReports;
     window.BetterPRTSPlusDebug = betterPrtsDebug;
 
+// 森空岛模组 ID 为 uniequip_00N_干员ID；第 N 个模组的分支来自游戏干员表。
+// 数据来源：frontend-v2-plus/src/static/json/operator/character_table_simple.v2.json
+const OP_MODULE_TYPES = Object.create(null);
+Object.entries({
+    X: `1001_amiya2 1011_lava2 101_sora 1020_reed2 1021_kroos2 1024_hbisc2 1027_greyy2 1030_noirc2 1035_wisdel 1036_fang2 1037_amiya3 1038_whitw2 1039_thorn2 1040_blaze2 1041_angel2 1042_phatm2 1043_leizi2 1044_hsgma2 1048_orchd2 1049_catap2 1050_chen3 1051_headb2 106_franka 107_liskam 109_fmout 115_headbr 117_myrrh 126_shotst 128_plosis 133_mm 140_whitew 141_nights 143_ghost 145_prove 148_nearl 149_scave 150_snakek 151_myrtle 154_morgan 159_peacok 163_hpsts 171_bldsk 172_svrash 173_slchan 174_slbell 185_frncat 190_clour 193_frostl 196_sunbr 198_blackd 2025_shu 2026_yu 2027_wang 204_platnm 215_mantic 218_cuttle 220_grani 230_savage 236_rope 237_gravel 242_otter 243_waaifu 252_bibeak 254_vodfox 258_podego 260_durnar 265_sophia 272_strong 275_breeze 279_excu 294_ayer 298_susuro 302_glaze 306_leizi 308_swire 325_bison 326_glacus 336_folivo 337_utage 338_iris 343_tknogi 344_beewax 346_aosta 347_jaksel 348_ceylon 355_ethan 356_broca 363_toddi 366_acdrop 373_lionhd 378_asbest 379_sesa 381_bubble 383_snsant 388_mint 4015_spuria 4016_kazema 4017_puzzle 4019_ncdeer 401_elysm 4025_aprot2 402_tuye 4032_provs 4036_forcer 4040_rockr 4041_chnut 4043_erato 4045_heidi 4047_pianst 4051_akkord 4052_surfer 4056_titi 405_absin 4062_totter 4063_quartz 4064_mlynar 4066_highmo 4071_peper 4079_haini 4081_warmy 4082_qiubai 4083_chimes 4100_caper 4102_threye 4104_coldst 4105_almond 4106_bryota 4114_harold 4119_wanqin 4122_grabds 4124_iana 4130_luton 4131_odda 4134_cetsyr 4137_udflow 4139_papyrs 4140_lasher 4144_chilc 4145_ulpia 4148_philae 4151_tinman 4155_talr 4162_cathy 4163_rosesa 4172_xingzh 4177_brigid 4178_alanna 4179_monstr 4184_dolris 4185_amoris 4196_reckpr 4198_christ 4203_kichi 4204_mantra 4207_branch 4208_wintim 4211_snhunt 4212_nasti 4214_cairn 421_crow 4221_ju 4223_botany 4224_turdus 4225_tanya 4228_closur 422_aurora 431_ashlok 433_windft 436_whispr 440_pinecn 445_wscoot 446_aroma 449_glider 450_necras 455_nothin 457_blitz 459_tachak 464_cement 469_indigo 473_mberry 475_akafyu 476_blkngt 478_kirara 484_robrta 486_takila 487_bobb 488_buildr 489_serum 491_humus 492_quercu 493_firwhl 494_vendla 496_wildmn 498_inside 499_kaitou`,
+    Y: `002_amiya 1022_flwr2 102_texas 1046_sbell2 1047_halo2 108_silent 110_deepcl 118_yuki 127_estell 129_bluep 130_doberm 131_flameb 135_halo 137_brownb 144_red 155_tiger 157_dagda 158_milu 164_nightm 166_skfire 181_flower 183_skgoat 187_ccheal 194_leto 195_glassb 199_yak 201_moeshd 2023_ling 214_kafka 219_meteo 226_hmau 235_jesica 241_panda 253_greyy 261_sddrag 271_spikes 274_astesi 277_sqrrel 289_gyuki 290_vigna 301_cutter 304_zebra 328_cammou 333_sidero 341_sntlla 345_folnic 349_chiave 365_aprl 367_swllow 369_bena 385_finlpp 4004_pudd 4006_melnte 4013_kjera 4014_lunacu 4023_rfalcn 4031_liesel 4037_demetr 4054_malist 4067_lolxh 4078_bdhkgt 4087_ines 4107_vrdant 4109_baslin 4110_delphn 411_tomimi 4125_rdoc 4126_fuze 4141_marcil 4142_laios 4143_sensi 4147_mitm 415_flint 4164_tecno 4166_varkis 4171_wulfen 4173_nowell 4182_oblvns 4183_mortis 4186_tmoris 4193_lemuen 4202_haruka 4226_veen 451_robin 452_bstalk 458_rfrost 466_qanik 497_ctable`,
+    XY: `010_chen 017_huang 1012_skadi2 1013_chen2 1014_nearl2 1016_agoat2 1019_siege2 1026_gvial2 1029_yato2 1031_slent2 1032_excu2 1034_jesca2 103_angel 112_siege 113_cqbw 1502_crosly 179_cgbird 180_amgoat 188_helage 197_poca 2013_cerber 2014_nian 2024_chyue 202_demkni 222_bpipe 225_haak 245_cello 248_mgllan 249_mlyss 311_mudrok 322_lmlee 340_shwaz 350_surtr 358_lisa 377_gdglow 400_weedy 4010_etlchi 4011_lessng 4026_vulpis 4039_horn 4042_lumen 4065_judge 4072_ironmn 4080_lin 4088_hodrer 4116_blkkgt 4117_ray 4121_zuole 4132_ascln 4138_narant 4146_nymph 4194_rmixer 426_billro 427_vigil 430_fartth 474_glady 479_sleach 485_pallas`,
+    YX: `1028_texas2 136_hsguma 147_shining 213_mostma 263_skadi 264_f12yin 300_phenxi 362_saga 4048_doroth 4055_bgsnow 420_flamtl 423_blemsh 456_ash`,
+    XYA: `003_kalts 1023_ghost2 1033_swire2 2012_typhon 2015_dusk 206_gnosis 250_phatom 4027_heyak 416_zumama 437_mizuki 472_pasngr`,
+    YXA: `291_aglina 332_archet 4009_irene`,
+    XA: `391_rosmon 4058_pepe`,
+    XD: `134_ifrit 293_thorns`,
+    XYD: `4046_ebnhlz`,
+    DY: `4098_vvana 4133_logos`,
+    D: `4123_ela`,
+    AB: `4195_radian`
+}).forEach(([types, ids]) => ids.split(' ').forEach(id => { OP_MODULE_TYPES[`char_${id}`] = types; }));
+OP_MODULE_TYPES.char_297_hamoni = 'X';
     function createEmptyAccountsData() {
         return { 1: [], 2: [], 3: [] };
     }
@@ -180,6 +201,35 @@
             if (seen.has(normalized)) return;
             seen.add(normalized);
             result.push(normalized);
+        });
+        return result;
+    }
+
+    function normalizeOperatorTraining(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+        const limits = { elite: [0, 2], level: [1, 90], potential: [1, 6], mainSkill: [1, 7],
+            skill1: [0, 3], skill2: [0, 3], skill3: [0, 3],
+            modX: [0, 3], modY: [0, 3], modD: [0, 3], modA: [0, 3], modB: [0, 3] };
+        const result = {};
+        Object.entries(limits).forEach(([key, [min, max]]) => {
+            const raw = value[key];
+            if (typeof raw !== 'number' && (typeof raw !== 'string' || !raw.trim())) return;
+            const number = Number(raw);
+            if (Number.isInteger(number) && number >= min && number <= max) result[key] = number;
+        });
+        return result;
+    }
+
+    function normalizeAccountsTraining(value, accounts) {
+        const result = { 1: {}, 2: {}, 3: {} };
+        ACCOUNT_IDS.forEach(id => {
+            (accounts[id] || []).forEach(name => {
+                if (!Object.prototype.hasOwnProperty.call(value?.[id] || {}, name)) return;
+                const training = normalizeOperatorTraining(value[id][name]);
+                if (Object.keys(training).length) {
+                    Object.defineProperty(result[id], name, { value: training, enumerable: true, configurable: true });
+                }
+            });
         });
         return result;
     }
@@ -346,6 +396,23 @@
         return parseOperatorNamesFromText(text);
     }
 
+    function parseImportedOperators(rawText, fileName = '') {
+        const names = parseImportedOperatorNames(rawText, fileName);
+        const records = safeJsonParse(String(rawText || ''), null);
+        const training = {};
+        if (Array.isArray(records)) {
+            records.forEach(op => {
+                if (!isOwnedOperatorRecord(op)) return;
+                const name = normalizeOperatorName(op?.name);
+                if (!names.includes(name)) return;
+                Object.defineProperty(training, name, {
+                    value: normalizeOperatorTraining(op), enumerable: true, configurable: true
+                });
+            });
+        }
+        return { names, training };
+    }
+
     function isSklandHost() {
         return /(^|\.)skland\.com$/i.test(window.location.hostname);
     }
@@ -374,6 +441,7 @@
             accountsData: normalizeAccountsData(source.accountsData),
             accountMeta: normalizeAccountMeta(source.accountMeta)
         };
+        state.accountsTraining = normalizeAccountsTraining(source.accountsTraining, state.accountsData);
         return state;
     }
 
@@ -382,6 +450,7 @@
         return JSON.stringify({
             activeAccountId: state.activeAccountId,
             accountsData: state.accountsData,
+            accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta
         });
     }
@@ -489,7 +558,7 @@
         return createAccountState(currentState);
     }
 
-    function createSklandImportState(state, { accountId, names, binding, importedAt } = {}) {
+    function createSklandImportState(state, { accountId, names, training, binding, importedAt } = {}) {
         const currentState = createAccountState(state);
         const targetAccountId = normalizeAccountId(accountId);
         const operatorNames = sanitizeOperatorNames(names);
@@ -515,6 +584,7 @@
 
         currentState.activeAccountId = targetAccountId;
         currentState.accountsData[targetAccountId] = operatorNames;
+        currentState.accountsTraining[targetAccountId] = training || {};
         currentState.accountMeta[targetAccountId] = {
             ...currentMeta,
             label: nextLabel,
@@ -677,10 +747,13 @@ function createSklandImportCancelledError() {
         const binding = await resolveSklandImportBinding(targetAccountId, bindingOptions, importOptions);
         const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const names = convertSklandPlayerInfoToNames(playerInfo);
+        const cultivateInfo = await getSklandGameCultivateInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
+        const training = convertSklandPlayerInfoToTraining(playerInfo, cultivateInfo);
         const importedAt = new Date().toISOString();
         const result = createSklandImportState(getCurrentAccountState(), {
             accountId: targetAccountId,
             names,
+            training,
             binding,
             importedAt
         });
@@ -832,6 +905,15 @@ function createSklandImportCancelledError() {
         return data;
     }
 
+    async function getSklandGameCultivateInfo(credential, token, timestamp, uid) {
+        const data = await sklandSignedGet('/api/v1/game/cultivate/player',
+            `uid=${encodeURIComponent(uid)}`, credential, token, timestamp);
+        if (data.code !== 0 || !Array.isArray(data.data?.characters)) {
+            throw new Error('读取森空岛干员练度失败，请稍后重试。');
+        }
+        return data;
+    }
+
     async function sklandSignedGet(path, query, credential, token, timestamp) {
         const sign = await generateSklandSign(token, path, query, timestamp);
         const url = `${SKLAND_BASE_URL}${path}${query ? `?${query}` : ''}`;
@@ -912,6 +994,38 @@ function createSklandImportCancelledError() {
                 onerror: () => reject(new Error('森空岛接口请求失败，请稍后重试。'))
             });
         });
+    }
+
+    function convertSklandPlayerInfoToTraining(gamePlayerInfo, cultivateInfo) {
+        const data = isPlainRecord(gamePlayerInfo?.data) ? gamePlayerInfo.data : {};
+        const characters = Array.isArray(cultivateInfo?.data?.characters) ? cultivateInfo.data.characters : [];
+        const cultivatedById = new Map(characters.filter(isPlainRecord).map(char => [char.id, char]));
+        const training = {};
+        for (const raw of Array.isArray(data.chars) ? data.chars : []) {
+            const id = String(raw?.charId ?? raw?.id ?? '');
+            const name = normalizeOperatorName(data.charInfoMap?.[id]?.name ?? raw?.name);
+            if (!name || !id.startsWith('char_')) continue;
+            const character = { ...raw, ...cultivatedById.get(id) };
+            const skills = Array.isArray(character.skills) ? character.skills : [];
+            const record = normalizeOperatorTraining({
+                elite: character.evolvePhase, level: character.level,
+                potential: character.potentialRank == null ? undefined : Number(character.potentialRank) + 1,
+                mainSkill: character.mainSkillLevel,
+                skill1: skills[0]?.level, skill2: skills[1]?.level, skill3: skills[2]?.level
+            });
+            const moduleTypes = OP_MODULE_TYPES[id];
+            if (cultivatedById.has(id) && Array.isArray(character.equips)) {
+                for (const type of moduleTypes || '') record[`mod${type}`] = 0;
+            }
+            for (const equip of Array.isArray(character.equips) ? character.equips : []) {
+                const match = /^uniequip_00([2-4])_(.+)$/.exec(equip.id);
+                if (!match || match[2] !== id.split('_').slice(2).join('_')) continue;
+                const type = moduleTypes?.[Number(match[1]) - 2];
+                if (type) Object.assign(record, normalizeOperatorTraining({ [`mod${type}`]: equip.level }));
+            }
+            Object.defineProperty(training, name, { value: record, enumerable: true, configurable: true });
+        }
+        return training;
     }
 
     function convertSklandPlayerInfoToNames(gamePlayerInfo) {
@@ -2805,14 +2919,20 @@ function createSklandImportCancelledError() {
         return "";
     }
 
-    function matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, allowUnknownFallbackGroup) {
+    function matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, allowUnknownFallbackGroup,
+        checkTraining, unknownTraining = [], lowTraining = []) {
         const groups = requiredGroups
             .map((group, index) => {
                 const allowedNames = (group.opers || [])
                     .map(o => o.name)
                     .filter(Boolean);
-                const candidates = allowedNames
-                    .filter(name => ownedOpsSet.has(name) && !usedOwnedOps.has(name));
+                const candidates = (group.opers || [])
+                    .filter(op => ownedOpsSet.has(op.name) && !usedOwnedOps.has(op.name))
+                    .filter(op => !checkTraining || checkTraining(op).status !== 'low')
+                    .sort((left, right) => checkTraining
+                        ? Number(checkTraining(left).status === 'unknown') - Number(checkTraining(right).status === 'unknown')
+                        : 0)
+                    .map(op => op.name);
                 return {
                     index,
                     name: group.name || '未命名干员组',
@@ -2843,11 +2963,22 @@ function createSklandImportCancelledError() {
         groupOrder.forEach(group => {
             if (!tryAssign(group, new Set())) {
                 missingGroups.push(`[${group.name}]`);
+                if (checkTraining) {
+                    const low = (requiredGroups[group.index].opers || [])
+                        .filter(op => ownedOpsSet.has(op.name) && checkTraining(op).status === 'low')
+                        .map(op => `${op.name}：${checkTraining(op).detail}`);
+                    if (low.length) lowTraining.push(`[${group.name}] ${low.join(' / ')}`);
+                }
             }
         });
 
         matchedByOperator.forEach((group, opName) => {
             usedOwnedOps.add(opName);
+            if (checkTraining) {
+                const op = requiredGroups[group.index].opers.find(candidate => candidate.name === opName);
+                const result = checkTraining(op);
+                if (result.status === 'unknown') unknownTraining.push(`${opName}：${result.detail}`);
+            }
         });
 
         return missingGroups;
@@ -2896,36 +3027,98 @@ function createSklandImportCancelledError() {
         return requiredOps.some(hasNamedOperatorEntry) || requiredGroups.some(hasGroupEntry);
     }
 
+    function checkOperatorTraining(op, training) {
+        const requirements = op?.requirements;
+        if (!requirements || typeof requirements !== 'object') return { status: 'ok' };
+        const details = [];
+        const unknown = [];
+        const check = (label, required, actual) => {
+            if (!Number.isInteger(required) || required < 0) return;
+            if (!Number.isInteger(actual)) unknown.push(label);
+            else if (actual < required) details.push(`${label} ${actual}/${required}`);
+        };
+        const eliteText = elite => ['未精英化', '精一', '精二'][elite] || '精英化未知';
+        if (Number.isInteger(requirements.level) && requirements.level > 0) {
+            if (!Number.isInteger(training?.elite) || !Number.isInteger(training?.level)) unknown.push('等级');
+            else if (Number.isInteger(requirements.elite) && requirements.elite >= 0
+                ? training.elite < requirements.elite ||
+                  (training.elite === requirements.elite && training.level < requirements.level)
+                : training.level < requirements.level) {
+                const requiredElite = Number.isInteger(requirements.elite) ? eliteText(requirements.elite) : '';
+                details.push(`当前${eliteText(training.elite)}${training.level}级，要求${requiredElite}${requirements.level}级`);
+            }
+        }
+        if (requirements.elite > 0) {
+            if (!Number.isInteger(training?.elite)) {
+                if (!unknown.includes('等级')) unknown.push('精英化');
+            } else if (training.elite < requirements.elite && !details.some(detail => detail.startsWith('当前'))) {
+                details.push(`当前${eliteText(training.elite)}，要求${eliteText(requirements.elite)}`);
+            }
+        }
+        if (Number.isInteger(requirements.skill_level) && requirements.skill_level > 0) {
+            const skill = Number(op.skill);
+            const mastery = skill >= 1 && skill <= 3 ? training?.[`skill${skill}`] : undefined;
+            const actual = Number.isInteger(training?.mainSkill)
+                ? training.mainSkill === 7 && requirements.skill_level > 7
+                    ? Number.isInteger(mastery) ? 7 + mastery : undefined
+                    : training.mainSkill
+                : undefined;
+            if (requirements.skill_level > 7 && (!Number.isInteger(skill) || skill < 1 || skill > 3)) unknown.push('技能编号');
+            else check('技能', requirements.skill_level, actual);
+        }
+        const moduleType = { 1: 'X', 2: 'Y', 3: 'D', 4: 'A', 5: 'B' }[requirements.module];
+        if (moduleType) {
+            const moduleLevel = requirements.module_level > 0 ? requirements.module_level : 1;
+            check(`模组${moduleType}`, moduleLevel, training?.[`mod${moduleType}`]);
+        }
+        check('潜能', requirements.potential, training?.potential);
+        if (details.length) return { status: 'low', detail: details.join('、') };
+        return unknown.length ? { status: 'unknown', detail: `${unknown.join('、')}数据未知` } : { status: 'ok' };
+    }
+
     /**
      * 干员与干员组的可用性判定
      */
-    function checkOperationAvailability(operation, ownedOpsSet, filterMode) {
-        if (!ownedOpsSet || ownedOpsSet.size === 0 || filterMode === 'NONE') {
-            return { isAvailable: true, missingCount: 0, missingOps:[] };
+    function checkOperationAvailability(operation, ownedOpsSet, filterMode, training = {}, checkTraining = false) {
+        if (!ownedOpsSet || ownedOpsSet.size === 0 || (filterMode === 'NONE' && !checkTraining)) {
+            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], hasRequirements: false };
         }
 
         const { requiredOps, requiredGroups } = getParsedOperationContent(operation);
 
         if (requiredOps.length === 0 && requiredGroups.length === 0) {
-            return { isAvailable: true, missingCount: 0, missingOps:[] };
+            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], hasRequirements: false };
         }
 
         const usedOwnedOps = new Set();
         const missingDetails =[];
+        const lowTraining = [];
+        const unknownTraining = [];
+        const hasRequirements = [...requiredOps, ...requiredGroups.flatMap(group => group.opers || [])]
+            .some(op => op?.requirements && Object.values(op.requirements).some(value => Number.isInteger(value) && value > 0));
+        const evaluate = op => checkOperatorTraining(op, training[op.name]);
 
         requiredOps.forEach(op => {
             const opName = op.name;
             if (operation._isFallback && !OP_ID_MAP[opName]) return; // 忽略错抓的非干员词汇
 
             if (ownedOpsSet.has(opName)) {
-                usedOwnedOps.add(opName);
+                const result = checkTraining ? evaluate(op) : { status: 'ok' };
+                if (result.status === 'low') {
+                    missingDetails.push(opName);
+                    lowTraining.push(`${opName}：${result.detail}`);
+                } else {
+                    usedOwnedOps.add(opName);
+                    if (result.status === 'unknown') unknownTraining.push(`${opName}：${result.detail}`);
+                }
             } else {
                 missingDetails.push(opName);
             }
         });
 
         if (requiredGroups.length > 0) {
-            const missingGroups = matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, operation._isFallback);
+            const missingGroups = matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, operation._isFallback,
+                checkTraining ? evaluate : null, unknownTraining, lowTraining);
             missingDetails.push(...missingGroups);
         }
 
@@ -2938,20 +3131,21 @@ function createSklandImportCancelledError() {
             isAvailable = false;
         }
 
-        return { isAvailable, missingCount, missingOps: missingDetails };
+        return { isAvailable, missingCount, missingOps: missingDetails, lowTraining, unknownTraining, hasRequirements };
     }
     // =========================================================================
     //                            MODULE 4: 数据存取与账号管理
     // =========================================================================
 
     function getCurrentAccountState() {
-        return createAccountState({ activeAccountId, accountsData, accountMeta });
+        return createAccountState({ activeAccountId, accountsData, accountsTraining, accountMeta });
     }
 
     function publishAccountState(value) {
         const state = createAccountState(value);
         activeAccountId = state.activeAccountId;
         accountsData = state.accountsData;
+        accountsTraining = state.accountsTraining;
         accountMeta = state.accountMeta;
         ownedOpsSet = new Set(accountsData[activeAccountId] || []);
         return state;
@@ -3025,7 +3219,7 @@ function createSklandImportCancelledError() {
         refreshAccountControls();
 
         // 3. 立刻触发重新筛选运算
-        if (currentFilterMode !== 'NONE') {
+        if (currentFilterMode !== 'NONE' || trainingCheckEnabled) {
             requestFilterUpdate();
         }
     }
@@ -3068,7 +3262,7 @@ function createSklandImportCancelledError() {
         refreshAccountControls();
         applyFloatingPositionToContainer();
         applySidebarCollapse();
-        if (forceFilterUpdate || currentFilterMode !== 'NONE') requestFilterUpdate();
+        if (forceFilterUpdate || currentFilterMode !== 'NONE' || trainingCheckEnabled) requestFilterUpdate();
     }
 
     async function renameAccount(id) {
@@ -3123,6 +3317,7 @@ function createSklandImportCancelledError() {
     function getBackupPreferences() {
         return {
             filterMode: normalizeFilterMode(currentFilterMode),
+            trainingCheck: trainingCheckEnabled,
             displayMode: normalizeDisplayMode(displayMode),
             config: {
                 visuals: CONFIG.visuals === true,
@@ -3142,6 +3337,7 @@ function createSklandImportCancelledError() {
             exportedAt: new Date().toISOString(),
             activeAccountId: state.activeAccountId,
             accountsData: state.accountsData,
+            accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta,
             preferences: getBackupPreferences()
         };
@@ -3189,6 +3385,7 @@ function createSklandImportCancelledError() {
         const rawConfig = isPlainRecord(raw.config) ? raw.config : {};
         return {
             filterMode: normalizeFilterMode(raw.filterMode),
+            trainingCheck: raw.trainingCheck === true,
             displayMode: normalizeDisplayMode(raw.displayMode),
             config: {
                 visuals: rawConfig.visuals !== false,
@@ -3213,6 +3410,7 @@ function createSklandImportCancelledError() {
         return {
             activeAccountId: normalizeAccountId(value.activeAccountId),
             accountsData: normalizeAccountsData(value.accountsData),
+            accountsTraining: normalizeAccountsTraining(value.accountsTraining, normalizeAccountsData(value.accountsData)),
             accountMeta: normalizeAccountMeta(value.accountMeta),
             preferences: normalizeBackupPreferences(value.preferences)
         };
@@ -3255,6 +3453,8 @@ function createSklandImportCancelledError() {
     function applyAccountsBackup(backup) {
         const nextState = createAccountState(backup);
         currentFilterMode = normalizeFilterMode(backup.preferences.filterMode);
+        trainingCheckEnabled = backup.preferences.trainingCheck === true;
+        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
         displayMode = normalizeDisplayMode(backup.preferences.displayMode);
         CONFIG.visuals = backup.preferences.config.visuals === true;
         CONFIG.cleanLink = backup.preferences.config.cleanLink === true;
@@ -3364,7 +3564,7 @@ function createSklandImportCancelledError() {
         document.getElementById('prts-import-dialog-backdrop')?.remove();
     }
 
-    function applyImportedOperatorNames(names, sourceLabel, statusEl) {
+    function applyImportedOperatorNames(names, sourceLabel, statusEl, training = {}) {
         const sanitizedNames = sanitizeOperatorNames(names);
         if (sanitizedNames.length === 0) {
             const message = '未能识别有效的干员数据，请检查 JSON/TXT 内容。';
@@ -3380,6 +3580,7 @@ function createSklandImportCancelledError() {
 
         const nextState = getCurrentAccountState();
         nextState.accountsData[nextState.activeAccountId] = sanitizedNames;
+        nextState.accountsTraining[nextState.activeAccountId] = training;
         commitAccountState(nextState);
         refreshAccountStateUi();
 
@@ -3405,8 +3606,8 @@ function createSklandImportCancelledError() {
             const reader = new FileReader();
             reader.onload = event => {
                 try {
-                    const names = parseImportedOperatorNames(event.target.result, file.name);
-                    resolve(applyImportedOperatorNames(names, file.name || '文件导入', statusEl));
+                    const { names, training } = parseImportedOperators(event.target.result, file.name);
+                    resolve(applyImportedOperatorNames(names, file.name || '文件导入', statusEl, training));
                 } catch (error) {
                     const message = getImportErrorMessage(error);
                     console.error('[Better PRTS] 导入干员数据失败', error);
@@ -3543,8 +3744,8 @@ function createSklandImportCancelledError() {
             }
 
             try {
-                const names = parseImportedOperatorNames(rawText, '');
-                const imported = applyImportedOperatorNames(names, '粘贴内容', status);
+                const { names, training } = parseImportedOperators(rawText, '');
+                const imported = applyImportedOperatorNames(names, '粘贴内容', status, training);
                 if (imported) window.setTimeout(closeOperatorImportDialog, 700);
             } catch (error) {
                 const message = getImportErrorMessage(error);
@@ -3642,6 +3843,17 @@ function createSklandImportCancelledError() {
         requestFilterUpdate();
     }
 
+    function toggleTrainingCheck() {
+        if (ownedOpsSet.size === 0) {
+            showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
+            return;
+        }
+        trainingCheckEnabled = !trainingCheckEnabled;
+        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
+        updateFilterButtonStyles();
+        requestFilterUpdate();
+    }
+
     function applySidebarCollapse() {
         if (isFilterDisabledPage()) return;
         const wrapper = document.querySelector('.docs-content-wrapper');
@@ -3659,6 +3871,7 @@ function createSklandImportCancelledError() {
     function updateFilterButtonStyles() {
         const perfectBtn = document.getElementById('btn-perfect');
         const supportBtn = document.getElementById('btn-support');
+        const trainingBtn = document.getElementById('btn-training');
         if (!perfectBtn || !supportBtn) return;
 
         perfectBtn.classList.remove('prts-active');
@@ -3668,6 +3881,10 @@ function createSklandImportCancelledError() {
 
         if (currentFilterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
         else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
+        if (trainingBtn) {
+            trainingBtn.classList.toggle('prts-active', trainingCheckEnabled);
+            trainingBtn.setAttribute('aria-pressed', String(trainingCheckEnabled));
+        }
     }
 
     function injectFilterControls() {
@@ -3789,8 +4006,14 @@ function createSklandImportCancelledError() {
             pressed: currentFilterMode === 'SUPPORT'
         });
         mainRow.appendChild(btnSupport);
+        const btnTraining = createPrtsButton({
+            id: 'btn-training', text: '校验练度', icon: 'check',
+            onClick: toggleTrainingCheck, active: trainingCheckEnabled, pressed: trainingCheckEnabled
+        });
+        btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
+        mainRow.appendChild(btnTraining);
 
-        if (isNew && currentFilterMode !== 'NONE') {
+        if (isNew && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
             requestFilterUpdate();
         }
     }
@@ -4286,7 +4509,8 @@ function createSklandImportCancelledError() {
             ? createCardDiagnostics(resolution.source)
             : createCardDiagnostics('none');
 
-        const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
+        const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
+            checkOperationAvailability(operation, ownedOpsSet, currentFilterMode, accountsTraining[activeAccountId], trainingCheckEnabled);
 
         if (!isAvailable && displayMode === 'HIDE') {
             if (card.style.display !== 'none') card.style.display = 'none';
@@ -4304,7 +4528,9 @@ function createSklandImportCancelledError() {
         }
 
         const existingLabel = cardInner.querySelector('.prts-status-label');
-        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1);
+        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1) ||
+            (trainingCheckEnabled && diagnostics.noDataCards === 0 &&
+                (lowTraining.length || unknownTraining.length || !hasRequirements));
 
         if (!showMissingInfo) {
             if (existingLabel) existingLabel.remove();
@@ -4321,11 +4547,22 @@ function createSklandImportCancelledError() {
             const name = missingOps[0];
             iconText = 'support';
             labelText = `需助战: ${name}`;
-        } else {
+        } else if (missingCount > 0 && currentFilterMode !== 'NONE') {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
             iconText = 'missing';
-            labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+            labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+        }
+        if (trainingCheckEnabled) {
+            if (lowTraining.length) labelText += ` · 练度不足：${lowTraining.slice(0, 2).join('、')}`;
+            if (unknownTraining.length) labelText += ` · 待核验：${unknownTraining.slice(0, 2).join('、')}`;
+            if (!hasRequirements) labelText += ' · 未标注练度';
+        }
+        if (!iconText) {
+            iconText = lowTraining.length ? 'missing' : unknownTraining.length ? 'support' : 'check';
+            if (lowTraining.length) newClass += ' prts-label-missing';
+            else if (unknownTraining.length) newClass += ' prts-label-support';
+            labelText = labelText.replace(/^ · /, '');
         }
 
         if (existingLabel) {
@@ -5093,7 +5330,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (handleRouteChange()) return;
             const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
             syncPageScaffold();
-            if (missingFilterBar && currentFilterMode !== 'NONE') {
+            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
                 scheduleFilterUpdate(120);
             }
         }, 3000);

@@ -52,7 +52,7 @@
         document.getElementById('prts-import-dialog-backdrop')?.remove();
     }
 
-    function applyImportedOperatorNames(names, sourceLabel, statusEl) {
+    function applyImportedOperatorNames(names, sourceLabel, statusEl, training = {}) {
         const sanitizedNames = sanitizeOperatorNames(names);
         if (sanitizedNames.length === 0) {
             const message = '未能识别有效的干员数据，请检查 JSON/TXT 内容。';
@@ -68,6 +68,7 @@
 
         const nextState = getCurrentAccountState();
         nextState.accountsData[nextState.activeAccountId] = sanitizedNames;
+        nextState.accountsTraining[nextState.activeAccountId] = training;
         commitAccountState(nextState);
         refreshAccountStateUi();
 
@@ -93,8 +94,8 @@
             const reader = new FileReader();
             reader.onload = event => {
                 try {
-                    const names = parseImportedOperatorNames(event.target.result, file.name);
-                    resolve(applyImportedOperatorNames(names, file.name || '文件导入', statusEl));
+                    const { names, training } = parseImportedOperators(event.target.result, file.name);
+                    resolve(applyImportedOperatorNames(names, file.name || '文件导入', statusEl, training));
                 } catch (error) {
                     const message = getImportErrorMessage(error);
                     console.error('[Better PRTS] 导入干员数据失败', error);
@@ -231,8 +232,8 @@
             }
 
             try {
-                const names = parseImportedOperatorNames(rawText, '');
-                const imported = applyImportedOperatorNames(names, '粘贴内容', status);
+                const { names, training } = parseImportedOperators(rawText, '');
+                const imported = applyImportedOperatorNames(names, '粘贴内容', status, training);
                 if (imported) window.setTimeout(closeOperatorImportDialog, 700);
             } catch (error) {
                 const message = getImportErrorMessage(error);
@@ -330,6 +331,17 @@
         requestFilterUpdate();
     }
 
+    function toggleTrainingCheck() {
+        if (ownedOpsSet.size === 0) {
+            showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
+            return;
+        }
+        trainingCheckEnabled = !trainingCheckEnabled;
+        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
+        updateFilterButtonStyles();
+        requestFilterUpdate();
+    }
+
     function applySidebarCollapse() {
         if (isFilterDisabledPage()) return;
         const wrapper = document.querySelector('.docs-content-wrapper');
@@ -347,6 +359,7 @@
     function updateFilterButtonStyles() {
         const perfectBtn = document.getElementById('btn-perfect');
         const supportBtn = document.getElementById('btn-support');
+        const trainingBtn = document.getElementById('btn-training');
         if (!perfectBtn || !supportBtn) return;
 
         perfectBtn.classList.remove('prts-active');
@@ -356,6 +369,10 @@
 
         if (currentFilterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
         else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
+        if (trainingBtn) {
+            trainingBtn.classList.toggle('prts-active', trainingCheckEnabled);
+            trainingBtn.setAttribute('aria-pressed', String(trainingCheckEnabled));
+        }
     }
 
     function injectFilterControls() {
@@ -477,8 +494,14 @@
             pressed: currentFilterMode === 'SUPPORT'
         });
         mainRow.appendChild(btnSupport);
+        const btnTraining = createPrtsButton({
+            id: 'btn-training', text: '校验练度', icon: 'check',
+            onClick: toggleTrainingCheck, active: trainingCheckEnabled, pressed: trainingCheckEnabled
+        });
+        btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
+        mainRow.appendChild(btnTraining);
 
-        if (isNew && currentFilterMode !== 'NONE') {
+        if (isNew && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
             requestFilterUpdate();
         }
     }

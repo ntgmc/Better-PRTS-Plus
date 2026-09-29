@@ -7,6 +7,7 @@ const repoRoot = path.resolve(__dirname, '..');
 const sourceFiles = [
   'src/core/constants.js',
   'src/data/operators.generated.js',
+  'src/data/module-types.generated.js',
   'src/import/parsers.js',
   'src/core/account-state.js',
   'src/core/filter-scheduler.js',
@@ -22,7 +23,9 @@ const source = sourceFiles
 globalThis.__testExports = {
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
+  OP_MODULE_TYPES,
   parseImportedOperatorNames,
+  parseImportedOperators,
   normalizeAccountMeta,
   normalizeSklandSyncMeta,
   normalizeSklandImportSummary,
@@ -39,6 +42,9 @@ globalThis.__testExports = {
   commitAccountState,
   commitSklandImportResult,
   matchOperatorGroups,
+  checkOperationAvailability,
+  checkOperatorTraining,
+  convertSklandPlayerInfoToTraining,
   parseAccountsBackup,
   getSklandArknightsBindingOptionsFromList,
   normalizeSklandArknightsBindings,
@@ -85,7 +91,9 @@ vm.runInContext(source, context, { filename: 'better-prts-plus-core.js' });
 const {
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
+  OP_MODULE_TYPES,
   parseImportedOperatorNames,
+  parseImportedOperators,
   normalizeAccountMeta,
   normalizeSklandSyncMeta,
   normalizeSklandImportSummary,
@@ -102,6 +110,9 @@ const {
   commitAccountState,
   commitSklandImportResult,
   matchOperatorGroups,
+  checkOperationAvailability,
+  checkOperatorTraining,
+  convertSklandPlayerInfoToTraining,
   parseAccountsBackup,
   getSklandArknightsBindingOptionsFromList,
   normalizeSklandArknightsBindings,
@@ -156,6 +167,70 @@ test('matchOperatorGroups reassigns wider candidates for narrow groups', () => {
   ], new Set(['A', 'B']), used, false);
   assert.deepStrictEqual(hostArray(missing), []);
   assert.deepStrictEqual([...used].sort(), ['A', 'B']);
+});
+
+test('training requirements distinguish insufficient, unknown and absent data', () => {
+  const op = { name: '阿米娅', skill: 2, requirements: {
+    elite: 2, level: 60, skill_level: 10, module: 1, module_level: 2, potential: 2
+  } };
+  const trained = { elite: 2, level: 80, mainSkill: 7, skill2: 3, modX: 2, potential: 2 };
+  assert.strictEqual(checkOperatorTraining(op, trained).status, 'ok');
+  assert.strictEqual(checkOperatorTraining(op, { ...trained, skill2: 1 }).status, 'low');
+  assert.strictEqual(checkOperatorTraining(op, { ...trained, mainSkill: 6 }).status, 'low');
+  assert.strictEqual(checkOperatorTraining(op, { ...trained, level: 1 }).status, 'low');
+  assert.strictEqual(checkOperatorTraining(op, { ...trained, elite: 1, level: 1 }).detail, '当前精一1级，要求精二60级');
+  assert.strictEqual(checkOperatorTraining(op, { ...trained, elite: 2, level: 1 }).detail, '当前精二1级，要求精二60级');
+  assert.strictEqual(checkOperatorTraining({ name: '阿米娅', requirements: { elite: 2 } }, { elite: 1 }).detail,
+    '当前精一，要求精二');
+  assert.strictEqual(checkOperatorTraining(op, { ...trained, modX: 1 }).status, 'low');
+  assert.strictEqual(checkOperatorTraining({ name: '阿米娅', requirements: { module: 3 } },
+    { modD: 1 }).status, 'ok');
+  assert.strictEqual(checkOperatorTraining(op, {}).status, 'unknown');
+  assert.strictEqual(checkOperatorTraining({ name: '阿米娅', requirements: { elite: 0 } }, {}).status, 'ok');
+  assert.strictEqual(checkOperatorTraining({ name: '阿米娅' }, {}).status, 'ok');
+});
+
+test('training check combines support vacancies and group alternatives', () => {
+  const operation = { parsedContent: {
+    opers: [{ name: '阿米娅', skill: 2, requirements: { skill_level: 10 } }],
+    groups: [{ name: '先锋', opers: [
+      { name: '芬', requirements: { elite: 2 } },
+      { name: '桃金娘', requirements: { elite: 1 } }
+    ] }]
+  } };
+  const owned = new Set(['阿米娅', '芬', '桃金娘']);
+  const training = { '阿米娅': { mainSkill: 7, skill2: 1 }, '芬': { elite: 0 }, '桃金娘': { elite: 1 } };
+  let result = checkOperationAvailability(operation, owned, 'SUPPORT', training, true);
+  assert.strictEqual(result.missingCount, 1);
+  assert.strictEqual(result.isAvailable, true);
+  assert.strictEqual(result.lowTraining.length, 1);
+  assert.strictEqual(result.unknownTraining.length, 0);
+  result = checkOperationAvailability(operation, owned, 'PERFECT',
+    { '阿米娅': { mainSkill: 7, skill2: 3 }, '桃金娘': { elite: 1 } }, true);
+  assert.strictEqual(result.unknownTraining.length, 0);
+  result = checkOperationAvailability(operation, owned, 'PERFECT', training, true);
+  assert.strictEqual(result.isAvailable, false);
+  result = checkOperationAvailability(operation, owned, 'PERFECT', {}, true);
+  assert.strictEqual(result.isAvailable, true);
+  assert(result.unknownTraining.length > 0);
+  result = checkOperationAvailability(operation, owned, 'PERFECT', training, false);
+  assert.strictEqual(result.isAvailable, true);
+  result = checkOperationAvailability(operation, new Set(['阿米娅', '芬']), 'PERFECT',
+    { '阿米娅': { mainSkill: 7, skill2: 3 }, '芬': { elite: 0 } }, true);
+  assert.strictEqual(result.lowTraining.length, 1);
+  assert.strictEqual(result.missingOps[0], '[先锋]');
+});
+
+test('imported training survives account switches and backup normalization', () => {
+  const imported = parseImportedOperators(JSON.stringify([
+    { name: '阿米娅', elite: 2, level: 80, skill2: 3, own: true },
+    { name: '芬', own: false }
+  ]), 'maa.json');
+  assert.deepStrictEqual(hostArray(imported.names), ['阿米娅']);
+  const initial = createAccountState({ accountsData: { 1: imported.names }, accountsTraining: { 1: imported.training } });
+  const restored = createAccountState(JSON.parse(serializeAccountState(createAccountSwitchState(initial, 2))));
+  assert.strictEqual(restored.accountsTraining[1]['阿米娅'].skill2, 3);
+  assert.strictEqual(restored.accountsTraining[1]['芬'], undefined);
 });
 
 test('matchOperatorGroups does not reuse already used operators', () => {
@@ -508,6 +583,52 @@ test('convertSklandPlayerInfoToNames rejects empty Skland data', () => {
   assert.throws(() => convertSklandPlayerInfoToNames({ data: { chars: [] } }), /为空/);
 });
 
+test('Skland cultivation maps mastery, potential and module branches to the correct operator', () => {
+  const training = convertSklandPlayerInfoToTraining({ data: {
+    chars: [
+      { id: 'char_002_amiya', evolvePhase: 2, level: 80, mainSkillLevel: 7, potentialRank: 1,
+        skills: [{ level: 0 }, { level: 3 }] },
+      { id: 'char_1035_wisdel', evolvePhase: 2, level: 1, mainSkillLevel: 7 },
+      { id: 'char_1028_texas2', evolvePhase: 2, level: 60, mainSkillLevel: 7 },
+      { id: 'char_003_kalts', evolvePhase: 2, level: 60, mainSkillLevel: 7 }
+    ],
+    charInfoMap: {
+      char_002_amiya: { name: '阿米娅' },
+      char_1035_wisdel: { name: '维什戴尔' },
+      char_1028_texas2: { name: '缄默德克萨斯' },
+      char_003_kalts: { name: '凯尔希' }
+    }
+  } }, { data: { characters: [
+    { id: 'char_002_amiya', equips: [{ id: 'uniequip_002_amiya', level: 1 }] },
+    { id: 'char_1035_wisdel', equips: [
+      { id: 'uniequip_002_wisdel', level: 3 },
+      { id: 'uniequip_002_amiya', level: 3 }
+    ] },
+    { id: 'char_1028_texas2', equips: [
+      { id: 'uniequip_002_texas2', level: 2 },
+      { id: 'uniequip_003_texas2', level: 1 }
+    ] },
+    { id: 'char_003_kalts', equips: [] }
+  ] } });
+  assert.strictEqual(training['阿米娅'].skill2, 3);
+  assert.strictEqual(training['阿米娅'].potential, 2);
+  assert.strictEqual(training['阿米娅'].modX, undefined);
+  assert.strictEqual(training['阿米娅'].modY, 1);
+  assert.strictEqual(training['维什戴尔'].modX, 3);
+  assert.strictEqual(training['缄默德克萨斯'].modY, 2);
+  assert.strictEqual(training['缄默德克萨斯'].modX, 1);
+  assert.strictEqual(training['凯尔希'].modX, 0);
+  assert.strictEqual(training['凯尔希'].modY, 0);
+  assert.strictEqual(training['凯尔希'].modA, 0);
+  assert.strictEqual(checkOperatorTraining({ name: '凯尔希', requirements: { module: 1 } },
+    training['凯尔希']).status, 'low');
+  assert.strictEqual(checkOperatorTraining({ name: '维什戴尔', requirements: { module: 1, module_level: 3 } },
+    training['维什戴尔']).status, 'ok');
+  assert.strictEqual(OP_MODULE_TYPES.char_1035_wisdel, 'X');
+  assert.strictEqual(OP_MODULE_TYPES.char_4133_logos, 'DY');
+  assert.strictEqual(Object.keys(OP_MODULE_TYPES).length, 378);
+});
+
 test('account state serialization preserves the normalized unified schema', () => {
   const state = createAccountState({
     activeAccountId: 2,
@@ -516,7 +637,7 @@ test('account state serialization preserves the normalized unified schema', () =
   });
   const parsed = JSON.parse(serializeAccountState(state));
   assert.deepStrictEqual(hostObject(createAccountState(parsed)), hostObject(state));
-  assert.deepStrictEqual(Object.keys(parsed).sort(), ['accountMeta', 'accountsData', 'activeAccountId']);
+  assert.deepStrictEqual(Object.keys(parsed).sort(), ['accountMeta', 'accountsData', 'accountsTraining', 'activeAccountId']);
 });
 
 test('resolveStoredAccountState migrates missing metadata', () => {

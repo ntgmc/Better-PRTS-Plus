@@ -78,10 +78,13 @@ function createSklandImportCancelledError() {
         const binding = await resolveSklandImportBinding(targetAccountId, bindingOptions, importOptions);
         const playerInfo = await getSklandGamePlayerInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const names = convertSklandPlayerInfoToNames(playerInfo);
+        const cultivateInfo = await getSklandGameCultivateInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
+        const training = convertSklandPlayerInfoToTraining(playerInfo, cultivateInfo);
         const importedAt = new Date().toISOString();
         const result = createSklandImportState(getCurrentAccountState(), {
             accountId: targetAccountId,
             names,
+            training,
             binding,
             importedAt
         });
@@ -233,6 +236,15 @@ function createSklandImportCancelledError() {
         return data;
     }
 
+    async function getSklandGameCultivateInfo(credential, token, timestamp, uid) {
+        const data = await sklandSignedGet('/api/v1/game/cultivate/player',
+            `uid=${encodeURIComponent(uid)}`, credential, token, timestamp);
+        if (data.code !== 0 || !Array.isArray(data.data?.characters)) {
+            throw new Error('读取森空岛干员练度失败，请稍后重试。');
+        }
+        return data;
+    }
+
     async function sklandSignedGet(path, query, credential, token, timestamp) {
         const sign = await generateSklandSign(token, path, query, timestamp);
         const url = `${SKLAND_BASE_URL}${path}${query ? `?${query}` : ''}`;
@@ -313,6 +325,38 @@ function createSklandImportCancelledError() {
                 onerror: () => reject(new Error('森空岛接口请求失败，请稍后重试。'))
             });
         });
+    }
+
+    function convertSklandPlayerInfoToTraining(gamePlayerInfo, cultivateInfo) {
+        const data = isPlainRecord(gamePlayerInfo?.data) ? gamePlayerInfo.data : {};
+        const characters = Array.isArray(cultivateInfo?.data?.characters) ? cultivateInfo.data.characters : [];
+        const cultivatedById = new Map(characters.filter(isPlainRecord).map(char => [char.id, char]));
+        const training = {};
+        for (const raw of Array.isArray(data.chars) ? data.chars : []) {
+            const id = String(raw?.charId ?? raw?.id ?? '');
+            const name = normalizeOperatorName(data.charInfoMap?.[id]?.name ?? raw?.name);
+            if (!name || !id.startsWith('char_')) continue;
+            const character = { ...raw, ...cultivatedById.get(id) };
+            const skills = Array.isArray(character.skills) ? character.skills : [];
+            const record = normalizeOperatorTraining({
+                elite: character.evolvePhase, level: character.level,
+                potential: character.potentialRank == null ? undefined : Number(character.potentialRank) + 1,
+                mainSkill: character.mainSkillLevel,
+                skill1: skills[0]?.level, skill2: skills[1]?.level, skill3: skills[2]?.level
+            });
+            const moduleTypes = OP_MODULE_TYPES[id];
+            if (cultivatedById.has(id) && Array.isArray(character.equips)) {
+                for (const type of moduleTypes || '') record[`mod${type}`] = 0;
+            }
+            for (const equip of Array.isArray(character.equips) ? character.equips : []) {
+                const match = /^uniequip_00([2-4])_(.+)$/.exec(equip.id);
+                if (!match || match[2] !== id.split('_').slice(2).join('_')) continue;
+                const type = moduleTypes?.[Number(match[1]) - 2];
+                if (type) Object.assign(record, normalizeOperatorTraining({ [`mod${type}`]: equip.level }));
+            }
+            Object.defineProperty(training, name, { value: record, enumerable: true, configurable: true });
+        }
+        return training;
     }
 
     function convertSklandPlayerInfoToNames(gamePlayerInfo) {

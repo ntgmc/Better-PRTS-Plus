@@ -490,7 +490,8 @@
             ? createCardDiagnostics(resolution.source)
             : createCardDiagnostics('none');
 
-        const { isAvailable, missingCount, missingOps } = checkOperationAvailability(operation, ownedOpsSet, currentFilterMode);
+        const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
+            checkOperationAvailability(operation, ownedOpsSet, currentFilterMode, accountsTraining[activeAccountId], trainingCheckEnabled);
 
         if (!isAvailable && displayMode === 'HIDE') {
             if (card.style.display !== 'none') card.style.display = 'none';
@@ -508,7 +509,9 @@
         }
 
         const existingLabel = cardInner.querySelector('.prts-status-label');
-        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1);
+        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1) ||
+            (trainingCheckEnabled && diagnostics.noDataCards === 0 &&
+                (lowTraining.length || unknownTraining.length || !hasRequirements));
 
         if (!showMissingInfo) {
             if (existingLabel) existingLabel.remove();
@@ -525,11 +528,22 @@
             const name = missingOps[0];
             iconText = 'support';
             labelText = `需助战: ${name}`;
-        } else {
+        } else if (missingCount > 0 && currentFilterMode !== 'NONE') {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
             iconText = 'missing';
-            labelText = `缺 ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+            labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+        }
+        if (trainingCheckEnabled) {
+            if (lowTraining.length) labelText += ` · 练度不足：${lowTraining.slice(0, 2).join('、')}`;
+            if (unknownTraining.length) labelText += ` · 待核验：${unknownTraining.slice(0, 2).join('、')}`;
+            if (!hasRequirements) labelText += ' · 未标注练度';
+        }
+        if (!iconText) {
+            iconText = lowTraining.length ? 'missing' : unknownTraining.length ? 'support' : 'check';
+            if (lowTraining.length) newClass += ' prts-label-missing';
+            else if (unknownTraining.length) newClass += ' prts-label-support';
+            labelText = labelText.replace(/^ · /, '');
         }
 
         if (existingLabel) {

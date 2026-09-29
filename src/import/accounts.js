@@ -3,13 +3,14 @@
     // =========================================================================
 
     function getCurrentAccountState() {
-        return createAccountState({ activeAccountId, accountsData, accountMeta });
+        return createAccountState({ activeAccountId, accountsData, accountsTraining, accountMeta });
     }
 
     function publishAccountState(value) {
         const state = createAccountState(value);
         activeAccountId = state.activeAccountId;
         accountsData = state.accountsData;
+        accountsTraining = state.accountsTraining;
         accountMeta = state.accountMeta;
         ownedOpsSet = new Set(accountsData[activeAccountId] || []);
         return state;
@@ -83,7 +84,7 @@
         refreshAccountControls();
 
         // 3. 立刻触发重新筛选运算
-        if (currentFilterMode !== 'NONE') {
+        if (currentFilterMode !== 'NONE' || trainingCheckEnabled) {
             requestFilterUpdate();
         }
     }
@@ -126,7 +127,7 @@
         refreshAccountControls();
         applyFloatingPositionToContainer();
         applySidebarCollapse();
-        if (forceFilterUpdate || currentFilterMode !== 'NONE') requestFilterUpdate();
+        if (forceFilterUpdate || currentFilterMode !== 'NONE' || trainingCheckEnabled) requestFilterUpdate();
     }
 
     async function renameAccount(id) {
@@ -181,6 +182,7 @@
     function getBackupPreferences() {
         return {
             filterMode: normalizeFilterMode(currentFilterMode),
+            trainingCheck: trainingCheckEnabled,
             displayMode: normalizeDisplayMode(displayMode),
             config: {
                 visuals: CONFIG.visuals === true,
@@ -200,6 +202,7 @@
             exportedAt: new Date().toISOString(),
             activeAccountId: state.activeAccountId,
             accountsData: state.accountsData,
+            accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta,
             preferences: getBackupPreferences()
         };
@@ -247,6 +250,7 @@
         const rawConfig = isPlainRecord(raw.config) ? raw.config : {};
         return {
             filterMode: normalizeFilterMode(raw.filterMode),
+            trainingCheck: raw.trainingCheck === true,
             displayMode: normalizeDisplayMode(raw.displayMode),
             config: {
                 visuals: rawConfig.visuals !== false,
@@ -271,6 +275,7 @@
         return {
             activeAccountId: normalizeAccountId(value.activeAccountId),
             accountsData: normalizeAccountsData(value.accountsData),
+            accountsTraining: normalizeAccountsTraining(value.accountsTraining, normalizeAccountsData(value.accountsData)),
             accountMeta: normalizeAccountMeta(value.accountMeta),
             preferences: normalizeBackupPreferences(value.preferences)
         };
@@ -313,6 +318,8 @@
     function applyAccountsBackup(backup) {
         const nextState = createAccountState(backup);
         currentFilterMode = normalizeFilterMode(backup.preferences.filterMode);
+        trainingCheckEnabled = backup.preferences.trainingCheck === true;
+        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
         displayMode = normalizeDisplayMode(backup.preferences.displayMode);
         CONFIG.visuals = backup.preferences.config.visuals === true;
         CONFIG.cleanLink = backup.preferences.config.cleanLink === true;

@@ -40,6 +40,35 @@
         return result;
     }
 
+    function normalizeOperatorTraining(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+        const limits = { elite: [0, 2], level: [1, 90], potential: [1, 6], mainSkill: [1, 7],
+            skill1: [0, 3], skill2: [0, 3], skill3: [0, 3],
+            modX: [0, 3], modY: [0, 3], modD: [0, 3], modA: [0, 3], modB: [0, 3] };
+        const result = {};
+        Object.entries(limits).forEach(([key, [min, max]]) => {
+            const raw = value[key];
+            if (typeof raw !== 'number' && (typeof raw !== 'string' || !raw.trim())) return;
+            const number = Number(raw);
+            if (Number.isInteger(number) && number >= min && number <= max) result[key] = number;
+        });
+        return result;
+    }
+
+    function normalizeAccountsTraining(value, accounts) {
+        const result = { 1: {}, 2: {}, 3: {} };
+        ACCOUNT_IDS.forEach(id => {
+            (accounts[id] || []).forEach(name => {
+                if (!Object.prototype.hasOwnProperty.call(value?.[id] || {}, name)) return;
+                const training = normalizeOperatorTraining(value[id][name]);
+                if (Object.keys(training).length) {
+                    Object.defineProperty(result[id], name, { value: training, enumerable: true, configurable: true });
+                }
+            });
+        });
+        return result;
+    }
+
     function normalizeAccountsData(value) {
         const normalized = createEmptyAccountsData();
         if (!value || typeof value !== 'object') return normalized;
@@ -200,6 +229,23 @@
         if (/\.json$/i.test(fileName)) throw new Error('文件格式错误：不是有效的 JSON 文件');
 
         return parseOperatorNamesFromText(text);
+    }
+
+    function parseImportedOperators(rawText, fileName = '') {
+        const names = parseImportedOperatorNames(rawText, fileName);
+        const records = safeJsonParse(String(rawText || ''), null);
+        const training = {};
+        if (Array.isArray(records)) {
+            records.forEach(op => {
+                if (!isOwnedOperatorRecord(op)) return;
+                const name = normalizeOperatorName(op?.name);
+                if (!names.includes(name)) return;
+                Object.defineProperty(training, name, {
+                    value: normalizeOperatorTraining(op), enumerable: true, configurable: true
+                });
+            });
+        }
+        return { names, training };
     }
 
     function isSklandHost() {
