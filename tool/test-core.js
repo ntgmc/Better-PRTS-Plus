@@ -190,6 +190,27 @@ test('training requirements distinguish insufficient, unknown and absent data', 
   assert.strictEqual(checkOperatorTraining({ name: '阿米娅' }, {}).status, 'ok');
 });
 
+test('training prompts omit unpromoted prefixes and label selected skill mastery', () => {
+  assert.strictEqual(checkOperatorTraining({ requirements: { elite: 0, level: 60 } },
+    { elite: 0, level: 1 }).detail, '当前1级，要求60级');
+  assert.strictEqual(checkOperatorTraining({ requirements: { elite: 2, level: 60 } },
+    { elite: 0, level: 1 }).detail, '当前1级，要求精二60级');
+  assert.strictEqual(checkOperatorTraining({ requirements: { elite: 2 } },
+    { elite: 0 }).detail, '当前无，要求精二');
+  [8, 9, 10].forEach((level, index) => {
+    const op = { skill: 2, requirements: { skill_level: level } };
+    assert.strictEqual(checkOperatorTraining(op, { mainSkill: 5 }).detail,
+      `2技能当前5级，要求${['专一', '专二', '专三'][index]}`);
+    assert.strictEqual(checkOperatorTraining(op, { mainSkill: 7, skill2: index + 1 }).status, 'ok');
+  });
+  assert.strictEqual(checkOperatorTraining({ skill: 2, requirements: { skill_level: 10 } },
+    { mainSkill: 7, skill1: 3, skill2: 1 }).detail, '2技能当前专一，要求专三');
+  assert.strictEqual(checkOperatorTraining({ skill: 2, requirements: { skill_level: 10 } },
+    { mainSkill: 7 }).status, 'unknown');
+  assert.strictEqual(checkOperatorTraining({ skill: 2, requirements: { skill_level: 7 } },
+    { mainSkill: 5 }).detail, '2技能当前5级，要求7级');
+});
+
 test('training check combines support vacancies and group alternatives', () => {
   const operation = { parsedContent: {
     opers: [{ name: '阿米娅', skill: 2, requirements: { skill_level: 10 } }],

@@ -173,7 +173,7 @@
             if (!Number.isInteger(actual)) unknown.push(label);
             else if (actual < required) details.push(`${label} ${actual}/${required}`);
         };
-        const eliteText = elite => ['未精英化', '精一', '精二'][elite] || '精英化未知';
+        const eliteText = elite => ['', '精一', '精二'][elite] ?? '精英化未知';
         if (Number.isInteger(requirements.level) && requirements.level > 0) {
             if (!Number.isInteger(training?.elite) || !Number.isInteger(training?.level)) unknown.push('等级');
             else if (Number.isInteger(requirements.elite) && requirements.elite >= 0
@@ -188,7 +188,7 @@
             if (!Number.isInteger(training?.elite)) {
                 if (!unknown.includes('等级')) unknown.push('精英化');
             } else if (training.elite < requirements.elite && !details.some(detail => detail.startsWith('当前'))) {
-                details.push(`当前${eliteText(training.elite)}，要求${eliteText(requirements.elite)}`);
+                details.push(`当前${eliteText(training.elite) || '无'}，要求${eliteText(requirements.elite)}`);
             }
         }
         if (Number.isInteger(requirements.skill_level) && requirements.skill_level > 0) {
@@ -200,7 +200,12 @@
                     : training.mainSkill
                 : undefined;
             if (requirements.skill_level > 7 && (!Number.isInteger(skill) || skill < 1 || skill > 3)) unknown.push('技能编号');
-            else check('技能', requirements.skill_level, actual);
+            else if (!Number.isInteger(actual)) unknown.push('技能');
+            else if (actual < requirements.skill_level) {
+                const skillText = level => ({ 8: '专一', 9: '专二', 10: '专三' }[level] || `${level}级`);
+                const skillLabel = Number.isInteger(skill) && skill >= 1 && skill <= 3 ? `${skill}技能` : '技能';
+                details.push(`${skillLabel}当前${skillText(actual)}，要求${skillText(requirements.skill_level)}`);
+            }
         }
         const moduleType = { 1: 'X', 2: 'Y', 3: 'D', 4: 'A', 5: 'B' }[requirements.module];
         if (moduleType) {

@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Version](https://img.shields.io/badge/Version-3.4.0-blue.svg?style=flat-square)
+![Version](https://img.shields.io/badge/Version-3.4.1-blue.svg?style=flat-square)
 ![License](https://img.shields.io/badge/License-GPL--3.0-red.svg?style=flat-square)
 ![Platform](https://img.shields.io/badge/Platform-Tampermonkey-green.svg?style=flat-square)
 [![GreasyFork](https://img.shields.io/badge/Release-GreasyFork-orange.svg?style=flat-square)](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)
@@ -28,6 +28,8 @@
 ### 2. 🔍 持有干员筛选 (Perfect Filter)
 *   **完美阵容**：只保留您已拥有全部所需干员的作业。
 *   **允许助战**：保留最多缺少 1 名干员的作业，方便通过好友助战补齐。
+*   **校验练度**：独立开关，可与“完美阵容”“允许助战”配合使用；核对作业标注的精英化、等级、技能等级（8/9/10 对应专一/专二/专三）、模组和潜能要求。
+*   **练度提示**：练度不足计入助战缺口，卡片显示具体差距（如“当前1级，要求精二60级”“2技能当前5级，要求专三”）。
 *   **缺失提示**：在卡片上标记 **“缺 X 人”** 或 **“需助战：[干员名]”**，不用手动核对阵容。
 *   **结果处理**：不符合条件的作业可选择置灰保留，也可以直接隐藏。
 
@@ -60,7 +62,7 @@
 1.  点击页面右侧的 **设置悬浮按钮**。
 2.  点击 **“导入干员数据”**。
 3.  在导入窗口中选择 `.json` / `.txt` 文件，或直接粘贴 JSON/TXT 文本后点击 **“导入粘贴内容”**。
-    > **提示**：脚本兼容 MAA 导出的 JSON 格式。TXT 支持每行一个干员名字；导入成功后会显示“新增 / 移除 / 当前总数”摘要，方便确认结果。
+    > **提示**：脚本兼容 MAA 导出的 JSON 格式，并保留其中的练度数据；TXT 每行一个干员名字，仅能判断持有。森空岛导入可同步技能与模组练度。
 
 也可以使用 **森空岛导入**：
 1.  在 PRTS Plus 的筛选栏或悬浮球面板点击 **“森空岛导入”**，打开森空岛网页。
