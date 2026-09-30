@@ -403,7 +403,7 @@ if ($userScript -notmatch "function updateStatusLabel") {
 if ($userScript -notmatch "function hasEffectiveOperationData") {
     throw "Missing operation data effectiveness check"
 }
-if ($userScript -notmatch "prts_cfg_compat_debug" -or $userScript -notmatch "compatDebug: GM_getValue\('prts_cfg_compat_debug', false\)") {
+if ($userScript -notmatch "prts_cfg_compat_debug" -or $userScript -notmatch "compatDebug: \{[^\r\n]*default: false") {
     throw "Missing compatibility diagnostics config"
 }
 if ($userScript -notmatch "#prts-compat-debug-panel") {
@@ -430,7 +430,7 @@ if ($userScript -notmatch "function createDialogTag") {
 if ($userScript -match "h2\.innerHTML|tagHtml") {
     throw "Dialog tags should not be rendered with innerHTML"
 }
-if ($userScript -notmatch "GM_setValue\(FILTER_MODE_KEY, currentFilterMode\)") {
+if ($userScript -notmatch "GM_setValue\(CONFIG_KEY, JSON\.stringify\(normalizeConfig\(CONFIG\)\)\)") {
     throw "Filter mode persistence is missing"
 }
 if ($userScript -notmatch "function scheduleFilterUpdate") {

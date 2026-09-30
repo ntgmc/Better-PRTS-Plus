@@ -31,7 +31,6 @@
         observer.observe(document.body, { childList: true, subtree: true });
 
         const portalInnerObserver = new MutationObserver((mutations) => {
-            if (!CONFIG.visuals) return;
             mutations.forEach(mutation => {
                 const portalNode = mutation.target.closest(BP_SELECTORS.portal);
                 if (portalNode) enhancePopover(portalNode);
@@ -39,7 +38,6 @@
         });
 
         const bodyObserver = new MutationObserver((mutations) => {
-            if (!CONFIG.visuals) return;
             mutations.forEach(mutation => {
                 if (mutation.addedNodes.length > 0) {
                     mutation.addedNodes.forEach(node => {
@@ -59,7 +57,7 @@
             if (handleRouteChange()) return;
             const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
             syncPageScaffold();
-            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled || CONFIG.hideVideo)) {
+            if (missingFilterBar && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck || CONFIG.hideVideo)) {
                 scheduleFilterUpdate(120);
             }
         }, 3000);

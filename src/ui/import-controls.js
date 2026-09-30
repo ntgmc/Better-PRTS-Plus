@@ -311,8 +311,8 @@
     }
 
     function toggleDisplayMode() {
-        displayMode = (displayMode === 'GRAY') ? 'HIDE' : 'GRAY';
-        GM_setValue(DISPLAY_MODE_KEY, displayMode);
+        CONFIG.displayMode = (CONFIG.displayMode === 'GRAY') ? 'HIDE' : 'GRAY';
+        saveConfig();
         const bar = document.getElementById('prts-filter-bar');
         if (bar) bar.remove();
         injectFilterControls();
@@ -324,9 +324,8 @@
             showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
             return;
         }
-        currentFilterMode = (currentFilterMode === mode) ? 'NONE' : mode;
-        currentFilterMode = normalizeFilterMode(currentFilterMode);
-        GM_setValue(FILTER_MODE_KEY, currentFilterMode);
+        CONFIG.filterMode = normalizeFilterMode(CONFIG.filterMode === mode ? 'NONE' : mode);
+        saveConfig();
         updateFilterButtonStyles();
         requestFilterUpdate();
     }
@@ -336,8 +335,8 @@
             showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
             return;
         }
-        trainingCheckEnabled = !trainingCheckEnabled;
-        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
+        CONFIG.trainingCheck = !CONFIG.trainingCheck;
+        saveConfig();
         updateFilterButtonStyles();
         requestFilterUpdate();
     }
@@ -364,14 +363,14 @@
 
         perfectBtn.classList.remove('prts-active');
         supportBtn.classList.remove('prts-active');
-        perfectBtn.setAttribute('aria-pressed', currentFilterMode === 'PERFECT' ? 'true' : 'false');
-        supportBtn.setAttribute('aria-pressed', currentFilterMode === 'SUPPORT' ? 'true' : 'false');
+        perfectBtn.setAttribute('aria-pressed', CONFIG.filterMode === 'PERFECT' ? 'true' : 'false');
+        supportBtn.setAttribute('aria-pressed', CONFIG.filterMode === 'SUPPORT' ? 'true' : 'false');
 
-        if (currentFilterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
-        else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
+        if (CONFIG.filterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
+        else if (CONFIG.filterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
         if (trainingBtn) {
-            trainingBtn.classList.toggle('prts-active', trainingCheckEnabled);
-            trainingBtn.setAttribute('aria-pressed', String(trainingCheckEnabled));
+            trainingBtn.classList.toggle('prts-active', CONFIG.trainingCheck);
+            trainingBtn.setAttribute('aria-pressed', String(CONFIG.trainingCheck));
         }
     }
 
@@ -459,9 +458,9 @@
         mainRow.appendChild(btnSklandImport);
 
         // (3) 模式切换
-        const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
-        const displayModeIcon = displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
-        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
+        const displayModeText = CONFIG.displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
+        const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
+        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: CONFIG.displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
         mainRow.appendChild(btnSetting);
 
         // (4) 分割线
@@ -479,8 +478,8 @@
             text: '完美阵容',
             icon: 'check',
             onClick: () => toggleFilter('PERFECT'),
-            active: currentFilterMode === 'PERFECT',
-            pressed: currentFilterMode === 'PERFECT'
+            active: CONFIG.filterMode === 'PERFECT',
+            pressed: CONFIG.filterMode === 'PERFECT'
         });
         mainRow.appendChild(btnPerfect);
 
@@ -490,18 +489,18 @@
             text: '允许助战',
             icon: 'support',
             onClick: () => toggleFilter('SUPPORT'),
-            active: currentFilterMode === 'SUPPORT',
-            pressed: currentFilterMode === 'SUPPORT'
+            active: CONFIG.filterMode === 'SUPPORT',
+            pressed: CONFIG.filterMode === 'SUPPORT'
         });
         mainRow.appendChild(btnSupport);
         const btnTraining = createPrtsButton({
             id: 'btn-training', text: '校验练度', icon: 'check',
-            onClick: toggleTrainingCheck, active: trainingCheckEnabled, pressed: trainingCheckEnabled
+            onClick: toggleTrainingCheck, active: CONFIG.trainingCheck, pressed: CONFIG.trainingCheck
         });
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
         mainRow.appendChild(btnTraining);
 
-        if (isNew && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
+        if (isNew && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck)) {
             requestFilterUpdate();
         }
     }

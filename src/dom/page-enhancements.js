@@ -55,17 +55,11 @@
 
     function cleanBilibiliLinks(cardInner) {
         if (!CONFIG.cleanLink) return;
-        const descContainer = cardInner.querySelector('.grow.text-gray-700');
+        const descContainer = cardInner.querySelector('.grow.text-gray-700, .prts-desc-wrapper');
         if (!descContainer || descContainer.dataset.biliProcessed) return;
 
         const videoUrl = extractAndRemoveBilibiliUrl(descContainer);
         trimTrailingDescriptionNoise(descContainer);
-        wrapDescriptionContent(descContainer);
-        descContainer.classList.add('prts-desc-wrapper');
-        descContainer.classList.remove('grow');
-        descContainer.style.width = '100%';
-        descContainer.tabIndex = 0;
-        descContainer.setAttribute('aria-label', '作业描述');
 
         if (videoUrl) {
             const btnContainer = document.createElement('div');
@@ -88,6 +82,18 @@
         }
 
         descContainer.dataset.biliProcessed = "true";
+    }
+
+    function collapseCardDescription(cardInner) {
+        if (!CONFIG.collapseDescription) return;
+        const descContainer = cardInner.querySelector('.grow.text-gray-700');
+        if (!descContainer || descContainer.classList.contains('prts-desc-wrapper')) return;
+        wrapDescriptionContent(descContainer);
+        descContainer.classList.add('prts-desc-wrapper');
+        descContainer.classList.remove('grow');
+        descContainer.style.width = '100%';
+        descContainer.tabIndex = 0;
+        descContainer.setAttribute('aria-label', '作业描述');
     }
 
     function getOperationCards() {
@@ -273,8 +279,8 @@
         return false;
     }
 
-    function optimizeCardVisuals(card, cardInner) {
-        if (!CONFIG.visuals) return;
+    function addStageBadge(cardInner) {
+        if (!CONFIG.stageBadge) return;
 
         const heading = cardInner.querySelector(`h4, h5, ${BP_SELECTORS.heading}`);
         const stageCodeSpan = cardInner.querySelector('.flex.whitespace-pre .inline-block.font-bold.my-auto');
@@ -319,7 +325,10 @@
 
             heading.dataset.badgeProcessed = "true";
         }
+    }
 
+    function replaceCardOperatorAvatars(cardInner) {
+        if (!CONFIG.operatorAvatars) return;
         const allDivs = Array.from(cardInner.querySelectorAll('div'));
         const labelDiv = allDivs.find(div => div.innerText.trim() === '干员/干员组');
 
@@ -399,6 +408,7 @@
     }
 
     function enhancePopover(portalNode) {
+        if (!CONFIG.popoverAvatars) return;
         const content = portalNode.querySelector(BP_SELECTORS.popoverContent);
         if (!content || content.dataset.optimized) return;
 
@@ -506,10 +516,12 @@
             return diagnostics;
         }
 
-        getCardTypeTag(cardInner, 'PRTS')?.remove();
+        if (CONFIG.hidePrtsBadge) getCardTypeTag(cardInner, 'PRTS')?.remove();
         syncOperationCardTime(cardInner);
-        optimizeCardVisuals(card, cardInner);
+        addStageBadge(cardInner);
+        replaceCardOperatorAvatars(cardInner);
         cleanBilibiliLinks(cardInner);
+        collapseCardDescription(cardInner);
 
         const resolution = getOperationResolutionForCard(card, cardInner);
         const operation = resolution.operation;
@@ -523,9 +535,9 @@
             return diagnostics;
         }
         const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
-            checkOperationAvailability(operation, ownedOpsSet, currentFilterMode, accountsTraining[activeAccountId], trainingCheckEnabled);
+            checkOperationAvailability(operation, ownedOpsSet, CONFIG.filterMode, accountsTraining[activeAccountId], CONFIG.trainingCheck);
 
-        if (!isAvailable && displayMode === 'HIDE') {
+        if (!isAvailable && CONFIG.displayMode === 'HIDE') {
             if (card.style.display !== 'none') card.style.display = 'none';
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
@@ -534,15 +546,15 @@
         if (card.style.display === 'none') card.style.display = '';
 
         const hasGrayClass = card.classList.contains('prts-card-gray');
-        if (!isAvailable && displayMode === 'GRAY') {
+        if (!isAvailable && CONFIG.displayMode === 'GRAY') {
             if (!hasGrayClass) card.classList.add('prts-card-gray');
         } else if (hasGrayClass) {
             card.classList.remove('prts-card-gray');
         }
 
         const existingLabel = cardInner.querySelector('.prts-status-label');
-        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1) ||
-            (trainingCheckEnabled && diagnostics.noDataCards === 0 &&
+        const showMissingInfo = !isAvailable || (CONFIG.filterMode === 'SUPPORT' && missingCount === 1) ||
+            (CONFIG.trainingCheck && diagnostics.noDataCards === 0 &&
                 (lowTraining.length || unknownTraining.length || !hasRequirements));
 
         if (!showMissingInfo) {
@@ -555,18 +567,18 @@
         let iconText = '';
         let newClass = 'prts-status-label';
 
-        if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
+        if (CONFIG.filterMode === 'SUPPORT' && missingCount === 1) {
             newClass += ' prts-label-support';
             const name = missingOps[0];
             iconText = 'support';
             labelText = `需助战: ${name}`;
-        } else if (missingCount > 0 && currentFilterMode !== 'NONE') {
+        } else if (missingCount > 0 && CONFIG.filterMode !== 'NONE') {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
             iconText = 'missing';
             labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
-        if (trainingCheckEnabled) {
+        if (CONFIG.trainingCheck) {
             if (lowTraining.length) labelText += ` · 练度不足：${lowTraining.slice(0, 2).join('、')}`;
             if (unknownTraining.length) labelText += ` · 待核验：${unknownTraining.slice(0, 2).join('、')}`;
             if (!hasRequirements) labelText += ' · 未标注练度';

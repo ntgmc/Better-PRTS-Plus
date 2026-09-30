@@ -46,8 +46,6 @@
      * 加载干员数据：具备高级的向下兼容与数据迁移能力
      */
     function loadOwnedOps() {
-        currentFilterMode = normalizeFilterMode(currentFilterMode);
-        displayMode = normalizeDisplayMode(displayMode);
         const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
         reportAccountStateDiagnostics(resolved.diagnostics);
         if (resolved.migrated) {
@@ -84,7 +82,7 @@
         refreshAccountControls();
 
         // 3. 立刻触发重新筛选运算
-        if (currentFilterMode !== 'NONE' || trainingCheckEnabled) {
+        if (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) {
             requestFilterUpdate();
         }
     }
@@ -127,7 +125,7 @@
         refreshAccountControls();
         applyFloatingPositionToContainer();
         applySidebarCollapse();
-        if (forceFilterUpdate || currentFilterMode !== 'NONE' || trainingCheckEnabled) requestFilterUpdate();
+        if (forceFilterUpdate || CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
     }
 
     async function renameAccount(id) {
@@ -181,17 +179,13 @@
 
     function getBackupPreferences() {
         return {
-            filterMode: normalizeFilterMode(currentFilterMode),
-            trainingCheck: trainingCheckEnabled,
-            displayMode: normalizeDisplayMode(displayMode),
-            config: {
-                visuals: CONFIG.visuals === true,
-                cleanLink: CONFIG.cleanLink === true,
-                hideVideo: CONFIG.hideVideo === true,
-                showExactTime: CONFIG.showExactTime === true,
-                hideSidebar: CONFIG.hideSidebar === true
-            },
-            floatingPosition: parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'))
+            filterMode: CONFIG.filterMode,
+            trainingCheck: CONFIG.trainingCheck,
+            displayMode: CONFIG.displayMode,
+            config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
+                .filter(([, definition]) => definition.group)
+                .map(([key]) => [key, CONFIG[key]])),
+            floatingPosition: parseFloatingPosition(CONFIG.floatingPosition)
         };
     }
 
@@ -250,18 +244,18 @@
     function normalizeBackupPreferences(value) {
         const raw = isPlainRecord(value) ? value : {};
         const rawConfig = isPlainRecord(raw.config) ? raw.config : {};
+        const config = normalizeConfig({
+            ...rawConfig, filterMode: raw.filterMode, trainingCheck: raw.trainingCheck,
+            displayMode: raw.displayMode, floatingPosition: raw.floatingPosition
+        });
         return {
-            filterMode: normalizeFilterMode(raw.filterMode),
-            trainingCheck: raw.trainingCheck === true,
-            displayMode: normalizeDisplayMode(raw.displayMode),
-            config: {
-                visuals: rawConfig.visuals !== false,
-                cleanLink: rawConfig.cleanLink !== false,
-                hideVideo: rawConfig.hideVideo === true,
-                showExactTime: rawConfig.showExactTime === true,
-                hideSidebar: rawConfig.hideSidebar === true
-            },
-            floatingPosition: parseFloatingPosition(raw.floatingPosition)
+            filterMode: config.filterMode,
+            trainingCheck: config.trainingCheck,
+            displayMode: config.displayMode,
+            config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
+                .filter(([, definition]) => definition.group)
+                .map(([key]) => [key, config[key]])),
+            floatingPosition: config.floatingPosition
         };
     }
 
@@ -304,7 +298,7 @@
         const container = document.getElementById('prts-float-container');
         if (!container) return;
 
-        const savedPos = parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
+        const savedPos = CONFIG.floatingPosition;
         container.style.top = savedPos.top;
         if (savedPos.isRight) {
             container.style.left = 'auto';
@@ -321,23 +315,22 @@
 
     function applyAccountsBackup(backup) {
         const nextState = createAccountState(backup);
-        currentFilterMode = normalizeFilterMode(backup.preferences.filterMode);
-        trainingCheckEnabled = backup.preferences.trainingCheck === true;
-        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
-        displayMode = normalizeDisplayMode(backup.preferences.displayMode);
-        CONFIG.visuals = backup.preferences.config.visuals === true;
-        CONFIG.cleanLink = backup.preferences.config.cleanLink === true;
-        CONFIG.hideVideo = backup.preferences.config.hideVideo === true;
-        CONFIG.showExactTime = backup.preferences.config.showExactTime === true;
-        CONFIG.hideSidebar = backup.preferences.config.hideSidebar === true;
+        const preferences = normalizeBackupPreferences(backup.preferences);
+        const nextConfig = normalizeConfig({ ...preferences.config, ...preferences });
+        const needsReload = Object.entries(CONFIG_DEFINITIONS).some(([key, definition]) =>
+            definition.reloadOnDisable && CONFIG[key] && !nextConfig[key]);
 
         commitAccountState(nextState);
-        GM_setValue(FILTER_MODE_KEY, currentFilterMode);
-        GM_setValue(DISPLAY_MODE_KEY, displayMode);
+        Object.assign(CONFIG, nextConfig);
         saveConfig();
-        GM_setValue('prts_float_pos', JSON.stringify(backup.preferences.floatingPosition));
+        if (needsReload) {
+            location.reload();
+            return;
+        }
 
         refreshAccountStateUi(true);
+        syncPageScaffold();
+        document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
     }
 
     function handleImportAccountsBackup() {

@@ -24,6 +24,7 @@
     }
 
     function optimizeDialogContent() {
+        if (!CONFIG.announcementTags) return;
         const dialog = document.querySelector(BP_SELECTORS.dialog);
         if (!dialog || dialog.dataset.contentOptimized) return;
 
@@ -42,15 +43,6 @@
         }
     }
 
-    function saveConfig() {
-        GM_setValue('prts_cfg_visuals', CONFIG.visuals);
-        GM_setValue('prts_cfg_link', CONFIG.cleanLink);
-        GM_setValue('prts_cfg_hide_video', CONFIG.hideVideo);
-        GM_setValue('prts_cfg_exact_time', CONFIG.showExactTime);
-        GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
-        GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
-    }
-
     function registerAccountsDataChangeListener() {
         if (typeof GM_addValueChangeListener !== 'function') return;
         GM_addValueChangeListener(ACCOUNTS_DATA_KEY, (_name, oldValue, newValue, remote) => {
@@ -65,7 +57,7 @@
         if (bar) bar.remove();
         injectFilterControls();
         refreshAccountControls();
-        if (currentFilterMode !== 'NONE') requestFilterUpdate();
+        if (CONFIG.filterMode !== 'NONE') requestFilterUpdate();
     }
 
     function initSklandImportPage() {
@@ -343,7 +335,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
     function createFloatingBall() {
         if (document.getElementById('prts-float-container')) return;
 
-        const savedPos = parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
+        const savedPos = CONFIG.floatingPosition;
         const container = document.createElement('div');
         container.id = 'prts-float-container';
 
@@ -381,8 +373,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.setAttribute('role', 'region');
         panel.setAttribute('aria-label', 'Better-PRTS-Plus 设置');
 
-        const createSwitch = (label, checked, onChange, configKey, icon) => createPrtsSwitch({ label, checked, onChange, configKey, icon });
-
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
         title.tabIndex = 0;
@@ -392,7 +382,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         titleText.textContent = '功能开关';
         titleText.style.marginRight = 'auto';
         const titleHint = document.createElement('span');
-        titleHint.textContent = '刷新生效';
+        titleHint.textContent = '部分关闭时刷新';
         titleHint.style.fontSize = '12px';
         titleHint.style.opacity = '0.6';
         title.appendChild(titleText);
@@ -419,35 +409,32 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }
         });
 
-        panel.appendChild(createSwitch('作业卡片美化', CONFIG.visuals, (val) => {
-            CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
-        }, 'visuals', 'operators'));
-        panel.appendChild(createSwitch('显示作业具体时间', CONFIG.showExactTime, (val) => {
-            CONFIG.showExactTime = val;
-            saveConfig();
-            requestFilterUpdate();
-        }, 'showExactTime', 'time'));
-        panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
-            CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
-        }, 'cleanLink', 'link'));
-        panel.appendChild(createSwitch('隐藏视频作业', CONFIG.hideVideo, (val) => {
-            CONFIG.hideVideo = val; saveConfig(); syncOperationTypeButtons(); requestFilterUpdate();
-        }, 'hideVideo', 'filter'));
-
-        panel.appendChild(createSwitch('折叠侧边栏', CONFIG.hideSidebar, (val) => {
-            CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
-        }, 'hideSidebar', 'layout'));
-
-        debugOptions.appendChild(createSwitch('兼容诊断', CONFIG.compatDebug, (val) => {
-            CONFIG.compatDebug = val;
-            saveConfig();
-            if (val) {
-                renderCompatibilityDiagnosticsPanel();
-                requestFilterUpdate();
-            } else {
-                removeCompatibilityDiagnosticsPanel();
+        let currentGroup = '';
+        Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
+            if (!definition.group) return;
+            const target = definition.group === '诊断' ? debugOptions : panel;
+            if (definition.group !== currentGroup) {
+                const groupTitle = document.createElement('div');
+                groupTitle.className = 'prts-panel-title';
+                groupTitle.textContent = definition.group;
+                target.appendChild(groupTitle);
+                currentGroup = definition.group;
             }
-        }, 'compatDebug', 'filter'));
+            target.appendChild(createPrtsSwitch({
+                label: definition.label, checked: CONFIG[key], configKey: key, icon: definition.icon,
+                onChange: value => {
+                    CONFIG[key] = value;
+                    saveConfig();
+                    if (!value && definition.reloadOnDisable) {
+                        location.reload();
+                        return;
+                    }
+                    syncPageScaffold();
+                    document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
+                    requestFilterUpdate();
+                }
+            }));
+        });
         panel.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
@@ -612,7 +599,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 const topPercent = (rect.top / window.innerHeight * 100).toFixed(1) + '%';
                 container.style.top = topPercent;
 
-                GM_setValue('prts_float_pos', JSON.stringify({ top: topPercent, isRight: isRight }));
+                CONFIG.floatingPosition = { top: topPercent, isRight: isRight };
+                saveConfig();
             } else {
                 if (initialSnapRight) {
                     container.style.left = 'auto';

@@ -35,9 +35,7 @@
 
     // [V12.0/V3.1.0 数据重构] 单一集合存储提升性能，包含向下兼容
     const ACCOUNTS_DATA_KEY = 'prts_plus_accounts_data';
-    const DISPLAY_MODE_KEY = 'prts_plus_display_mode'; // 可选值: 'GRAY' | 'HIDE'
-    const FILTER_MODE_KEY = 'prts_plus_filter_mode'; // 可选值: 'NONE' | 'PERFECT' | 'SUPPORT'
-    const TRAINING_CHECK_KEY = 'prts_plus_training_check';
+    const CONFIG_KEY = 'prts_plus_settings';
     const SKLAND_LAST_IMPORT_KEY = 'prts_plus_skland_last_import';
     const ACCOUNT_BACKUP_TYPE = 'Better-PRTS-Plus.accounts-backup';
     const ACCOUNT_BACKUP_VERSION = 1;
@@ -52,14 +50,53 @@
     // [设置配置] 功能开关默认状态
     const SKLAND_FAVICON_SVG = '<svg class="prts-btn-icon-svg" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M0,15h1v1H0z" fill="#CCE519" opacity="0.039"/><path d="M2,15h1v1H2z" fill="#C8EE21" opacity="0.424"/><path d="M15,0h1v1H15z" fill="#D0D017" opacity="0.043"/><path d="M14,15h1v1H14z" fill="#D3F825" opacity="0.486"/><path d="M4,15h2v1H4z" fill="#C7EB21" opacity="0.502"/><path d="M11,15h3v1H11z" fill="#C9ED21" opacity="0.502"/><path d="M6,15h1v1H6z" fill="#C9EF1F" opacity="0.502"/><path d="M10,15h1v1H10z" fill="#C9F11F" opacity="0.502"/><path d="M3,15h1v1H3zM7,15h1v1H7z" fill="#CBEF21" opacity="0.502"/><path d="M8,15h2v1H8z" fill="#CDF321" opacity="0.502"/><path d="M14,0h1v1H14z" fill="#D1F323" opacity="0.502"/><path d="M15,1h1v1H15z" fill="#D0F321" opacity="0.6"/><path d="M0,13h1v1H0z" fill="#CFEF23" opacity="0.651"/><path d="M0,11h1v1H0z" fill="#D3B809" opacity="0.71"/><path d="M2,0h1v1H2z" fill="#D6F822" opacity="0.745"/><path d="M0,10h1v1H0z" fill="#DFC01A" opacity="0.757"/><path d="M0,12h1v1H0z" fill="#C9F718" opacity="0.769"/><path d="M0,2h1v1H0z" fill="#CDF222" opacity="0.773"/><path d="M13,0h1v1H13z" fill="#D2F723" opacity="0.792"/><path d="M0,5h1v1H0z" fill="#C0E51A" opacity="0.816"/><path d="M0,4h1v1H0z" fill="#C6EB17" opacity="0.816"/><path d="M0,6h1v1H0z" fill="#C9E618" opacity="0.816"/><path d="M15,14h1v1H15z" fill="#C9F127" opacity="0.816"/><path d="M4,0h2v1H4zM9,0h3v1H9z" fill="#CDF222" opacity="0.816"/><path d="M6,0h1v1H6z" fill="#CFF322" opacity="0.816"/><path d="M8,0h1v1H8z" fill="#D0F61F" opacity="0.816"/><path d="M7,0h1v1H7z" fill="#D4FB1D" opacity="0.816"/><path d="M0,8h1v1H0z" fill="#D5F022" opacity="0.816"/><path d="M0,7h1v1H0z" fill="#E0B61D" opacity="0.816"/><path d="M12,0h1v1H12z" fill="#CEF221" opacity="0.824"/><path d="M9,6h1v1H9z" fill="#9BB075" opacity="0.827"/><path d="M3,0h1v1H3z" fill="#CEF221" opacity="0.827"/><path d="M0,9h1v1H0z" fill="#D2FD21" opacity="0.827"/><path d="M0,3h1v1H0z" fill="#D0F522" opacity="0.831"/><path d="M8,10h1v1H8z" fill="#4B4848" opacity="0.859"/><path d="M10,6h1v1H10z" fill="#EBE6D6" opacity="0.89"/><path d="M1,14h1v1H1z" fill="#D0F421" opacity="0.922"/><path d="M15,8h1v1H15z" fill="#95DC0B" opacity="0.933"/><path d="M15,7h1v1H15z" fill="#9EBD4D" opacity="0.933"/><path d="M15,10h1v1H15z" fill="#A7B177" opacity="0.933"/><path d="M15,9h1v1H15z" fill="#ABB952" opacity="0.933"/><path d="M15,6h1v1H15z" fill="#BBCA71" opacity="0.933"/><path d="M15,11h1v1H15z" fill="#BBD01D" opacity="0.933"/><path d="M15,5h1v1H15z" fill="#C1E516" opacity="0.933"/><path d="M15,12h1v1H15z" fill="#D0F320" opacity="0.933"/><path d="M15,4h1v1H15z" fill="#D3F721" opacity="0.933"/><path d="M15,2h1v1H15z" fill="#CCF021" opacity="0.937"/><path d="M9,7h1v1H9z" fill="#4D5441" opacity="0.937"/><path d="M15,3h1v1H15z" fill="#CDF022" opacity="0.941"/><path d="M5,10h1v1H5z" fill="#E1F0D0" opacity="0.945"/><path d="M12,8h1v1H12z" fill="#4B4749" opacity="0.945"/><path d="M8,9h1v1H8z" fill="#FAF9FB" opacity="0.953"/><path d="M15,13h1v1H15z" fill="#CFF121" opacity="0.961"/><path d="M10,7h1v1H10z" fill="#2F2D28" opacity="0.961"/><path d="M9,10h1v1H9z" fill="#323031" opacity="0.976"/><path d="M13,8h1v1H13z" fill="#9E9693" opacity="0.98"/><path d="M5,9h1v1H5z" fill="#ABB09A" opacity="0.98"/><path d="M12,9h1v1H12z" fill="#1C1B19" opacity="0.98"/><path d="M6,10h1v1H6z" fill="#525650" opacity="0.984"/><path d="M11,6h1v1H11z" fill="#FCFDF6" opacity="0.992"/><path d="M12,6h1v1H12z" fill="#FEFEFE" opacity="0.992"/><path d="M13,9h1v1H13z" fill="#272429" opacity="0.992"/><path d="M9,9h1v1H9z" fill="#3D3D3D" opacity="0.992"/><path d="M7,10h1v1H7z" fill="#1F1F20" opacity="0.996"/><path d="M6,9h1v1H6z" fill="#282A06" opacity="0.996"/><path d="M11,7h1v1H11z" fill="#555653" opacity="0.996"/><path d="M7,12h1v1H7z" fill="#656379"/><path d="M8,6h1v1H8z" fill="#667D4D"/><path d="M7,9h1v1H7z" fill="#69696F"/><path d="M7,4h1v1H7z" fill="#6B687A"/><path d="M4,7h1v1H4z" fill="#6F6C80"/><path d="M14,8h1v1H14z" fill="#719246"/><path d="M4,8h1v1H4z" fill="#767574"/><path d="M3,7h1v1H3z" fill="#7C7778"/><path d="M8,12h1v1H8z" fill="#7C7967"/><path d="M9,12h1v1H9z" fill="#828073"/><path d="M7,8h1v1H7z" fill="#82827E"/><path d="M2,9h1v1H2z" fill="#82C10A"/><path d="M12,11h1v1H12z" fill="#848194"/><path d="M7,3h1v1H7z" fill="#8984A5"/><path d="M6,12h1v1H6z" fill="#8A8EA8"/><path d="M7,5h1v1H7z" fill="#8C8C86"/><path d="M3,9h1v1H3z" fill="#8CA753"/><path d="M2,5h1v1H2z" fill="#908AA8"/><path d="M3,6h1v1H3z" fill="#93948D"/><path d="M10,12h1v1H10z" fill="#94978F"/><path d="M2,7h1v1H2z" fill="#959994"/><path d="M14,10h1v1H14z" fill="#9692A3"/><path d="M5,7h1v1H5z" fill="#989892"/><path d="M8,3h1v1H8z" fill="#9EA675"/><path d="M14,5h1v1H14z" fill="#A1AF5D"/><path d="M3,8h1v1H3z" fill="#A2B173"/><path d="M13,4h1v1H13z" fill="#A3B357"/><path d="M8,8h1v1H8z" fill="#A5A4A7"/><path d="M6,7h1v1H6z" fill="#A5A6AD"/><path d="M6,13h1v1H6z" fill="#A5B030"/><path d="M6,6h1v1H6z" fill="#A5BF2C"/><path d="M7,2h1v1H7z" fill="#A6A4B0"/><path d="M1,5h1v1H1z" fill="#A6AA95"/><path d="M11,3h1v1H11z" fill="#A6B658"/><path d="M9,3h1v1H9z" fill="#A7C711"/><path d="M8,2h1v1H8z" fill="#A8B959"/><path d="M12,4h1v1H12z" fill="#A9AF8C"/><path d="M10,3h1v1H10z" fill="#A9B862"/><path d="M1,10h1v1H1z" fill="#A9CB31"/><path d="M11,12h1v1H11z" fill="#ABB288"/><path d="M2,4h1v1H2z" fill="#ABB86E"/><path d="M12,12h1v1H12z" fill="#ABBE4F"/><path d="M4,6h1v1H4z" fill="#ACBA68"/><path d="M9,13h1v1H9z" fill="#ADB95F"/><path d="M6,3h1v1H6z" fill="#ADC054"/><path d="M8,4h1v1H8z" fill="#AEAEAD"/><path d="M13,11h1v1H13z" fill="#AEB789"/><path d="M2,8h1v1H2z" fill="#AED330"/><path d="M1,6h1v1H1z" fill="#AFB97C"/><path d="M6,4h1v1H6z" fill="#B0C061"/><path d="M1,11h1v1H1z" fill="#B0C765"/><path d="M1,4h1v1H1z" fill="#B1BD74"/><path d="M3,5h1v1H3z" fill="#B1C64C"/><path d="M7,6h1v1H7z" fill="#B2B0B8"/><path d="M2,10h1v1H2z" fill="#B2B19B"/><path d="M7,13h1v1H7z" fill="#B2BE62"/><path d="M6,2h1v1H6z" fill="#B2CF29"/><path d="M12,3h1v1H12z" fill="#B4D70F"/><path d="M8,13h1v1H8z" fill="#B7C36A"/><path d="M14,11h1v1H14z" fill="#B7CE3E"/><path d="M10,13h1v1H10z" fill="#B9B938"/><path d="M9,4h1v1H9z" fill="#B9BAB2"/><path d="M13,7h1v1H13z" fill="#B9BCA2"/><path d="M14,7h1v1H14z" fill="#BAC981"/><path d="M2,12h1v1H2z" fill="#BBC39A"/><path d="M7,1h1v1H7z" fill="#BBDB28"/><path d="M5,13h1v1H5z" fill="#BBDF11"/><path d="M3,13h1v1H3z" fill="#BCDF15"/><path d="M13,12h1v1H13z" fill="#BCDF18"/><path d="M6,5h1v1H6z" fill="#BDDA2E"/><path d="M1,12h1v1H1z" fill="#BDDB2F"/><path d="M2,13h1v1H2z" fill="#BDE114"/><path d="M5,6h1v1H5z" fill="#BEDA35"/><path d="M4,13h1v1H4zM11,13h1v1H11z" fill="#C0E215"/><path d="M14,4h1v1H14z" fill="#C2E710"/><path d="M2,3h1v1H2z" fill="#C3E617"/><path d="M3,4h1v1H3z" fill="#C3E714"/><path d="M6,11h1v1H6z" fill="#C4C3C3"/><path d="M10,2h1v1H10z" fill="#C6EB12"/><path d="M3,2h1v1H3z" fill="#C7EA21"/><path d="M11,2h1v1H11z" fill="#C7EC14"/><path d="M4,5h1v1H4z" fill="#C7EF0A"/><path d="M4,2h1v1H4zM13,2h1v1H13zM4,3h1v1H4z" fill="#C8EB21"/><path d="M2,2h1v1H2z" fill="#C8EC21"/><path d="M13,3h1v1H13z" fill="#C8EE14"/><path d="M5,4h1v1H5z" fill="#C8EF15"/><path d="M3,12h1v1H3z" fill="#C9CEB2"/><path d="M5,12h1v1H5z" fill="#CACFAA"/><path d="M8,1h1v1H8z" fill="#CAEE22"/><path d="M1,3h1v1H1z" fill="#CAEF1A"/><path d="M5,3h1v1H5z" fill="#CAF016"/><path d="M4,12h1v1H4z" fill="#CBD0B0"/><path d="M3,3h1v1H3z" fill="#CBEE21"/><path d="M1,7h1v1H1z" fill="#CBF12D"/><path d="M12,13h1v1H12z" fill="#CBF216"/><path d="M4,9h1v1H4z" fill="#CCCACC"/><path d="M12,2h1v1H12z" fill="#CCEF21"/><path d="M4,4h1v1H4z" fill="#CCEF22"/><path d="M1,13h1v1H1z" fill="#CCF01E"/><path d="M5,2h1v1H5z" fill="#CCF11D"/><path d="M9,2h1v1H9z" fill="#CDF513"/><path d="M13,13h1v1H13z" fill="#CFF320"/><path d="M1,8h1v1H1z" fill="#CFF419"/><path d="M14,2h1v1H14z" fill="#CFF422"/><path d="M5,5h1v1H5z" fill="#CFF617"/><path d="M14,3h1v1H14z" fill="#D0F322"/><path d="M12,7h1v1H12z" fill="#D1D1D5"/><path d="M6,1h1v1H6z" fill="#D1F820"/><path d="M11,8h1v1H11z" fill="#151616"/><path d="M3,1h2v1H3zM12,1h1v1H12z" fill="#D2F723"/><path d="M5,1h1v1H5zM10,1h2v1H10z" fill="#D3F823"/><path d="M14,12h1v1H14z" fill="#D3F918"/><path d="M13,1h1v1H13z" fill="#D4F823"/><path d="M9,1h1v1H9z" fill="#D4F923"/><path d="M14,13h1v1H14z" fill="#D5FA22"/><path d="M1,9h1v1H1z" fill="#D6F621"/><path d="M9,14h1v1H9z" fill="#D6FA16"/><path d="M9,5h1v1H9z" fill="#D7D4E0"/><path d="M8,14h1v1H8z" fill="#D7F613"/><path d="M2,1h1v1H2z" fill="#D7FC24"/><path d="M1,2h1v1H1z" fill="#D9FF23"/><path d="M14,14h1v1H14z" fill="#D9FF24"/><path d="M1,1h1v1H1z" fill="#DAFF24"/><path d="M7,14h1v1H7z" fill="#DCFF17"/><path d="M4,14h2v1H4z" fill="#DDFF22"/><path d="M3,14h1v1H3z" fill="#DEFF22"/><path d="M2,14h1v1H2z" fill="#DEFF23"/><path d="M12,14h1v1H12z" fill="#E0FF23"/><path d="M13,5h1v1H13z" fill="#E1DEEF"/><path d="M11,14h1v1H11z" fill="#E1FF22"/><path d="M13,14h1v1H13z" fill="#E1FF23"/><path d="M14,1h1v1H14z" fill="#E1FF25"/><path d="M10,14h1v1H10z" fill="#E2FF1F"/><path d="M6,14h1v1H6z" fill="#E3FF21"/><path d="M11,4h1v1H11z" fill="#EAE7F7"/><path d="M3,10h1v1H3z" fill="#EEEAF3"/><path d="M14,6h1v1H14z" fill="#F2EDFF"/><path d="M10,4h1v1H10z" fill="#F5F2FF"/><path d="M2,11h1v1H2z" fill="#FFFEFF"/><path d="M10,5h3v1H10zM13,6h1v1H13zM4,10h1v1H4zM3,11h3v1H3z" fill="#FFFFFF"/><path d="M8,11h1v1H8z" fill="#1E1F1E"/><path d="M10,10h1v1H10z" fill="#1F1F23"/><path d="M10,9h1v1H10z" fill="#212121"/><path d="M9,11h1v1H9z" fill="#22221B"/><path d="M10,8h1v1H10z" fill="#272829"/><path d="M11,9h1v1H11z" fill="#292929"/><path d="M11,10h1v1H11z" fill="#292A2B"/><path d="M7,11h1v1H7z" fill="#2F2F2E"/><path d="M9,8h1v1H9z" fill="#302F32"/><path d="M12,10h1v1H12z" fill="#3A3B3A"/><path d="M2,6h1v1H2z" fill="#46435C"/><path d="M10,11h1v1H10z" fill="#48472B"/><path d="M13,10h1v1H13z" fill="#4B4A54"/><path d="M8,5h1v1H8z" fill="#4C4755"/><path d="M8,7h1v1H8z" fill="#4D553F"/><path d="M11,11h1v1H11z" fill="#4F4D4E"/><path d="M6,8h1v1H6z" fill="#5C5B54"/><path d="M14,9h1v1H14z" fill="#605D93"/><path d="M5,8h1v1H5z" fill="#615F60"/><path d="M7,7h1v1H7z" fill="#626084"/><path d="M0,14h1v1H0z" fill="#CEEC1E" opacity="0.165"/><path d="M1,15h1v1H1z" fill="#CCEF1E" opacity="0.259"/><path d="M15,15h1v1H15z" fill="#C9F225" opacity="0.318"/><path d="M0,1h1v1H0z" fill="#CEF122" opacity="0.373"/><path d="M1,0h1v1H1z" fill="#CAEF21" opacity="0.384"/></svg>';
 
-    const CONFIG = {
-        visuals: GM_getValue('prts_cfg_visuals', true),       // 干员头像优化
-        cleanLink: GM_getValue('prts_cfg_link', true),        // 链接净化
-        hideVideo: GM_getValue('prts_cfg_hide_video', false), // 隐藏视频作业
-        showExactTime: GM_getValue('prts_cfg_exact_time', false), // 作业具体时间
-        hideSidebar: GM_getValue('prts_cfg_hide_sidebar', false), // 折叠侧边栏
-        compatDebug: GM_getValue('prts_cfg_compat_debug', false)  // 兼容性诊断
+    const CONFIG_DEFINITIONS = {
+        collapseDescription: { group: '作业卡片', label: '折叠描述文本', icon: 'layout', default: true, legacyKey: 'prts_cfg_link', alias: 'cleanLink', reloadOnDisable: true },
+        operatorAvatars: { group: '作业卡片', label: '干员头像', icon: 'operators', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        stageBadge: { group: '作业卡片', label: '关卡代号徽章', icon: 'filter', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        showExactTime: { group: '作业卡片', label: '显示作业具体时间', icon: 'time', default: false, legacyKey: 'prts_cfg_exact_time' },
+        cleanLink: { group: '作业卡片', label: '视频链接优化', icon: 'link', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
+        hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'filter', default: false, legacyKey: 'prts_cfg_hide_video' },
+        hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'filter', default: true, reloadOnDisable: true },
+        popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'operators', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'layout', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
+        announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'filter', default: true, reloadOnDisable: true },
+        compatDebug: { group: '诊断', label: '兼容诊断', icon: 'filter', default: false, legacyKey: 'prts_cfg_compat_debug' },
+        filterMode: { default: 'NONE', options: ['NONE', 'PERFECT', 'SUPPORT'], legacyKey: 'prts_plus_filter_mode' },
+        displayMode: { default: 'GRAY', options: ['GRAY', 'HIDE'], legacyKey: 'prts_plus_display_mode' },
+        trainingCheck: { default: false, legacyKey: 'prts_plus_training_check' },
+        floatingPosition: { default: { top: '40%', isRight: true }, legacyKey: 'prts_float_pos' }
     };
+
+    function normalizeConfig(value) {
+        const parsed = typeof value === 'string' ? safeJsonParse(value, null) : value;
+        const raw = isPlainRecord(parsed) ? parsed : {};
+        return Object.fromEntries(Object.entries(CONFIG_DEFINITIONS).map(([key, definition]) => {
+            const candidate = raw[key] ?? (definition.alias ? raw[definition.alias] : undefined);
+            const normalized = key === 'floatingPosition' ? parseFloatingPosition(candidate)
+                : definition.options ? (definition.options.includes(candidate) ? candidate : definition.default)
+                : typeof candidate === 'boolean' ? candidate : definition.default;
+            return [key, normalized];
+        }));
+    }
+
+    function loadConfig() {
+        const stored = GM_getValue(CONFIG_KEY);
+        const parsed = typeof stored === 'string' ? safeJsonParse(stored, null) : stored;
+        if (isPlainRecord(parsed)) return normalizeConfig(parsed);
+        const legacy = Object.fromEntries(Object.entries(CONFIG_DEFINITIONS).map(([key, definition]) => [
+            key, definition.legacyKey ? GM_getValue(definition.legacyKey, definition.default) : definition.default
+        ]));
+        const config = normalizeConfig(legacy);
+        GM_setValue(CONFIG_KEY, JSON.stringify(config));
+        return config;
+    }
+
+    const CONFIG = loadConfig();
+
+    function saveConfig() {
+        GM_setValue(CONFIG_KEY, JSON.stringify(normalizeConfig(CONFIG)));
+    }
 
     const BP_SELECTORS = {
         inputGroup: '.bp4-input-group, .bp6-input-group',
@@ -80,10 +117,7 @@
     let accountsTraining = { 1: {}, 2: {}, 3: {} };
     let accountMeta = createDefaultAccountMeta();
 
-    let currentFilterMode = GM_getValue(FILTER_MODE_KEY, 'NONE');
-    let displayMode = normalizeDisplayMode(GM_getValue(DISPLAY_MODE_KEY, 'GRAY'));
     let ownedOpsSet = new Set();
-    let trainingCheckEnabled = GM_getValue(TRAINING_CHECK_KEY, false) === true;
     const operationCache = new WeakMap();
     const cardDiagnosticsCache = new WeakMap();
 
@@ -3202,8 +3236,6 @@ function createSklandImportCancelledError() {
      * 加载干员数据：具备高级的向下兼容与数据迁移能力
      */
     function loadOwnedOps() {
-        currentFilterMode = normalizeFilterMode(currentFilterMode);
-        displayMode = normalizeDisplayMode(displayMode);
         const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
         reportAccountStateDiagnostics(resolved.diagnostics);
         if (resolved.migrated) {
@@ -3240,7 +3272,7 @@ function createSklandImportCancelledError() {
         refreshAccountControls();
 
         // 3. 立刻触发重新筛选运算
-        if (currentFilterMode !== 'NONE' || trainingCheckEnabled) {
+        if (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) {
             requestFilterUpdate();
         }
     }
@@ -3283,7 +3315,7 @@ function createSklandImportCancelledError() {
         refreshAccountControls();
         applyFloatingPositionToContainer();
         applySidebarCollapse();
-        if (forceFilterUpdate || currentFilterMode !== 'NONE' || trainingCheckEnabled) requestFilterUpdate();
+        if (forceFilterUpdate || CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
     }
 
     async function renameAccount(id) {
@@ -3337,17 +3369,13 @@ function createSklandImportCancelledError() {
 
     function getBackupPreferences() {
         return {
-            filterMode: normalizeFilterMode(currentFilterMode),
-            trainingCheck: trainingCheckEnabled,
-            displayMode: normalizeDisplayMode(displayMode),
-            config: {
-                visuals: CONFIG.visuals === true,
-                cleanLink: CONFIG.cleanLink === true,
-                hideVideo: CONFIG.hideVideo === true,
-                showExactTime: CONFIG.showExactTime === true,
-                hideSidebar: CONFIG.hideSidebar === true
-            },
-            floatingPosition: parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'))
+            filterMode: CONFIG.filterMode,
+            trainingCheck: CONFIG.trainingCheck,
+            displayMode: CONFIG.displayMode,
+            config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
+                .filter(([, definition]) => definition.group)
+                .map(([key]) => [key, CONFIG[key]])),
+            floatingPosition: parseFloatingPosition(CONFIG.floatingPosition)
         };
     }
 
@@ -3406,18 +3434,18 @@ function createSklandImportCancelledError() {
     function normalizeBackupPreferences(value) {
         const raw = isPlainRecord(value) ? value : {};
         const rawConfig = isPlainRecord(raw.config) ? raw.config : {};
+        const config = normalizeConfig({
+            ...rawConfig, filterMode: raw.filterMode, trainingCheck: raw.trainingCheck,
+            displayMode: raw.displayMode, floatingPosition: raw.floatingPosition
+        });
         return {
-            filterMode: normalizeFilterMode(raw.filterMode),
-            trainingCheck: raw.trainingCheck === true,
-            displayMode: normalizeDisplayMode(raw.displayMode),
-            config: {
-                visuals: rawConfig.visuals !== false,
-                cleanLink: rawConfig.cleanLink !== false,
-                hideVideo: rawConfig.hideVideo === true,
-                showExactTime: rawConfig.showExactTime === true,
-                hideSidebar: rawConfig.hideSidebar === true
-            },
-            floatingPosition: parseFloatingPosition(raw.floatingPosition)
+            filterMode: config.filterMode,
+            trainingCheck: config.trainingCheck,
+            displayMode: config.displayMode,
+            config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
+                .filter(([, definition]) => definition.group)
+                .map(([key]) => [key, config[key]])),
+            floatingPosition: config.floatingPosition
         };
     }
 
@@ -3460,7 +3488,7 @@ function createSklandImportCancelledError() {
         const container = document.getElementById('prts-float-container');
         if (!container) return;
 
-        const savedPos = parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
+        const savedPos = CONFIG.floatingPosition;
         container.style.top = savedPos.top;
         if (savedPos.isRight) {
             container.style.left = 'auto';
@@ -3477,23 +3505,22 @@ function createSklandImportCancelledError() {
 
     function applyAccountsBackup(backup) {
         const nextState = createAccountState(backup);
-        currentFilterMode = normalizeFilterMode(backup.preferences.filterMode);
-        trainingCheckEnabled = backup.preferences.trainingCheck === true;
-        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
-        displayMode = normalizeDisplayMode(backup.preferences.displayMode);
-        CONFIG.visuals = backup.preferences.config.visuals === true;
-        CONFIG.cleanLink = backup.preferences.config.cleanLink === true;
-        CONFIG.hideVideo = backup.preferences.config.hideVideo === true;
-        CONFIG.showExactTime = backup.preferences.config.showExactTime === true;
-        CONFIG.hideSidebar = backup.preferences.config.hideSidebar === true;
+        const preferences = normalizeBackupPreferences(backup.preferences);
+        const nextConfig = normalizeConfig({ ...preferences.config, ...preferences });
+        const needsReload = Object.entries(CONFIG_DEFINITIONS).some(([key, definition]) =>
+            definition.reloadOnDisable && CONFIG[key] && !nextConfig[key]);
 
         commitAccountState(nextState);
-        GM_setValue(FILTER_MODE_KEY, currentFilterMode);
-        GM_setValue(DISPLAY_MODE_KEY, displayMode);
+        Object.assign(CONFIG, nextConfig);
         saveConfig();
-        GM_setValue('prts_float_pos', JSON.stringify(backup.preferences.floatingPosition));
+        if (needsReload) {
+            location.reload();
+            return;
+        }
 
         refreshAccountStateUi(true);
+        syncPageScaffold();
+        document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
     }
 
     function handleImportAccountsBackup() {
@@ -3850,8 +3877,8 @@ function createSklandImportCancelledError() {
     }
 
     function toggleDisplayMode() {
-        displayMode = (displayMode === 'GRAY') ? 'HIDE' : 'GRAY';
-        GM_setValue(DISPLAY_MODE_KEY, displayMode);
+        CONFIG.displayMode = (CONFIG.displayMode === 'GRAY') ? 'HIDE' : 'GRAY';
+        saveConfig();
         const bar = document.getElementById('prts-filter-bar');
         if (bar) bar.remove();
         injectFilterControls();
@@ -3863,9 +3890,8 @@ function createSklandImportCancelledError() {
             showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
             return;
         }
-        currentFilterMode = (currentFilterMode === mode) ? 'NONE' : mode;
-        currentFilterMode = normalizeFilterMode(currentFilterMode);
-        GM_setValue(FILTER_MODE_KEY, currentFilterMode);
+        CONFIG.filterMode = normalizeFilterMode(CONFIG.filterMode === mode ? 'NONE' : mode);
+        saveConfig();
         updateFilterButtonStyles();
         requestFilterUpdate();
     }
@@ -3875,8 +3901,8 @@ function createSklandImportCancelledError() {
             showPrtsToast('请先导入干员数据', 'warning', `当前账号：${getAccountLabel(activeAccountId)}`);
             return;
         }
-        trainingCheckEnabled = !trainingCheckEnabled;
-        GM_setValue(TRAINING_CHECK_KEY, trainingCheckEnabled);
+        CONFIG.trainingCheck = !CONFIG.trainingCheck;
+        saveConfig();
         updateFilterButtonStyles();
         requestFilterUpdate();
     }
@@ -3903,14 +3929,14 @@ function createSklandImportCancelledError() {
 
         perfectBtn.classList.remove('prts-active');
         supportBtn.classList.remove('prts-active');
-        perfectBtn.setAttribute('aria-pressed', currentFilterMode === 'PERFECT' ? 'true' : 'false');
-        supportBtn.setAttribute('aria-pressed', currentFilterMode === 'SUPPORT' ? 'true' : 'false');
+        perfectBtn.setAttribute('aria-pressed', CONFIG.filterMode === 'PERFECT' ? 'true' : 'false');
+        supportBtn.setAttribute('aria-pressed', CONFIG.filterMode === 'SUPPORT' ? 'true' : 'false');
 
-        if (currentFilterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
-        else if (currentFilterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
+        if (CONFIG.filterMode === 'PERFECT') perfectBtn.classList.add('prts-active');
+        else if (CONFIG.filterMode === 'SUPPORT') supportBtn.classList.add('prts-active');
         if (trainingBtn) {
-            trainingBtn.classList.toggle('prts-active', trainingCheckEnabled);
-            trainingBtn.setAttribute('aria-pressed', String(trainingCheckEnabled));
+            trainingBtn.classList.toggle('prts-active', CONFIG.trainingCheck);
+            trainingBtn.setAttribute('aria-pressed', String(CONFIG.trainingCheck));
         }
     }
 
@@ -3998,9 +4024,9 @@ function createSklandImportCancelledError() {
         mainRow.appendChild(btnSklandImport);
 
         // (3) 模式切换
-        const displayModeText = displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
-        const displayModeIcon = displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
-        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
+        const displayModeText = CONFIG.displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
+        const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
+        const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: CONFIG.displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
         mainRow.appendChild(btnSetting);
 
         // (4) 分割线
@@ -4018,8 +4044,8 @@ function createSklandImportCancelledError() {
             text: '完美阵容',
             icon: 'check',
             onClick: () => toggleFilter('PERFECT'),
-            active: currentFilterMode === 'PERFECT',
-            pressed: currentFilterMode === 'PERFECT'
+            active: CONFIG.filterMode === 'PERFECT',
+            pressed: CONFIG.filterMode === 'PERFECT'
         });
         mainRow.appendChild(btnPerfect);
 
@@ -4029,18 +4055,18 @@ function createSklandImportCancelledError() {
             text: '允许助战',
             icon: 'support',
             onClick: () => toggleFilter('SUPPORT'),
-            active: currentFilterMode === 'SUPPORT',
-            pressed: currentFilterMode === 'SUPPORT'
+            active: CONFIG.filterMode === 'SUPPORT',
+            pressed: CONFIG.filterMode === 'SUPPORT'
         });
         mainRow.appendChild(btnSupport);
         const btnTraining = createPrtsButton({
             id: 'btn-training', text: '校验练度', icon: 'check',
-            onClick: toggleTrainingCheck, active: trainingCheckEnabled, pressed: trainingCheckEnabled
+            onClick: toggleTrainingCheck, active: CONFIG.trainingCheck, pressed: CONFIG.trainingCheck
         });
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
         mainRow.appendChild(btnTraining);
 
-        if (isNew && (currentFilterMode !== 'NONE' || trainingCheckEnabled)) {
+        if (isNew && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck)) {
             requestFilterUpdate();
         }
     }
@@ -4101,17 +4127,11 @@ function createSklandImportCancelledError() {
 
     function cleanBilibiliLinks(cardInner) {
         if (!CONFIG.cleanLink) return;
-        const descContainer = cardInner.querySelector('.grow.text-gray-700');
+        const descContainer = cardInner.querySelector('.grow.text-gray-700, .prts-desc-wrapper');
         if (!descContainer || descContainer.dataset.biliProcessed) return;
 
         const videoUrl = extractAndRemoveBilibiliUrl(descContainer);
         trimTrailingDescriptionNoise(descContainer);
-        wrapDescriptionContent(descContainer);
-        descContainer.classList.add('prts-desc-wrapper');
-        descContainer.classList.remove('grow');
-        descContainer.style.width = '100%';
-        descContainer.tabIndex = 0;
-        descContainer.setAttribute('aria-label', '作业描述');
 
         if (videoUrl) {
             const btnContainer = document.createElement('div');
@@ -4134,6 +4154,18 @@ function createSklandImportCancelledError() {
         }
 
         descContainer.dataset.biliProcessed = "true";
+    }
+
+    function collapseCardDescription(cardInner) {
+        if (!CONFIG.collapseDescription) return;
+        const descContainer = cardInner.querySelector('.grow.text-gray-700');
+        if (!descContainer || descContainer.classList.contains('prts-desc-wrapper')) return;
+        wrapDescriptionContent(descContainer);
+        descContainer.classList.add('prts-desc-wrapper');
+        descContainer.classList.remove('grow');
+        descContainer.style.width = '100%';
+        descContainer.tabIndex = 0;
+        descContainer.setAttribute('aria-label', '作业描述');
     }
 
     function getOperationCards() {
@@ -4319,8 +4351,8 @@ function createSklandImportCancelledError() {
         return false;
     }
 
-    function optimizeCardVisuals(card, cardInner) {
-        if (!CONFIG.visuals) return;
+    function addStageBadge(cardInner) {
+        if (!CONFIG.stageBadge) return;
 
         const heading = cardInner.querySelector(`h4, h5, ${BP_SELECTORS.heading}`);
         const stageCodeSpan = cardInner.querySelector('.flex.whitespace-pre .inline-block.font-bold.my-auto');
@@ -4365,7 +4397,10 @@ function createSklandImportCancelledError() {
 
             heading.dataset.badgeProcessed = "true";
         }
+    }
 
+    function replaceCardOperatorAvatars(cardInner) {
+        if (!CONFIG.operatorAvatars) return;
         const allDivs = Array.from(cardInner.querySelectorAll('div'));
         const labelDiv = allDivs.find(div => div.innerText.trim() === '干员/干员组');
 
@@ -4445,6 +4480,7 @@ function createSklandImportCancelledError() {
     }
 
     function enhancePopover(portalNode) {
+        if (!CONFIG.popoverAvatars) return;
         const content = portalNode.querySelector(BP_SELECTORS.popoverContent);
         if (!content || content.dataset.optimized) return;
 
@@ -4552,10 +4588,12 @@ function createSklandImportCancelledError() {
             return diagnostics;
         }
 
-        getCardTypeTag(cardInner, 'PRTS')?.remove();
+        if (CONFIG.hidePrtsBadge) getCardTypeTag(cardInner, 'PRTS')?.remove();
         syncOperationCardTime(cardInner);
-        optimizeCardVisuals(card, cardInner);
+        addStageBadge(cardInner);
+        replaceCardOperatorAvatars(cardInner);
         cleanBilibiliLinks(cardInner);
+        collapseCardDescription(cardInner);
 
         const resolution = getOperationResolutionForCard(card, cardInner);
         const operation = resolution.operation;
@@ -4569,9 +4607,9 @@ function createSklandImportCancelledError() {
             return diagnostics;
         }
         const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
-            checkOperationAvailability(operation, ownedOpsSet, currentFilterMode, accountsTraining[activeAccountId], trainingCheckEnabled);
+            checkOperationAvailability(operation, ownedOpsSet, CONFIG.filterMode, accountsTraining[activeAccountId], CONFIG.trainingCheck);
 
-        if (!isAvailable && displayMode === 'HIDE') {
+        if (!isAvailable && CONFIG.displayMode === 'HIDE') {
             if (card.style.display !== 'none') card.style.display = 'none';
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
@@ -4580,15 +4618,15 @@ function createSklandImportCancelledError() {
         if (card.style.display === 'none') card.style.display = '';
 
         const hasGrayClass = card.classList.contains('prts-card-gray');
-        if (!isAvailable && displayMode === 'GRAY') {
+        if (!isAvailable && CONFIG.displayMode === 'GRAY') {
             if (!hasGrayClass) card.classList.add('prts-card-gray');
         } else if (hasGrayClass) {
             card.classList.remove('prts-card-gray');
         }
 
         const existingLabel = cardInner.querySelector('.prts-status-label');
-        const showMissingInfo = !isAvailable || (currentFilterMode === 'SUPPORT' && missingCount === 1) ||
-            (trainingCheckEnabled && diagnostics.noDataCards === 0 &&
+        const showMissingInfo = !isAvailable || (CONFIG.filterMode === 'SUPPORT' && missingCount === 1) ||
+            (CONFIG.trainingCheck && diagnostics.noDataCards === 0 &&
                 (lowTraining.length || unknownTraining.length || !hasRequirements));
 
         if (!showMissingInfo) {
@@ -4601,18 +4639,18 @@ function createSklandImportCancelledError() {
         let iconText = '';
         let newClass = 'prts-status-label';
 
-        if (currentFilterMode === 'SUPPORT' && missingCount === 1) {
+        if (CONFIG.filterMode === 'SUPPORT' && missingCount === 1) {
             newClass += ' prts-label-support';
             const name = missingOps[0];
             iconText = 'support';
             labelText = `需助战: ${name}`;
-        } else if (missingCount > 0 && currentFilterMode !== 'NONE') {
+        } else if (missingCount > 0 && CONFIG.filterMode !== 'NONE') {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
             iconText = 'missing';
             labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
-        if (trainingCheckEnabled) {
+        if (CONFIG.trainingCheck) {
             if (lowTraining.length) labelText += ` · 练度不足：${lowTraining.slice(0, 2).join('、')}`;
             if (unknownTraining.length) labelText += ` · 待核验：${unknownTraining.slice(0, 2).join('、')}`;
             if (!hasRequirements) labelText += ' · 未标注练度';
@@ -4714,6 +4752,7 @@ function createSklandImportCancelledError() {
     }
 
     function optimizeDialogContent() {
+        if (!CONFIG.announcementTags) return;
         const dialog = document.querySelector(BP_SELECTORS.dialog);
         if (!dialog || dialog.dataset.contentOptimized) return;
 
@@ -4732,15 +4771,6 @@ function createSklandImportCancelledError() {
         }
     }
 
-    function saveConfig() {
-        GM_setValue('prts_cfg_visuals', CONFIG.visuals);
-        GM_setValue('prts_cfg_link', CONFIG.cleanLink);
-        GM_setValue('prts_cfg_hide_video', CONFIG.hideVideo);
-        GM_setValue('prts_cfg_exact_time', CONFIG.showExactTime);
-        GM_setValue('prts_cfg_hide_sidebar', CONFIG.hideSidebar);
-        GM_setValue('prts_cfg_compat_debug', CONFIG.compatDebug);
-    }
-
     function registerAccountsDataChangeListener() {
         if (typeof GM_addValueChangeListener !== 'function') return;
         GM_addValueChangeListener(ACCOUNTS_DATA_KEY, (_name, oldValue, newValue, remote) => {
@@ -4755,7 +4785,7 @@ function createSklandImportCancelledError() {
         if (bar) bar.remove();
         injectFilterControls();
         refreshAccountControls();
-        if (currentFilterMode !== 'NONE') requestFilterUpdate();
+        if (CONFIG.filterMode !== 'NONE') requestFilterUpdate();
     }
 
     function initSklandImportPage() {
@@ -5033,7 +5063,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
     function createFloatingBall() {
         if (document.getElementById('prts-float-container')) return;
 
-        const savedPos = parseFloatingPosition(GM_getValue('prts_float_pos', '{"top":"40%","isRight":true}'));
+        const savedPos = CONFIG.floatingPosition;
         const container = document.createElement('div');
         container.id = 'prts-float-container';
 
@@ -5071,8 +5101,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.setAttribute('role', 'region');
         panel.setAttribute('aria-label', 'Better-PRTS-Plus 设置');
 
-        const createSwitch = (label, checked, onChange, configKey, icon) => createPrtsSwitch({ label, checked, onChange, configKey, icon });
-
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
         title.tabIndex = 0;
@@ -5082,7 +5110,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         titleText.textContent = '功能开关';
         titleText.style.marginRight = 'auto';
         const titleHint = document.createElement('span');
-        titleHint.textContent = '刷新生效';
+        titleHint.textContent = '部分关闭时刷新';
         titleHint.style.fontSize = '12px';
         titleHint.style.opacity = '0.6';
         title.appendChild(titleText);
@@ -5109,35 +5137,32 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }
         });
 
-        panel.appendChild(createSwitch('作业卡片美化', CONFIG.visuals, (val) => {
-            CONFIG.visuals = val; saveConfig(); if(val) requestFilterUpdate(); else location.reload();
-        }, 'visuals', 'operators'));
-        panel.appendChild(createSwitch('显示作业具体时间', CONFIG.showExactTime, (val) => {
-            CONFIG.showExactTime = val;
-            saveConfig();
-            requestFilterUpdate();
-        }, 'showExactTime', 'time'));
-        panel.appendChild(createSwitch('视频链接优化', CONFIG.cleanLink, (val) => {
-            CONFIG.cleanLink = val; saveConfig(); if(val) requestFilterUpdate();
-        }, 'cleanLink', 'link'));
-        panel.appendChild(createSwitch('隐藏视频作业', CONFIG.hideVideo, (val) => {
-            CONFIG.hideVideo = val; saveConfig(); syncOperationTypeButtons(); requestFilterUpdate();
-        }, 'hideVideo', 'filter'));
-
-        panel.appendChild(createSwitch('折叠侧边栏', CONFIG.hideSidebar, (val) => {
-            CONFIG.hideSidebar = val; saveConfig(); applySidebarCollapse();
-        }, 'hideSidebar', 'layout'));
-
-        debugOptions.appendChild(createSwitch('兼容诊断', CONFIG.compatDebug, (val) => {
-            CONFIG.compatDebug = val;
-            saveConfig();
-            if (val) {
-                renderCompatibilityDiagnosticsPanel();
-                requestFilterUpdate();
-            } else {
-                removeCompatibilityDiagnosticsPanel();
+        let currentGroup = '';
+        Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
+            if (!definition.group) return;
+            const target = definition.group === '诊断' ? debugOptions : panel;
+            if (definition.group !== currentGroup) {
+                const groupTitle = document.createElement('div');
+                groupTitle.className = 'prts-panel-title';
+                groupTitle.textContent = definition.group;
+                target.appendChild(groupTitle);
+                currentGroup = definition.group;
             }
-        }, 'compatDebug', 'filter'));
+            target.appendChild(createPrtsSwitch({
+                label: definition.label, checked: CONFIG[key], configKey: key, icon: definition.icon,
+                onChange: value => {
+                    CONFIG[key] = value;
+                    saveConfig();
+                    if (!value && definition.reloadOnDisable) {
+                        location.reload();
+                        return;
+                    }
+                    syncPageScaffold();
+                    document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
+                    requestFilterUpdate();
+                }
+            }));
+        });
         panel.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
@@ -5302,7 +5327,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 const topPercent = (rect.top / window.innerHeight * 100).toFixed(1) + '%';
                 container.style.top = topPercent;
 
-                GM_setValue('prts_float_pos', JSON.stringify({ top: topPercent, isRight: isRight }));
+                CONFIG.floatingPosition = { top: topPercent, isRight: isRight };
+                saveConfig();
             } else {
                 if (initialSnapRight) {
                     container.style.left = 'auto';
@@ -5371,7 +5397,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
         observer.observe(document.body, { childList: true, subtree: true });
 
         const portalInnerObserver = new MutationObserver((mutations) => {
-            if (!CONFIG.visuals) return;
             mutations.forEach(mutation => {
                 const portalNode = mutation.target.closest(BP_SELECTORS.portal);
                 if (portalNode) enhancePopover(portalNode);
@@ -5379,7 +5404,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
         });
 
         const bodyObserver = new MutationObserver((mutations) => {
-            if (!CONFIG.visuals) return;
             mutations.forEach(mutation => {
                 if (mutation.addedNodes.length > 0) {
                     mutation.addedNodes.forEach(node => {
@@ -5399,7 +5423,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (handleRouteChange()) return;
             const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
             syncPageScaffold();
-            if (missingFilterBar && (currentFilterMode !== 'NONE' || trainingCheckEnabled || CONFIG.hideVideo)) {
+            if (missingFilterBar && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck || CONFIG.hideVideo)) {
                 scheduleFilterUpdate(120);
             }
         }, 3000);

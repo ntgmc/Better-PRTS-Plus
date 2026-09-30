@@ -22,6 +22,18 @@ const source = sourceFiles
   .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8'))
   .join('\n') + `
 globalThis.__testExports = {
+  CONFIG_KEY,
+  CONFIG_DEFINITIONS,
+  normalizeConfig,
+  loadConfig,
+  saveConfig,
+  buildAccountsBackup,
+  applyAccountsBackup,
+  addStageBadge,
+  replaceCardOperatorAvatars,
+  collapseCardDescription,
+  cleanBilibiliLinks,
+  enhancePopover,
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
   OP_MODULE_TYPES,
@@ -95,6 +107,18 @@ vm.createContext(context);
 vm.runInContext(source, context, { filename: 'better-prts-plus-core.js' });
 
 const {
+  CONFIG_KEY,
+  CONFIG_DEFINITIONS,
+  normalizeConfig,
+  loadConfig,
+  saveConfig,
+  buildAccountsBackup,
+  applyAccountsBackup,
+  addStageBadge,
+  replaceCardOperatorAvatars,
+  collapseCardDescription,
+  cleanBilibiliLinks,
+  enhancePopover,
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
   OP_MODULE_TYPES,
@@ -137,6 +161,238 @@ const tests = [];
 function test(name, fn) {
   tests.push({ name, fn });
 }
+
+test('unified settings migrate legacy values, validate types and prefer saved independent choices', () => {
+  const savedStorage = new Map(storage);
+  try {
+    storage.clear();
+    storage.set('prts_cfg_visuals', false);
+    storage.set('prts_cfg_link', false);
+    storage.set('prts_plus_filter_mode', 'SUPPORT');
+    storage.set('prts_plus_display_mode', 'HIDE');
+    storage.set('prts_plus_training_check', true);
+    storage.set('prts_float_pos', '{"top":"120%","isRight":false}');
+    const migrated = loadConfig();
+    for (const key of ['operatorAvatars', 'stageBadge', 'popoverAvatars', 'collapseDescription', 'cleanLink']) {
+      assert.strictEqual(migrated[key], false, key);
+    }
+    assert.strictEqual(migrated.filterMode, 'SUPPORT');
+    assert.strictEqual(migrated.displayMode, 'HIDE');
+    assert.strictEqual(migrated.trainingCheck, true);
+    assert.deepStrictEqual(hostObject(migrated.floatingPosition), { top: '95%', isRight: false });
+    assert.deepStrictEqual(JSON.parse(storage.get(CONFIG_KEY)), hostObject(migrated));
+    storage.set(CONFIG_KEY, JSON.stringify({ operatorAvatars: true, stageBadge: false, collapseDescription: true }));
+    const loaded = loadConfig();
+    assert.strictEqual(loaded.operatorAvatars, true);
+    assert.strictEqual(loaded.stageBadge, false);
+    assert.strictEqual(loaded.popoverAvatars, true);
+    assert.strictEqual(loaded.collapseDescription, true);
+    assert.strictEqual(loaded.cleanLink, true);
+    assert.strictEqual(loaded.filterMode, 'NONE');
+    const invalid = normalizeConfig({
+      operatorAvatars: 'false', hideVideo: 1, filterMode: 'invalid', displayMode: null,
+      trainingCheck: 'true', floatingPosition: '{bad-json', unknown: true
+    });
+    assert.strictEqual(invalid.operatorAvatars, true);
+    assert.strictEqual(invalid.hideVideo, false);
+    assert.strictEqual(invalid.trainingCheck, false);
+    assert.strictEqual(invalid.filterMode, 'NONE');
+    assert.strictEqual(invalid.displayMode, 'GRAY');
+    assert.strictEqual(Object.hasOwn(invalid, 'unknown'), false);
+    assert.deepStrictEqual(hostObject(invalid.floatingPosition), { top: '40%', isRight: true });
+    storage.set(CONFIG_KEY, '{bad-json');
+    assert.strictEqual(loadConfig().operatorAvatars, false);
+    failStorageKey = CONFIG_KEY;
+    assert.throws(saveConfig, /storage failure/);
+  } finally {
+    failStorageKey = null;
+    storage.clear();
+    savedStorage.forEach((value, key) => storage.set(key, value));
+  }
+});
+
+function createTestElement(tagName = 'div', text = '') {
+  const node = {
+    nodeType: 1, tagName: tagName.toUpperCase(), children: [], dataset: {}, style: {}, className: '',
+    attributes: new Map(), parentElement: null,
+    get parentNode() { return this.parentElement; },
+    get firstChild() { return this.children[0] || null; },
+    get lastChild() { return this.children[this.children.length - 1] || null; },
+    get textContent() { return text + this.children.map(child => child.textContent).join(''); },
+    set textContent(value) { this.replaceChildren(); text = value; },
+    get innerText() { return this.textContent; },
+    set innerText(value) { this.textContent = value; },
+    appendChild(child) {
+      child.remove();
+      child.parentElement = this;
+      this.children.push(child);
+      return child;
+    },
+    insertBefore(child, reference) {
+      this.appendChild(child);
+      if (reference) {
+        this.children.pop();
+        this.children.splice(this.children.indexOf(reference), 0, child);
+      }
+    },
+    replaceChildren() {
+      this.children.slice().forEach(child => child.remove());
+      text = '';
+    },
+    remove() {
+      if (this.parentElement) this.parentElement.children.splice(this.parentElement.children.indexOf(this), 1);
+      this.parentElement = null;
+    },
+    setAttribute(key, value) { this.attributes.set(key, value); },
+    closest() { return null; },
+    querySelector(selector) { return this.children.find(child => selector === `.${child.className}`) || null; },
+    querySelectorAll() { return []; }
+  };
+  node.classList = {
+    contains: name => node.className.split(/\s+/).includes(name),
+    add: name => { node.className = `${node.className} ${name}`.trim(); },
+    remove: name => { node.className = node.className.split(/\s+/).filter(value => value !== name).join(' '); }
+  };
+  return node;
+}
+
+test('card badges, avatars, descriptions and links work independently and remain idempotent', () => {
+  const savedConfig = { ...CONFIG };
+  const savedContext = {
+    document: context.document, Node: context.Node, NodeFilter: context.NodeFilter,
+    createPrtsIcon: context.createPrtsIcon
+  };
+  context.Node = { ELEMENT_NODE: 1, TEXT_NODE: 3 };
+  context.NodeFilter = { SHOW_TEXT: 4 };
+  context.document = {
+    createElement: createTestElement,
+    createTextNode: text => createTestElement('span', text),
+    createTreeWalker: () => ({ nextNode: () => null })
+  };
+  context.createPrtsIcon = () => createTestElement('svg');
+  try {
+    for (const avatars of [false, true]) for (const badge of [false, true]) {
+      CONFIG.operatorAvatars = avatars;
+      CONFIG.stageBadge = badge;
+      const heading = createTestElement('h4', '【1-7】 作业标题');
+      const label = createTestElement('div', '干员/干员组');
+      const tags = createTestElement();
+      const tag = createTestElement('span', '[阿米娅 2]');
+      tags.appendChild(tag);
+      tags.querySelectorAll = () => [tag];
+      label.nextElementSibling = tags;
+      const card = {
+        querySelector: selector => selector.startsWith('h4') ? heading : null,
+        querySelectorAll: () => [label]
+      };
+      addStageBadge(card);
+      replaceCardOperatorAvatars(card);
+      addStageBadge(card);
+      replaceCardOperatorAvatars(card);
+      assert.strictEqual(heading.children.length, Number(badge));
+      if (badge) {
+        assert.strictEqual(heading.children[0].innerText, '1-7');
+        assert(heading.textContent.includes('作业标题'));
+        assert(!heading.textContent.includes('【1-7】'));
+      } else {
+        assert.strictEqual(heading.textContent, '【1-7】 作业标题');
+      }
+      const grid = tags.querySelector('.prts-op-grid');
+      assert.strictEqual(Boolean(grid), avatars);
+      if (avatars) {
+        assert.strictEqual(grid.children.length, 1);
+        assert.strictEqual(grid.children[0].children[0].alt, '阿米娅');
+        assert.strictEqual(tag.style.display, 'none');
+      }
+    }
+    for (const collapse of [false, true]) for (const link of [false, true]) {
+      CONFIG.collapseDescription = collapse;
+      CONFIG.cleanLink = link;
+      const desc = createTestElement();
+      desc.appendChild(createTestElement('span', '作业描述'));
+      const anchor = createTestElement('a', '视频地址');
+      anchor.href = 'https://www.bilibili.com/video/BV123/';
+      desc.appendChild(anchor);
+      desc.querySelectorAll = selector => selector === 'a[href]' && anchor.parentElement ? [anchor] : [];
+      const parent = createTestElement();
+      parent.appendChild(desc);
+      const card = { querySelector: () => desc };
+      // A link can be enabled after the description has already been folded.
+      collapseCardDescription(card);
+      cleanBilibiliLinks(card);
+      collapseCardDescription(card);
+      cleanBilibiliLinks(card);
+      assert.strictEqual(desc.classList.contains('prts-desc-wrapper'), collapse);
+      assert.strictEqual(Boolean(desc.querySelector('.prts-desc-content')), collapse);
+      assert.strictEqual(Boolean(anchor.parentElement), !link);
+      assert.strictEqual(parent.children.length, link ? 2 : 1);
+      assert.strictEqual(desc.attributes.has('aria-label'), collapse);
+      if (link) assert.strictEqual(parent.children[1].children[0].href, anchor.href);
+    }
+    CONFIG.operatorAvatars = false;
+    const content = createTestElement('div', '-> 阿米娅 2');
+    const portal = { querySelector: () => content };
+    CONFIG.popoverAvatars = false;
+    enhancePopover(portal);
+    assert.strictEqual(content.textContent, '-> 阿米娅 2');
+    CONFIG.popoverAvatars = true;
+    enhancePopover(portal);
+    enhancePopover(portal);
+    assert.strictEqual(content.children.length, 1);
+    assert.strictEqual(content.children[0].children[0].children[0].alt, '阿米娅');
+  } finally {
+    Object.assign(CONFIG, savedConfig);
+    Object.assign(context, savedContext);
+  }
+});
+
+test('backup round trips every registered option and restores unified settings', () => {
+  const savedConfig = { ...CONFIG };
+  const savedStorage = new Map(storage);
+  const savedState = getCurrentAccountState();
+  const savedContext = {
+    document: context.document, location: context.location,
+    refreshAccountStateUi: context.refreshAccountStateUi, syncPageScaffold: context.syncPageScaffold
+  };
+  let reloads = 0;
+  context.location = { reload() { reloads++; } };
+  context.refreshAccountStateUi = () => {};
+  context.syncPageScaffold = () => {};
+  try {
+    Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
+      if (definition.group) CONFIG[key] = !definition.default;
+    });
+    CONFIG.filterMode = 'SUPPORT';
+    CONFIG.displayMode = 'HIDE';
+    CONFIG.trainingCheck = true;
+    CONFIG.floatingPosition = { top: '61%', isRight: false };
+    const backup = parseAccountsBackup(hostObject(buildAccountsBackup()));
+    Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
+      if (definition.group) assert.strictEqual(backup.preferences.config[key], CONFIG[key], key);
+    });
+    Object.assign(CONFIG, normalizeConfig({}));
+    applyAccountsBackup(backup);
+    const restored = JSON.parse(storage.get(CONFIG_KEY));
+    assert.deepStrictEqual(restored, hostObject(CONFIG));
+    assert.strictEqual(restored.filterMode, 'SUPPORT');
+    assert.strictEqual(restored.displayMode, 'HIDE');
+    assert.strictEqual(restored.trainingCheck, true);
+    assert.strictEqual(restored.compatDebug, true);
+    assert.deepStrictEqual(restored.floatingPosition, { top: '61%', isRight: false });
+    assert.strictEqual(reloads, 1);
+    assert.strictEqual(storage.has('prts_cfg_visuals'), false);
+    assert.strictEqual(storage.has('prts_plus_filter_mode'), false);
+    context.document = { querySelectorAll: () => [] };
+    applyAccountsBackup(backup);
+    assert.strictEqual(reloads, 1);
+  } finally {
+    Object.assign(CONFIG, savedConfig);
+    Object.assign(context, savedContext);
+    publishAccountState(savedState);
+    storage.clear();
+    savedStorage.forEach((value, key) => storage.set(key, value));
+  }
+});
 
 function hostArray(value) {
   return Array.from(value);
@@ -452,7 +708,10 @@ test('parseAccountsBackup normalizes data and preferences', () => {
   });
   assert.strictEqual(backup.preferences.filterMode, 'PERFECT');
   assert.strictEqual(backup.preferences.displayMode, 'HIDE');
-  assert.strictEqual(backup.preferences.config.visuals, false);
+  assert.strictEqual(backup.preferences.config.operatorAvatars, false);
+  assert.strictEqual(backup.preferences.config.stageBadge, false);
+  assert.strictEqual(backup.preferences.config.popoverAvatars, false);
+  assert.strictEqual(backup.preferences.config.collapseDescription, false);
   assert.strictEqual(backup.preferences.config.cleanLink, false);
   assert.strictEqual(backup.preferences.config.hideVideo, true);
   assert.strictEqual(backup.preferences.config.showExactTime, true);
