@@ -58,6 +58,11 @@ function Set-UserscriptHeaderVersion {
         throw "Version must look like X.Y, X.Y.Z, or X.Y.Z.N with an optional suffix; received '$NextVersion'"
     }
 
+    if ($NextVersion -ceq (Get-UserscriptHeaderVersion)) {
+        Write-Host "Userscript version is already $NextVersion."
+        return
+    }
+
     $header = Get-Content -LiteralPath $headerPath -Raw -Encoding UTF8
     $updated = [regex]::Replace(
         $header,
@@ -76,7 +81,10 @@ function Set-UserscriptHeaderVersion {
 
 function Test-StagedChanges {
     & git diff --cached --quiet
-    return $LASTEXITCODE -ne 0
+    if ($LASTEXITCODE -gt 1) {
+        throw "Cannot check staged changes"
+    }
+    return $LASTEXITCODE -eq 1
 }
 
 function Test-GitRefExists {
@@ -86,93 +94,125 @@ function Test-GitRefExists {
     return $LASTEXITCODE -eq 0
 }
 
-function Test-RemoteTagExists {
+function Get-RemoteTagCommit {
     param([string]$TagName)
 
-    $remoteTag = & git ls-remote --tags $Remote "refs/tags/$TagName"
+    $remoteTag = @(& git ls-remote --tags $Remote "refs/tags/$TagName" "refs/tags/$TagName^{}")
     if ($LASTEXITCODE -ne 0) {
         throw "Cannot query remote tag refs from '$Remote'"
     }
-    return (($remoteTag -join "`n").Trim().Length -gt 0)
+    $peeledTag = @($remoteTag | Where-Object { $_ -match "\srefs/tags/.+\^\{\}$" })
+    if ($peeledTag.Count -gt 0) {
+        return ($peeledTag[0] -split "\s+")[0]
+    }
+    if ($remoteTag) {
+        return ($remoteTag[0] -split "\s+")[0]
+    }
+    return ""
 }
 
-Invoke-Git rev-parse --is-inside-work-tree *> $null
+Push-Location $repoRoot
+try {
+    Invoke-Git rev-parse --is-inside-work-tree *> $null
 
-if ((Test-StagedChanges) -and -not $DryRun) {
-    throw "There are already staged changes. Commit or unstage them before running this release upload script."
-}
+    if ((Test-StagedChanges) -and -not $DryRun) {
+        throw "There are already staged changes. Commit or unstage them before running this release upload script."
+    }
 
-if (-not [string]::IsNullOrWhiteSpace($Version)) {
-    Set-UserscriptHeaderVersion -NextVersion $Version
-}
+    if (-not [string]::IsNullOrWhiteSpace($Version)) {
+        Set-UserscriptHeaderVersion -NextVersion $Version
+    }
 
-$releaseVersion = Get-UserscriptHeaderVersion
-$tagName = "v$releaseVersion"
+    $releaseVersion = Get-UserscriptHeaderVersion
+    $tagName = "v$releaseVersion"
 
-if ([string]::IsNullOrWhiteSpace($CommitMessage)) {
-    $CommitMessage = if ($PublishRelease) { "chore(release): $tagName" } else { "chore(release): prepare $tagName" }
-}
+    if ([string]::IsNullOrWhiteSpace($CommitMessage)) {
+        $CommitMessage = if ($PublishRelease) { "chore(release): $tagName" } else { "chore(release): prepare $tagName" }
+    }
 
-if ([string]::IsNullOrWhiteSpace($Branch)) {
-    $Branch = Get-GitOutput branch --show-current
-}
-if ([string]::IsNullOrWhiteSpace($Branch)) {
-    throw "Cannot determine current branch. Pass -Branch explicitly."
-}
+    if ([string]::IsNullOrWhiteSpace($Branch)) {
+        $Branch = Get-GitOutput branch --show-current
+    }
+    if ([string]::IsNullOrWhiteSpace($Branch)) {
+        throw "Cannot determine current branch. Pass -Branch explicitly."
+    }
 
-Write-Host "Preparing release files for $tagName"
-& $buildScriptPath
-& $syncReadmeScriptPath
-if (-not $SkipOperatorDataUpdate) {
-    & $updateOperatorDataScriptPath
-} else {
-    Write-Host "Skipping operator data update."
-}
-& $checkScriptPath
-
-if ($PublishRelease) {
-    & $checkReleaseScriptPath -Tag $tagName
-}
-
-if ($DryRun) {
-    Write-Host "Dry run complete. No git add, commit, tag, or push was performed."
-    Write-Host "Target branch: $Branch"
-    Write-Host "Commit message: $CommitMessage"
+    $localTagExists = $false
+    $remoteTagCommit = ""
     if ($PublishRelease) {
-        Write-Host "Release tag: $tagName"
-    }
-    exit 0
-}
-
-Invoke-Git add -- @releasePaths
-
-if (Test-StagedChanges) {
-    Invoke-Git commit -m $CommitMessage
-} else {
-    Write-Host "No release file changes to commit; using current HEAD."
-}
-
-if ($PublishRelease) {
-    if (Test-RemoteTagExists -TagName $tagName) {
-        throw "Remote tag '$tagName' already exists on '$Remote'."
-    }
-
-    if (Test-GitRefExists -Ref "refs/tags/$tagName") {
-        $tagCommit = Get-GitOutput rev-list -n 1 $tagName
         $headCommit = Get-GitOutput rev-parse HEAD
-        if ($tagCommit -ne $headCommit) {
-            throw "Local tag '$tagName' already exists but does not point to HEAD."
+        $localTagExists = Test-GitRefExists -Ref "refs/tags/$tagName"
+        if ($localTagExists) {
+            $tagCommit = Get-GitOutput rev-parse "refs/tags/$tagName^{commit}"
+            if ($tagCommit -ne $headCommit) {
+                throw "Local tag '$tagName' already exists but does not point to HEAD. Use a new version."
+            }
         }
-        Write-Host "Local tag $tagName already points to HEAD."
+        if (-not $DryRun) {
+            $remoteTagCommit = Get-RemoteTagCommit -TagName $tagName
+            if ($remoteTagCommit -and $remoteTagCommit -ne $headCommit) {
+                throw "Remote tag '$tagName' already exists on '$Remote' but does not point to HEAD. Use a new version."
+            }
+        }
+    }
+    $reuseReleaseTag = $localTagExists -or [bool]$remoteTagCommit
+    if ($reuseReleaseTag -and (Get-GitOutput status --porcelain --untracked-files=all -- @releasePaths)) {
+        throw "Release files have changes but tag '$tagName' already exists. Use a new version or restore the release files before retrying."
+    }
+
+    Write-Host "Preparing release files for $tagName"
+    & $buildScriptPath
+    & $syncReadmeScriptPath
+    if (-not $SkipOperatorDataUpdate -and -not $reuseReleaseTag) {
+        & $updateOperatorDataScriptPath
     } else {
+        Write-Host "Skipping operator data update; using existing release data."
+    }
+    & $checkScriptPath
+
+    if ($PublishRelease) {
+        & $checkReleaseScriptPath -Tag $tagName
+    }
+
+    if ($reuseReleaseTag -and (Get-GitOutput status --porcelain --untracked-files=all -- @releasePaths)) {
+        throw "Prepared release files differ from existing tag '$tagName'. Use a new version."
+    }
+
+    if ($DryRun) {
+        Write-Host "Dry run complete. No git add, commit, tag, or push was performed."
+        Write-Host "Target branch: $Branch"
+        Write-Host "Commit message: $CommitMessage"
+        if ($PublishRelease) {
+            Write-Host "Release tag: $tagName"
+        }
+        return
+    }
+
+    try {
+        Invoke-Git add -- @releasePaths
+        if (Test-StagedChanges) {
+            Invoke-Git commit -m $CommitMessage
+        } else {
+            Write-Host "No release file changes to commit; using current HEAD."
+        }
+    } catch {
+        Invoke-Git restore --staged -- @releasePaths
+        throw
+    }
+
+    if ($PublishRelease -and -not $reuseReleaseTag) {
         Invoke-Git tag -a $tagName -m $tagName
     }
-}
 
-Invoke-Git push $Remote "HEAD:$Branch"
-if ($PublishRelease) {
-    Invoke-Git push $Remote $tagName
-    Write-Host "Uploaded $Branch and $tagName. GitHub Actions will publish the release."
-} else {
-    Write-Host "Uploaded $Branch without creating a release tag."
+    Invoke-Git push $Remote "HEAD:refs/heads/$Branch"
+    if ($PublishRelease) {
+        if (-not $remoteTagCommit) {
+            Invoke-Git push $Remote "refs/tags/${tagName}:refs/tags/$tagName"
+        }
+        Write-Host "Uploaded $Branch and $tagName. GitHub Actions will publish the release if the tag was newly pushed."
+    } else {
+        Write-Host "Uploaded $Branch without creating a release tag."
+    }
+} finally {
+    Pop-Location
 }

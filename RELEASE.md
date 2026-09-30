@@ -32,11 +32,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/upload-release.ps1 -Ver
 
 发布完成后，等待 GitHub Actions 创建 Release，并确认 Release asset 中包含 `Better-PRTS-Plus.user.js`。GreasyFork 按 GitHub Release 对应版本同步或手动更新；README 中的 GreasyFork 推荐安装入口保持不变。
 
+发布重试回归检查：`powershell -NoProfile -ExecutionPolicy Bypass -File tool/test-release.ps1`。检查使用离线数据源和临时本地 Git 远端，结束后自动清理。
+
 ## 发布门禁
 
 - `tool/check.ps1` 会检查 `src/` 拼接产物是否与 `Better-PRTS-Plus.user.js` 一致、userscript 语法、README 版本徽章、干员生成物与内嵌数据同步状态，以及已有安全约束。
 - `tool/check-release.ps1 -Tag vX.Y.Z` 会检查 tag 格式，并要求 tag 版本与 userscript `@version` 完全一致。
-- `tool/publish-release.ps1` 会在本地调用 `tool/check-release.ps1`，并拒绝复用已经存在的远端 tag。
+- `tool/publish-release.ps1` 会在本地调用 `tool/check-release.ps1`，并在提交前检查已有 tag；只有 tag 指向当前 HEAD 且发布文件没有改动时才会复用，否则要求使用新版本。
 - GitHub Release workflow 会先运行全部检查，再创建 Release；如果 tag 与 `@version` 不一致，发布会在创建 Release 前失败。
 - 如果版本带有预发布后缀，例如 `2.15.0-beta.1`，对应 tag 为 `v2.15.0-beta.1`，GitHub Release 会标记为 prerelease。
 
@@ -62,6 +64,10 @@ GitHub Actions 会检查 PR 或 main push 中新增的提交，不追溯旧历�
 
 ## 失败处理
 
+- 因网络问题或远端拒绝导致 push 失败时，修复原因后直接重跑相同命令（包括相同 `-Version`）。脚本会复用已有提交和匹配的 tag，继续推送尚未上传的分支或 tag；已上传的匹配 tag 视为成功。
+- 干员数据未变化时保留原审计记录，避免仅因时间戳变化产生重复提交。已有发布 tag 时使用该次发布的数据，重试不再在线更新干员数据。
+- 提交失败时，脚本撤回本次暂存并保留工作区改动，修复提交错误后即可重跑；若进程被强制终止并留下暂存内容，先检查并取消暂存再重试。
+- 已有 tag 指向其他提交或发布文件发生改动时，脚本会在创建提交前停止。要发布新内容，请使用新版本号。
 - 如果 tag 写错但 Release 还没有生成，删除本地和远端错误 tag 后重新创建正确 tag。
 - 如果 Release 已经生成，先在 GitHub 上确认错误 Release 和资产状态，再删除错误 Release/tag 并重新发布。
 - 不要绕过检查把本地未校验的 `Better-PRTS-Plus.user.js` 手工上传为正式发布资产。

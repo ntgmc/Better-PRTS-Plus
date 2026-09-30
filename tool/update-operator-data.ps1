@@ -298,10 +298,14 @@ $json = Convert-NewLine $json "`r`n"
 
 Update-OperatorSourceBlock -operators $operators
 & $buildScriptPath
-Write-OperatorAuditSummary -summary $auditSummary
+if (($previousOperators | ConvertTo-Json -Compress -Depth 4) -cne ($operators | ConvertTo-Json -Compress -Depth 4) -or
+    -not (Test-Path -LiteralPath $operatorAuditPath)) {
+    Write-OperatorAuditSummary -summary $auditSummary
+} else {
+    Write-Host "Operator data is unchanged; keeping the existing audit summary."
+}
 
 Write-Host "Generated $($operators.Count) operators"
 Write-Host "Updated $operatorDataPath"
-Write-Host "Updated $operatorAuditPath"
 Write-Host "Updated $operatorSourcePath"
 Write-Host "Updated $userScriptPath"

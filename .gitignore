@@ -5,6 +5,7 @@ tool/*
 !tool/build-userscript.ps1
 !tool/update-operator-data.ps1
 !tool/test-core.js
+!tool/test-release.ps1
 !tool/operator-data-update-summary.json
 !tool/upload-release.ps1
 !tool/publish-release.ps1
