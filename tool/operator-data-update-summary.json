@@ -1,15 +1,26 @@
 {
     "source":  "https://raw.githubusercontent.com/ZOOT-Plus/zoot-plus-frontend/refs/heads/dev/src/models/generated/operators.json",
     "sourceKind":  "url",
-    "generatedAtUtc":  "2026-09-29T17:25:00.4253823Z",
+    "generatedAtUtc":  "2026-10-11T15:13:50.7604680Z",
     "previousCount":  429,
-    "newCount":  429,
-    "delta":  0,
-    "addedCount":  0,
+    "newCount":  432,
+    "delta":  3,
+    "addedCount":  3,
     "removedCount":  0,
     "renamedCount":  0,
     "added":  [
-
+                  {
+                      "id":  "char_393_toledo",
+                      "name":  "德·托莱多"
+                  },
+                  {
+                      "id":  "char_4231_clemnt",
+                      "name":  "克莱门莎"
+                  },
+                  {
+                      "id":  "char_4232_hbound",
+                      "name":  "旅骨"
+                  }
               ],
     "removed":  [
 

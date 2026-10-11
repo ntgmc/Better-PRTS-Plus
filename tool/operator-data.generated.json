@@ -896,6 +896,10 @@
         "name":  "迷迭香"
     },
     {
+        "id":  "char_393_toledo",
+        "name":  "德·托莱多"
+    },
+    {
         "id":  "char_394_hadiya",
         "name":  "哈蒂娅"
     },
@@ -1506,6 +1510,14 @@
     {
         "id":  "char_4230_mcnist",
         "name":  "机械师"
+    },
+    {
+        "id":  "char_4231_clemnt",
+        "name":  "克莱门莎"
+    },
+    {
+        "id":  "char_4232_hbound",
+        "name":  "旅骨"
     },
     {
         "id":  "char_4234_pedro",
