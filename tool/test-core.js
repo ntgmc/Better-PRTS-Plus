@@ -986,7 +986,37 @@ test('Skland cultivation maps mastery, potential and module branches to the corr
     training['维什戴尔']).status, 'ok');
   assert.strictEqual(OP_MODULE_TYPES.char_1035_wisdel, 'X');
   assert.strictEqual(OP_MODULE_TYPES.char_4133_logos, 'DY');
-  assert.strictEqual(Object.keys(OP_MODULE_TYPES).length, 378);
+});
+
+test('Skland imports new and additional module branches without hiding missing data', () => {
+  const operators = [
+    ['char_4217_makoto', '结城理', 'Y', '002'],
+    ['char_4218_aigis', '埃癸斯', 'X', '002'],
+    ['char_4219_yukari', '岳羽由加莉', 'X', '002'],
+    ['char_1020_reed2', '焰影苇草', 'Y', '003'],
+    ['char_300_phenxi', '菲亚梅塔', 'A', '004']
+  ];
+  const player = { data: { chars: operators.map(([id, name]) => ({ id, name })) } };
+  const cultivate = { data: { characters: operators.map(([id, , , slot]) => ({
+    id, equips: [{ id: `uniequip_${slot}_${id.split('_').slice(2).join('_')}`, level: 3 }]
+  })) } };
+  const imported = convertSklandPlayerInfoToTraining(player, cultivate);
+  for (const [id, name, type] of operators) {
+    assert(OP_MODULE_TYPES[id].includes(type));
+    assert.strictEqual(imported[name][`mod${type}`], 3);
+  }
+  const operation = { opers: [{ name: '结城理', requirements: { module: 2, module_level: 3 } }] };
+  const owned = new Set(['结城理']);
+  assert.strictEqual(checkOperationAvailability(operation, owned, 'PERFECT', imported, true).unknownTraining.length, 0);
+  assert.strictEqual(checkOperationAvailability(operation, owned, 'PERFECT', imported, true).isAvailable, true);
+  const locked = convertSklandPlayerInfoToTraining(player, {
+    data: { characters: [{ id: 'char_4217_makoto', equips: [] }] }
+  });
+  assert.strictEqual(locked['结城理'].modY, 0);
+  assert.strictEqual(checkOperationAvailability(operation, owned, 'PERFECT', locked, true).isAvailable, false);
+  const unavailable = convertSklandPlayerInfoToTraining(player);
+  assert.strictEqual(checkOperationAvailability(operation, owned, 'PERFECT', unavailable, true).unknownTraining[0],
+    '结城理：模组Y数据未知');
 });
 
 test('account state serialization preserves the normalized unified schema', () => {

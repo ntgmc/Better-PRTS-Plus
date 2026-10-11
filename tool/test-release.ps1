@@ -36,10 +36,32 @@ function Write-Hook {
     }
 }
 
+# Recreate upstream module records from the checked-in snapshot for offline release tests.
+$moduleJson = & node -e @'
+const fs = require('fs'), vm = require('vm');
+const context = {};
+vm.runInNewContext(fs.readFileSync(process.argv[1], 'utf8') + ';globalThis.modules = OP_MODULE_TYPES;', context);
+const equipDict = {};
+for (const [charId, types] of Object.entries(context.modules).reverse()) {
+  [...types].forEach((typeName2, index) => {
+    equipDict[`uniequip_00${index + 2}_${charId.split('_').slice(2).join('_')}`] = {
+      charId: /_amiya[23]$/.test(charId) ? 'char_002_amiya' : charId,
+      tmplId: /_amiya[23]$/.test(charId) ? charId : null,
+      type: 'ADVANCED', typeName2
+    };
+  });
+}
+equipDict.uniequip_001_makoto = { charId: 'char_4217_makoto', type: 'INITIAL', typeName2: null };
+console.log(JSON.stringify({ equipDict }));
+'@ (Join-Path $repoRoot "src/data/module-types.generated.js")
+if ($LASTEXITCODE -ne 0) { throw "Cannot build offline module fixture" }
+$moduleFixture = $moduleJson | ConvertFrom-Json
+
 # Keep the actual updater and Git operations, with an offline operator source.
 function Invoke-RestMethod {
     param([string]$Uri, [int]$TimeoutSec)
     $script:operatorUpdateCalls++
+    if ($Uri.EndsWith("/uniequip_table.json")) { return $moduleFixture }
     return Get-Content -LiteralPath $fixturePath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 
@@ -57,6 +79,13 @@ try {
 
     & $update -SourcePath $fixturePath
     Assert ((Get-FileHash -LiteralPath $audit).Hash -eq $auditHash) "Unchanged data rewrote the audit summary"
+    $moduleOutput = Join-Path $testRepo "src/data/module-types.generated.js"
+    $moduleHash = (Get-FileHash -LiteralPath $moduleOutput).Hash
+    Assert ($moduleHash -eq (Get-FileHash -LiteralPath (Join-Path $repoRoot "src/data/module-types.generated.js")).Hash) "Module regeneration changed the snapshot"
+    $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "INVALID"
+    Assert-Failure { & $update -SourcePath $fixturePath } "Unsupported module mapping"
+    Assert ((Get-FileHash -LiteralPath $moduleOutput).Hash -eq $moduleHash) "Invalid module data overwrote the snapshot"
+    $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "Y"
     $operators = Get-Content -LiteralPath $fixturePath -Raw -Encoding UTF8 | ConvertFrom-Json
     $operators += [pscustomobject]@{ id = "char_999999_release"; name = "Release test operator" }
     [System.IO.File]::WriteAllText($fixturePath, ($operators | ConvertTo-Json -Depth 4), $utf8NoBom)

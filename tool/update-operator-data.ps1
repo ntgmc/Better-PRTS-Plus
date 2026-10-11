@@ -1,6 +1,8 @@
 param(
     [string]$SourceUrl = "https://raw.githubusercontent.com/ZOOT-Plus/zoot-plus-frontend/refs/heads/dev/src/models/generated/operators.json",
-    [string]$SourcePath
+    [string]$SourcePath,
+    [string]$ModuleSourceUrl = "https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/zh_CN/gamedata/excel/uniequip_table.json",
+    [string]$ModuleSourcePath
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,6 +10,7 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $userScriptPath = Join-Path $repoRoot "Better-PRTS-Plus.user.js"
 $operatorSourcePath = Join-Path $repoRoot "src/data/operators.generated.js"
+$moduleOutputPath = Join-Path $repoRoot "src/data/module-types.generated.js"
 $operatorDataPath = Join-Path $PSScriptRoot "operator-data.generated.json"
 $operatorAuditPath = Join-Path $PSScriptRoot "operator-data-update-summary.json"
 $buildScriptPath = Join-Path $PSScriptRoot "build-userscript.ps1"
@@ -110,6 +113,52 @@ function Test-GeneratedOperators {
         $ids = ($duplicateIds | ForEach-Object { "$($_.Name) x$($_.Count)" }) -join ", "
         throw "Generated operator data has duplicate ids: $ids"
     }
+}
+
+function ConvertTo-GeneratedModuleSource {
+    param([object]$sourceData)
+
+    if ($null -eq $sourceData.equipDict) {
+        throw "Module source is missing equipDict"
+    }
+    $modules = @{}
+    foreach ($property in $sourceData.equipDict.PSObject.Properties) {
+        $equip = $property.Value
+        if ($equip.type -ne "ADVANCED") { continue }
+        $id = if ($equip.tmplId) { Get-StringValue $equip.tmplId } else { Get-StringValue $equip.charId }
+        if ($id -match $temporaryOperatorPattern) { continue }
+        $match = [regex]::Match($property.Name, "^uniequip_00([2-4])_(.+)$")
+        $type = Get-StringValue $equip.typeName2
+        if ($id -notmatch "^char_[0-9]+_[a-z0-9_]+$" -or -not $match.Success -or
+            $match.Groups[2].Value -cne ($id -replace "^char_[0-9]+_", "") -or $type -cnotmatch "^[XYDAB]$") {
+            throw "Unsupported module mapping: $($property.Name) ($id, $type)"
+        }
+        if (-not $modules.ContainsKey($id)) { $modules[$id] = @{} }
+        $modules[$id][[int]$match.Groups[1].Value] = $type
+    }
+    if ($modules.Count -eq 0) { throw "Generated module table is empty" }
+
+    $groups = [ordered]@{}
+    [string[]]$moduleIds = @($modules.Keys)
+    [Array]::Sort($moduleIds, [StringComparer]::Ordinal)
+    foreach ($id in $moduleIds) {
+        $types = ""
+        for ($index = 2; $index -le $modules[$id].Count + 1; $index++) {
+            if (-not $modules[$id].ContainsKey($index)) { throw "Missing module slot $index for $id" }
+            $types += $modules[$id][$index]
+        }
+        if (-not $groups.Contains($types)) { $groups[$types] = [System.Collections.Generic.List[string]]::new() }
+        $groups[$types].Add($id.Substring(5))
+    }
+    $lines = @(
+        "// Generated from the Arknights game uniequip_table.json by tool/update-operator-data.ps1."
+        "// Branch order follows uniequip_002/003/004 IDs, not the displayed module order."
+        "const OP_MODULE_TYPES = Object.create(null);"
+        "Object.entries({"
+    )
+    $lines += @($groups.Keys | ForEach-Object { '    ' + $_ + ': `' + ($groups[$_] -join ' ') + '`' }) -join ",`n"
+    $lines += '}).forEach(([types, ids]) => ids.split('' '').forEach(id => { OP_MODULE_TYPES[`char_${id}`] = types; }));'
+    return ($lines -join "`n") + "`n"
 }
 
 function Convert-NewLine($text, $newline) {
@@ -290,6 +339,13 @@ $previousOperators = Read-ExistingGeneratedOperators
 $sourceData = Get-SourceData
 $operators = ConvertTo-GeneratedOperators -sourceData $sourceData
 Test-GeneratedOperators -operators $operators
+if ([string]::IsNullOrWhiteSpace($ModuleSourcePath)) {
+    Write-Host "Downloading module source from $ModuleSourceUrl"
+    $moduleData = Invoke-RestMethod -Uri $ModuleSourceUrl -TimeoutSec 30
+} else {
+    $moduleData = Get-Content -LiteralPath $ModuleSourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
+}
+$moduleSource = ConvertTo-GeneratedModuleSource -sourceData $moduleData
 $auditSummary = New-OperatorAuditSummary -PreviousOperators $previousOperators -CurrentOperators $operators
 
 $json = $operators | ConvertTo-Json -Depth 4
@@ -297,6 +353,7 @@ $json = Convert-NewLine $json "`r`n"
 [System.IO.File]::WriteAllText($operatorDataPath, "$json`r`n", $utf8NoBom)
 
 Update-OperatorSourceBlock -operators $operators
+[System.IO.File]::WriteAllText($moduleOutputPath, $moduleSource, $utf8NoBom)
 & $buildScriptPath
 if (($previousOperators | ConvertTo-Json -Compress -Depth 4) -cne ($operators | ConvertTo-Json -Compress -Depth 4) -or
     -not (Test-Path -LiteralPath $operatorAuditPath)) {
@@ -308,4 +365,5 @@ if (($previousOperators | ConvertTo-Json -Compress -Depth 4) -cne ($operators | 
 Write-Host "Generated $($operators.Count) operators"
 Write-Host "Updated $operatorDataPath"
 Write-Host "Updated $operatorSourcePath"
+Write-Host "Updated $moduleOutputPath"
 Write-Host "Updated $userScriptPath"
