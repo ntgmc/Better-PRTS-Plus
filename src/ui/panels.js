@@ -420,20 +420,44 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 target.appendChild(groupTitle);
                 currentGroup = definition.group;
             }
-            target.appendChild(createPrtsSwitch({
-                label: definition.label, checked: CONFIG[key], configKey: key, icon: definition.icon,
-                onChange: value => {
-                    CONFIG[key] = value;
-                    saveConfig();
-                    if (!value && definition.reloadOnDisable) {
-                        location.reload();
-                        return;
-                    }
-                    syncPageScaffold();
-                    document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
-                    requestFilterUpdate();
+            const onChange = value => {
+                CONFIG[key] = value;
+                saveConfig();
+                if (!value && definition.reloadOnDisable) {
+                    location.reload();
+                    return;
                 }
-            }));
+                syncPageScaffold();
+                document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
+                requestFilterUpdate();
+            };
+            if (definition.options) {
+                const item = document.createElement('label');
+                item.className = 'prts-panel-item';
+                const labelText = document.createElement('span');
+                labelText.className = 'prts-panel-item-label';
+                labelText.appendChild(createPrtsIcon(definition.icon));
+                labelText.appendChild(document.createTextNode(definition.label));
+                const select = document.createElement('select');
+                select.className = 'prts-panel-select';
+                select.dataset.prtsConfigKey = key;
+                select.setAttribute('aria-label', definition.label);
+                definition.options.forEach(value => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = definition.optionLabels[value];
+                    select.appendChild(option);
+                });
+                select.value = CONFIG[key];
+                select.onchange = event => onChange(event.target.value);
+                item.appendChild(labelText);
+                item.appendChild(select);
+                target.appendChild(item);
+            } else {
+                target.appendChild(createPrtsSwitch({
+                    label: definition.label, checked: CONFIG[key], configKey: key, icon: definition.icon, onChange
+                }));
+            }
         });
         panel.appendChild(debugOptions);
 

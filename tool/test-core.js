@@ -53,6 +53,7 @@ globalThis.__testExports = {
   isVideoOperationCard,
   syncOperationTypeButtons,
   syncOperationCardTime,
+  updateTrainingStatusLabel,
   CONFIG,
   getCurrentAccountState,
   getOwnedOpsSnapshot: () => Array.from(ownedOpsSet),
@@ -138,6 +139,7 @@ const {
   isVideoOperationCard,
   syncOperationTypeButtons,
   syncOperationCardTime,
+  updateTrainingStatusLabel,
   CONFIG,
   getCurrentAccountState,
   getOwnedOpsSnapshot,
@@ -179,6 +181,8 @@ test('unified settings migrate legacy values, validate types and prefer saved in
     assert.strictEqual(migrated.filterMode, 'SUPPORT');
     assert.strictEqual(migrated.displayMode, 'HIDE');
     assert.strictEqual(migrated.trainingCheck, true);
+    assert.strictEqual(migrated.trainingPromptStyle, 'COMPACT');
+    assert.strictEqual(normalizeConfig({ trainingPromptStyle: 'DETAILED' }).trainingPromptStyle, 'DETAILED');
     assert.deepStrictEqual(hostObject(migrated.floatingPosition), { top: '95%', isRight: false });
     assert.deepStrictEqual(JSON.parse(storage.get(CONFIG_KEY)), hostObject(migrated));
     storage.set(CONFIG_KEY, JSON.stringify({ operatorAvatars: true, stageBadge: false, collapseDescription: true }));
@@ -191,11 +195,12 @@ test('unified settings migrate legacy values, validate types and prefer saved in
     assert.strictEqual(loaded.filterMode, 'NONE');
     const invalid = normalizeConfig({
       operatorAvatars: 'false', hideVideo: 1, filterMode: 'invalid', displayMode: null,
-      trainingCheck: 'true', floatingPosition: '{bad-json', unknown: true
+      trainingCheck: 'true', trainingPromptStyle: 'invalid', floatingPosition: '{bad-json', unknown: true
     });
     assert.strictEqual(invalid.operatorAvatars, true);
     assert.strictEqual(invalid.hideVideo, false);
     assert.strictEqual(invalid.trainingCheck, false);
+    assert.strictEqual(invalid.trainingPromptStyle, 'COMPACT');
     assert.strictEqual(invalid.filterMode, 'NONE');
     assert.strictEqual(invalid.displayMode, 'GRAY');
     assert.strictEqual(Object.hasOwn(invalid, 'unknown'), false);
@@ -244,8 +249,12 @@ function createTestElement(tagName = 'div', text = '') {
       this.parentElement = null;
     },
     setAttribute(key, value) { this.attributes.set(key, value); },
+    removeAttribute(key) { this.attributes.delete(key); },
     closest() { return null; },
-    querySelector(selector) { return this.children.find(child => selector === `.${child.className}`) || null; },
+    querySelector(selector) {
+      return this.children.find(child => selector === `.${child.className}` || selector.toUpperCase() === child.tagName)
+        || this.children.map(child => child.querySelector(selector)).find(Boolean) || null;
+    },
     querySelectorAll() { return []; }
   };
   node.classList = {
@@ -360,7 +369,8 @@ test('backup round trips every registered option and restores unified settings',
   context.syncPageScaffold = () => {};
   try {
     Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
-      if (definition.group) CONFIG[key] = !definition.default;
+      if (definition.group) CONFIG[key] = definition.options
+        ? definition.options.find(value => value !== definition.default) : !definition.default;
     });
     CONFIG.filterMode = 'SUPPORT';
     CONFIG.displayMode = 'HIDE';
@@ -377,6 +387,7 @@ test('backup round trips every registered option and restores unified settings',
     assert.strictEqual(restored.filterMode, 'SUPPORT');
     assert.strictEqual(restored.displayMode, 'HIDE');
     assert.strictEqual(restored.trainingCheck, true);
+    assert.strictEqual(restored.trainingPromptStyle, 'DETAILED');
     assert.strictEqual(restored.compatDebug, true);
     assert.deepStrictEqual(restored.floatingPosition, { top: '61%', isRight: false });
     assert.strictEqual(reloads, 1);
@@ -572,6 +583,122 @@ test('training check combines support vacancies and group alternatives', () => {
     { '阿米娅': { mainSkill: 7, skill2: 3 }, '芬': { elite: 0 } }, true);
   assert.strictEqual(result.lowTraining.length, 1);
   assert.strictEqual(result.missingOps[0], '[先锋]');
+});
+
+test('training comparisons carry field values and preserve unknown data alongside deficits', () => {
+  const op = { name: '阿米娅', skill: 2, requirements: {
+    elite: 2, level: 60, skill_level: 10, module: 1, module_level: 2, potential: 2
+  } };
+  const training = { elite: 1, level: 50, mainSkill: 7, skill2: 1, potential: 1 };
+  const result = checkOperatorTraining(op, training);
+  assert.strictEqual(result.status, 'low');
+  assert.deepStrictEqual(hostObject(result.issues), [
+    { label: '等级', current: '精一50级', required: '精二60级', status: 'low' },
+    { label: '2技能', current: '专一', required: '专三', status: 'low' },
+    { label: '模组X', current: '未知', required: '2级', status: 'unknown' },
+    { label: '潜能', current: '1潜', required: '2潜', status: 'low' }
+  ]);
+  const availability = checkOperationAvailability({ groups: [{ name: '术师', opers: [op] }] },
+    new Set(['阿米娅']), 'SUPPORT', { '阿米娅': training }, true);
+  assert.strictEqual(availability.isAvailable, true);
+  assert.strictEqual(availability.missingCount, 1);
+  assert.strictEqual(availability.trainingIssues[0].group, '术师');
+  assert.deepStrictEqual(hostObject(availability.trainingIssues[0].issues), hostObject(result.issues));
+  assert.strictEqual(checkOperationAvailability({ opers: [op] }, new Set(['阿米娅']),
+    'PERFECT', { '阿米娅': training }, false).trainingIssues.length, 0);
+});
+
+test('training panels retain all comparisons, render literal text and preserve expansion on refresh', () => {
+  const savedStyle = CONFIG.trainingPromptStyle;
+  CONFIG.trainingPromptStyle = 'DETAILED';
+  const savedDocument = context.document;
+  const savedIcon = context.createPrtsIcon;
+  context.document = { createElement: createTestElement,
+    createTextNode: text => createTestElement('span', text) };
+  context.createPrtsIcon = () => createTestElement('svg');
+  try {
+    const label = createTestElement();
+    label.setAttribute('aria-label', 'old status');
+    const issues = [
+      { name: '待核验干员', status: 'unknown', issues: [
+        { label: '等级', current: '未知', required: '精二60级', status: 'unknown' }
+      ] },
+      { name: '<img onerror=alert(1)>', group: '术师', status: 'low', issues: [
+        { label: '2技能', current: '专一', required: '专三', status: 'low' }
+      ] },
+      { name: '芬', status: 'low', issues: [
+        { label: '等级', current: '1级', required: '55级', status: 'low' }
+      ] }
+    ];
+    const render = () => updateTrainingStatusLabel(label, 'prts-status-label prts-label-missing',
+      'missing', '练度不足', issues);
+    render();
+    assert.strictEqual(label.attributes.has('aria-label'), false);
+    assert.strictEqual(label.children[2].children[0].textContent, '<img onerror=alert(1)>干员组：术师');
+    assert.strictEqual(label.children[2].children[1].children[1].textContent, '专一');
+    assert.strictEqual(label.children[2].children[1].children[2].textContent, '专三');
+    const more = label.querySelector('details');
+    assert.strictEqual(more.open, false);
+    assert.strictEqual(more.children[1].children[0].textContent, '待核验干员');
+    assert(label.textContent.includes('未知'));
+    assert(label.textContent.includes('还有 1 项'));
+    more.open = true;
+    render();
+    assert.strictEqual(label.querySelector('details'), more);
+    issues[0].issues[0].required = '精二70级';
+    render();
+    assert.strictEqual(label.querySelector('details').open, true);
+    assert(label.textContent.includes('精二70级'));
+  } finally {
+    CONFIG.trainingPromptStyle = savedStyle;
+    context.document = savedDocument;
+    context.createPrtsIcon = savedIcon;
+  }
+});
+
+test('compact training prompts expand full comparisons and update when the style changes', () => {
+  const savedStyle = CONFIG.trainingPromptStyle;
+  const savedDocument = context.document;
+  const savedIcon = context.createPrtsIcon;
+  context.document = { createElement: createTestElement };
+  context.createPrtsIcon = () => createTestElement('svg');
+  try {
+    CONFIG.trainingPromptStyle = 'COMPACT';
+    const label = createTestElement();
+    const issues = ['阿米娅', '芬', '桃金娘'].map(name => ({ name, status: 'low', issues: [
+      { label: '等级', current: '1级', required: '精二60级', status: 'low' }
+    ] }));
+    const render = () => updateTrainingStatusLabel(label, 'prts-status-label prts-label-missing',
+      'missing', '练度不足', issues);
+    render();
+    const details = label.querySelector('.prts-training-details');
+    assert.strictEqual(details.open, false);
+    assert.strictEqual(details.children[0].tagName, 'SUMMARY');
+    assert.strictEqual(label.classList.contains('prts-training-compact'), true);
+    assert(label.textContent.includes('阿米娅'));
+    assert(label.textContent.includes('桃金娘'));
+    details.open = true;
+    details.querySelector('.prts-training-more').open = true;
+    render();
+    assert.strictEqual(label.querySelector('.prts-training-details'), details);
+    issues[0].issues[0].required = '精二70级';
+    render();
+    assert.strictEqual(label.querySelector('.prts-training-details').open, true);
+    assert.strictEqual(label.querySelector('.prts-training-more').open, true);
+    assert(label.textContent.includes('精二70级'));
+    CONFIG.trainingPromptStyle = 'DETAILED';
+    render();
+    assert.strictEqual(label.querySelector('.prts-training-details'), null);
+    assert.strictEqual(label.classList.contains('prts-training-compact'), false);
+    assert.strictEqual(label.children[0].tagName, 'DIV');
+    CONFIG.trainingPromptStyle = 'COMPACT';
+    render();
+    assert.strictEqual(label.querySelector('.prts-training-details').open, false);
+  } finally {
+    CONFIG.trainingPromptStyle = savedStyle;
+    context.document = savedDocument;
+    context.createPrtsIcon = savedIcon;
+  }
 });
 
 test('imported training survives account switches and backup normalization', () => {

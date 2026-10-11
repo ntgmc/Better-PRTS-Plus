@@ -58,6 +58,7 @@
         cleanLink: { group: '作业卡片', label: '视频链接优化', icon: 'link', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'filter', default: false, legacyKey: 'prts_cfg_hide_video' },
         hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'filter', default: true, reloadOnDisable: true },
+        trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'check', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
         popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'operators', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'layout', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
         announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'filter', default: true, reloadOnDisable: true },
@@ -2053,6 +2054,118 @@ function createSklandImportCancelledError() {
         background: rgba(217, 119, 6, 0.1);
         color: var(--prts-color-accent) !important;
     }
+    /* Hallmark · component: training status · theme: existing PRTS tokens
+     * states: low, unknown, collapsed, expanded, focus; contrast: pass
+     * pre-emit critique: P4 H5 E5 S5 R5 V4 */
+    body .prts-status-label.prts-training-status {
+        display: flex !important;
+        flex-direction: column;
+        align-items: stretch !important;
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        gap: 0;
+        margin: var(--prts-space-2) 0 !important;
+        padding: var(--prts-space-2) var(--prts-space-3);
+        border-color: var(--prts-color-border-soft);
+        background: var(--prts-color-surface-muted);
+        color: var(--prts-color-text) !important;
+        font-family: var(--prts-font-sans);
+        font-weight: 400 !important;
+        overflow-wrap: anywhere;
+    }
+    body .prts-status-label.prts-training-compact { padding-top: 0; padding-bottom: 0; }
+    .prts-training-details > .prts-training-heading {
+        min-height: 44px;
+        padding: 0;
+        cursor: pointer;
+        list-style: none;
+    }
+    .prts-training-details > .prts-training-heading::-webkit-details-marker { display: none; }
+    .prts-training-details .prts-training-heading-text {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .prts-training-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--prts-space-1);
+        margin-left: auto;
+        color: var(--prts-color-text-muted);
+        font-size: 11px;
+        font-weight: 400;
+        white-space: nowrap;
+        flex: 0 0 auto;
+    }
+    .prts-training-toggle::after { content: '▾'; }
+    .prts-training-details[open] > summary .prts-training-toggle::after { content: '▴'; }
+    .prts-training-details[open] { padding-bottom: var(--prts-space-2); }
+    .prts-training-details > summary:hover .prts-training-toggle,
+    .prts-training-details > summary:active .prts-training-toggle { color: var(--prts-color-primary); }
+    .prts-training-details > summary:focus-visible {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        border-radius: var(--prts-radius-sm);
+    }
+    .prts-training-heading {
+        display: flex;
+        align-items: center;
+        gap: var(--prts-space-2);
+        min-width: 0;
+        padding-bottom: var(--prts-space-2);
+        font-weight: 600;
+    }
+    .prts-label-missing .prts-training-heading { color: var(--prts-color-danger); }
+    .prts-label-support .prts-training-heading { color: var(--prts-color-warning); }
+    .prts-training-columns, .prts-training-row {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1fr);
+        align-items: baseline;
+        gap: var(--prts-space-2);
+    }
+    .prts-training-columns {
+        padding-bottom: var(--prts-space-1);
+        font-size: 11px;
+        color: var(--prts-color-text-muted);
+    }
+    .prts-training-operator {
+        padding: var(--prts-space-2) 0;
+        border-top: 1px solid var(--prts-color-border-soft);
+    }
+    .prts-training-operator:last-child { padding-bottom: 0; }
+    .prts-training-name {
+        display: flex;
+        align-items: baseline;
+        flex-wrap: wrap;
+        gap: var(--prts-space-1) var(--prts-space-2);
+        margin-bottom: var(--prts-space-1);
+        font-weight: 600;
+    }
+    .prts-training-group { color: var(--prts-color-text-muted); font-size: 11px; font-weight: 400; }
+    .prts-training-row + .prts-training-row { margin-top: var(--prts-space-1); }
+    .prts-training-field { color: var(--prts-color-text-muted); }
+    .prts-training-current { color: var(--prts-color-danger); }
+    .prts-training-unknown .prts-training-current { color: var(--prts-color-warning); }
+    .prts-training-required { font-weight: 600; }
+    .prts-training-more { margin-top: var(--prts-space-2); }
+    .prts-training-more summary {
+        box-sizing: border-box;
+        min-height: 44px;
+        padding: var(--prts-space-3) 0;
+        border-top: 1px solid var(--prts-color-border-soft);
+        color: var(--prts-color-text-muted);
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .prts-training-more summary:hover { color: var(--prts-color-primary); }
+    .prts-training-more summary:focus-visible {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        border-radius: var(--prts-radius-sm);
+    }
+    .prts-training-more summary:active { color: var(--prts-color-primary-hover); }
     .prts-desc-wrapper:focus {
         outline: 2px solid var(--prts-color-primary);
         outline-offset: 2px;
@@ -2235,6 +2348,23 @@ function createSklandImportCancelledError() {
         border-color: var(--prts-color-border-soft) !important;
     }
     .prts-panel-item { color: var(--prts-color-text-muted) !important; }
+    .prts-panel-select {
+        min-width: 80px;
+        min-height: 44px;
+        padding: var(--prts-space-1) var(--prts-space-2);
+        border: 1px solid var(--prts-color-border);
+        border-radius: var(--prts-radius-sm);
+        background: var(--prts-color-surface-muted);
+        color: var(--prts-color-text);
+        font: inherit;
+        cursor: pointer;
+    }
+    .prts-panel-select:hover { background: var(--prts-color-surface-hover); }
+    .prts-panel-select:active { border-color: var(--prts-color-primary); }
+    .prts-panel-select:focus-visible {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+    }
     .prts-switch { width: 40px; height: 22px; flex: 0 0 auto; }
     .prts-switch input:focus-visible + .prts-slider {
         outline: 2px solid var(--prts-color-primary);
@@ -2970,7 +3100,7 @@ function createSklandImportCancelledError() {
     }
 
     function matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, allowUnknownFallbackGroup,
-        checkTraining, unknownTraining = [], lowTraining = []) {
+        checkTraining, unknownTraining = [], lowTraining = [], trainingIssues = []) {
         const groups = requiredGroups
             .map((group, index) => {
                 const allowedNames = (group.opers || [])
@@ -3016,7 +3146,11 @@ function createSklandImportCancelledError() {
                 if (checkTraining) {
                     const low = (requiredGroups[group.index].opers || [])
                         .filter(op => ownedOpsSet.has(op.name) && checkTraining(op).status === 'low')
-                        .map(op => `${op.name}：${checkTraining(op).detail}`);
+                        .map(op => {
+                            const result = checkTraining(op);
+                            trainingIssues.push({ name: op.name, group: group.name, ...result });
+                            return `${op.name}：${result.detail}`;
+                        });
                     if (low.length) lowTraining.push(`[${group.name}] ${low.join(' / ')}`);
                 }
             }
@@ -3027,7 +3161,10 @@ function createSklandImportCancelledError() {
             if (checkTraining) {
                 const op = requiredGroups[group.index].opers.find(candidate => candidate.name === opName);
                 const result = checkTraining(op);
-                if (result.status === 'unknown') unknownTraining.push(`${opName}：${result.detail}`);
+                if (result.status === 'unknown') {
+                    unknownTraining.push(`${opName}：${result.detail}`);
+                    trainingIssues.push({ name: opName, group: group.name, ...result });
+                }
             }
         });
 
@@ -3082,27 +3219,45 @@ function createSklandImportCancelledError() {
         if (!requirements || typeof requirements !== 'object') return { status: 'ok' };
         const details = [];
         const unknown = [];
+        const issues = [];
+        const addIssue = (label, current, required, status = 'low') => {
+            issues.push({ label, current, required, status });
+        };
         const check = (label, required, actual) => {
             if (!Number.isInteger(required) || required < 0) return;
-            if (!Number.isInteger(actual)) unknown.push(label);
-            else if (actual < required) details.push(`${label} ${actual}/${required}`);
+            const unit = label === '潜能' ? '潜' : '级';
+            if (!Number.isInteger(actual)) {
+                unknown.push(label);
+                addIssue(label, '未知', `${required}${unit}`, 'unknown');
+            } else if (actual < required) {
+                details.push(`${label} ${actual}/${required}`);
+                addIssue(label, `${actual}${unit}`, `${required}${unit}`);
+            }
         };
         const eliteText = elite => ['', '精一', '精二'][elite] ?? '精英化未知';
         if (Number.isInteger(requirements.level) && requirements.level > 0) {
-            if (!Number.isInteger(training?.elite) || !Number.isInteger(training?.level)) unknown.push('等级');
+            const requiredElite = Number.isInteger(requirements.elite) ? eliteText(requirements.elite) : '';
+            if (!Number.isInteger(training?.elite) || !Number.isInteger(training?.level)) {
+                unknown.push('等级');
+                addIssue('等级', '未知', `${requiredElite}${requirements.level}级`, 'unknown');
+            }
             else if (Number.isInteger(requirements.elite) && requirements.elite >= 0
                 ? training.elite < requirements.elite ||
                   (training.elite === requirements.elite && training.level < requirements.level)
                 : training.level < requirements.level) {
-                const requiredElite = Number.isInteger(requirements.elite) ? eliteText(requirements.elite) : '';
                 details.push(`当前${eliteText(training.elite)}${training.level}级，要求${requiredElite}${requirements.level}级`);
+                addIssue('等级', `${eliteText(training.elite)}${training.level}级`, `${requiredElite}${requirements.level}级`);
             }
         }
         if (requirements.elite > 0) {
             if (!Number.isInteger(training?.elite)) {
-                if (!unknown.includes('等级')) unknown.push('精英化');
+                if (!unknown.includes('等级')) {
+                    unknown.push('精英化');
+                    addIssue('精英化', '未知', eliteText(requirements.elite), 'unknown');
+                }
             } else if (training.elite < requirements.elite && !details.some(detail => detail.startsWith('当前'))) {
                 details.push(`当前${eliteText(training.elite) || '无'}，要求${eliteText(requirements.elite)}`);
+                addIssue('精英化', eliteText(training.elite) || '未精英化', eliteText(requirements.elite));
             }
         }
         if (Number.isInteger(requirements.skill_level) && requirements.skill_level > 0) {
@@ -3113,12 +3268,17 @@ function createSklandImportCancelledError() {
                     ? Number.isInteger(mastery) ? 7 + mastery : undefined
                     : training.mainSkill
                 : undefined;
-            if (requirements.skill_level > 7 && (!Number.isInteger(skill) || skill < 1 || skill > 3)) unknown.push('技能编号');
-            else if (!Number.isInteger(actual)) unknown.push('技能');
-            else if (actual < requirements.skill_level) {
-                const skillText = level => ({ 8: '专一', 9: '专二', 10: '专三' }[level] || `${level}级`);
-                const skillLabel = Number.isInteger(skill) && skill >= 1 && skill <= 3 ? `${skill}技能` : '技能';
+            const skillText = level => ({ 8: '专一', 9: '专二', 10: '专三' }[level] || `${level}级`);
+            const skillLabel = Number.isInteger(skill) && skill >= 1 && skill <= 3 ? `${skill}技能` : '技能';
+            if (requirements.skill_level > 7 && (!Number.isInteger(skill) || skill < 1 || skill > 3)) {
+                unknown.push('技能编号');
+                addIssue('技能编号未标注', '未知', skillText(requirements.skill_level), 'unknown');
+            } else if (!Number.isInteger(actual)) {
+                unknown.push('技能');
+                addIssue(skillLabel, '未知', skillText(requirements.skill_level), 'unknown');
+            } else if (actual < requirements.skill_level) {
                 details.push(`${skillLabel}当前${skillText(actual)}，要求${skillText(requirements.skill_level)}`);
+                addIssue(skillLabel, skillText(actual), skillText(requirements.skill_level));
             }
         }
         const moduleType = { 1: 'X', 2: 'Y', 3: 'D', 4: 'A', 5: 'B' }[requirements.module];
@@ -3127,8 +3287,8 @@ function createSklandImportCancelledError() {
             check(`模组${moduleType}`, moduleLevel, training?.[`mod${moduleType}`]);
         }
         check('潜能', requirements.potential, training?.potential);
-        if (details.length) return { status: 'low', detail: details.join('、') };
-        return unknown.length ? { status: 'unknown', detail: `${unknown.join('、')}数据未知` } : { status: 'ok' };
+        if (details.length) return { status: 'low', detail: details.join('、'), issues };
+        return unknown.length ? { status: 'unknown', detail: `${unknown.join('、')}数据未知`, issues } : { status: 'ok' };
     }
 
     /**
@@ -3136,19 +3296,20 @@ function createSklandImportCancelledError() {
      */
     function checkOperationAvailability(operation, ownedOpsSet, filterMode, training = {}, checkTraining = false) {
         if (!ownedOpsSet || ownedOpsSet.size === 0 || (filterMode === 'NONE' && !checkTraining)) {
-            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], hasRequirements: false };
+            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], trainingIssues: [], hasRequirements: false };
         }
 
         const { requiredOps, requiredGroups } = getParsedOperationContent(operation);
 
         if (requiredOps.length === 0 && requiredGroups.length === 0) {
-            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], hasRequirements: false };
+            return { isAvailable: true, missingCount: 0, missingOps:[], lowTraining: [], unknownTraining: [], trainingIssues: [], hasRequirements: false };
         }
 
         const usedOwnedOps = new Set();
         const missingDetails =[];
         const lowTraining = [];
         const unknownTraining = [];
+        const trainingIssues = [];
         const hasRequirements = [...requiredOps, ...requiredGroups.flatMap(group => group.opers || [])]
             .some(op => op?.requirements && Object.values(op.requirements).some(value => Number.isInteger(value) && value > 0));
         const evaluate = op => checkOperatorTraining(op, training[op.name]);
@@ -3159,6 +3320,7 @@ function createSklandImportCancelledError() {
 
             if (ownedOpsSet.has(opName)) {
                 const result = checkTraining ? evaluate(op) : { status: 'ok' };
+                if (result.status !== 'ok') trainingIssues.push({ name: opName, ...result });
                 if (result.status === 'low') {
                     missingDetails.push(opName);
                     lowTraining.push(`${opName}：${result.detail}`);
@@ -3173,7 +3335,7 @@ function createSklandImportCancelledError() {
 
         if (requiredGroups.length > 0) {
             const missingGroups = matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, operation._isFallback,
-                checkTraining ? evaluate : null, unknownTraining, lowTraining);
+                checkTraining ? evaluate : null, unknownTraining, lowTraining, trainingIssues);
             missingDetails.push(...missingGroups);
         }
 
@@ -3186,7 +3348,7 @@ function createSklandImportCancelledError() {
             isAvailable = false;
         }
 
-        return { isAvailable, missingCount, missingOps: missingDetails, lowTraining, unknownTraining, hasRequirements };
+        return { isAvailable, missingCount, missingOps: missingDetails, lowTraining, unknownTraining, trainingIssues, hasRequirements };
     }
     // =========================================================================
     //                            MODULE 4: 数据存取与账号管理
@@ -3303,7 +3465,8 @@ function createSklandImportCancelledError() {
         document.querySelectorAll('[data-prts-config-key]').forEach(input => {
             const key = input.dataset.prtsConfigKey;
             if (key && Object.prototype.hasOwnProperty.call(CONFIG, key)) {
-                input.checked = CONFIG[key] === true;
+                if (input.tagName === 'SELECT') input.value = CONFIG[key];
+                else input.checked = CONFIG[key] === true;
             }
         });
     }
@@ -4580,6 +4743,98 @@ function createSklandImportCancelledError() {
         }
     }
 
+    function updateTrainingStatusLabel(label, className, icon, text, issues) {
+        const compact = CONFIG.trainingPromptStyle === 'COMPACT';
+        const state = JSON.stringify([className, icon, text, issues, compact]);
+        if (label.dataset.prtsStatusState === state) return;
+        const expanded = label.querySelector('.prts-training-more')?.open;
+        const compactExpanded = label.querySelector('.prts-training-details')?.open;
+        label.className = `${className} prts-training-status${compact ? ' prts-training-compact' : ''}`;
+        label.removeAttribute('aria-label');
+        label.replaceChildren();
+
+        const heading = document.createElement(compact ? 'summary' : 'div');
+        heading.className = 'prts-training-heading';
+        const iconEl = createPrtsIcon(icon) || document.createElement('span');
+        iconEl.classList.add('prts-status-icon');
+        iconEl.setAttribute('aria-hidden', 'true');
+        heading.appendChild(iconEl);
+        const headingText = document.createElement('span');
+        headingText.className = 'prts-training-heading-text';
+        headingText.textContent = text;
+        headingText.title = text;
+        heading.appendChild(headingText);
+        let content = label;
+        if (compact) {
+            content = document.createElement('details');
+            content.className = 'prts-training-details';
+            content.open = Boolean(compactExpanded);
+            content.appendChild(heading);
+            label.appendChild(content);
+            const hint = document.createElement('span');
+            hint.className = 'prts-training-toggle';
+            hint.setAttribute('aria-hidden', 'true');
+            hint.textContent = '详情';
+            heading.appendChild(hint);
+        } else {
+            label.appendChild(heading);
+        }
+
+        const columns = document.createElement('div');
+        columns.className = 'prts-training-columns';
+        for (const title of ['项目', '当前', '作业要求']) {
+            const column = document.createElement('span');
+            column.textContent = title;
+            columns.appendChild(column);
+        }
+        content.appendChild(columns);
+
+        let extra;
+        const orderedIssues = [...issues].sort((left, right) =>
+            Number(left.status === 'unknown') - Number(right.status === 'unknown'));
+        orderedIssues.forEach((operator, index) => {
+            if (index === 2) {
+                extra = document.createElement('details');
+                extra.className = 'prts-training-more';
+                extra.open = Boolean(expanded);
+                const summary = document.createElement('summary');
+                summary.textContent = `还有 ${issues.length - 2} 项，展开查看`;
+                extra.appendChild(summary);
+                content.appendChild(extra);
+            }
+            const section = document.createElement('div');
+            section.className = 'prts-training-operator';
+            const name = document.createElement('div');
+            name.className = 'prts-training-name';
+            name.textContent = operator.name;
+            if (operator.group) {
+                const group = document.createElement('span');
+                group.className = 'prts-training-group';
+                group.textContent = `干员组：${operator.group}`;
+                name.appendChild(group);
+            }
+            section.appendChild(name);
+            operator.issues.forEach(issue => {
+                const row = document.createElement('div');
+                row.className = `prts-training-row prts-training-${issue.status}`;
+                for (const [className, value, title] of [
+                    ['prts-training-field', issue.label, '项目'],
+                    ['prts-training-current', issue.current, '当前'],
+                    ['prts-training-required', issue.required, '作业要求']
+                ]) {
+                    const cell = document.createElement('span');
+                    cell.className = className;
+                    cell.textContent = value;
+                    cell.setAttribute('aria-label', `${title}：${value}`);
+                    row.appendChild(cell);
+                }
+                section.appendChild(row);
+            });
+            (extra || content).appendChild(section);
+        });
+        label.dataset.prtsStatusState = state;
+    }
+
     function processOperationCard(card) {
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
@@ -4606,7 +4861,7 @@ function createSklandImportCancelledError() {
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
         }
-        const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
+        const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, trainingIssues, hasRequirements } =
             checkOperationAvailability(operation, ownedOpsSet, CONFIG.filterMode, accountsTraining[activeAccountId], CONFIG.trainingCheck);
 
         if (!isAvailable && CONFIG.displayMode === 'HIDE') {
@@ -4651,23 +4906,23 @@ function createSklandImportCancelledError() {
             labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
         if (CONFIG.trainingCheck) {
-            if (lowTraining.length) labelText += ` · 练度不足：${lowTraining.slice(0, 2).join('、')}`;
-            if (unknownTraining.length) labelText += ` · 待核验：${unknownTraining.slice(0, 2).join('、')}`;
-            if (!hasRequirements) labelText += ' · 未标注练度';
+            if (!labelText && lowTraining.length) labelText = `练度不足 · ${lowTraining.length} 个位置`;
+            else if (!labelText && unknownTraining.length) labelText = `练度待核验 · ${unknownTraining.length} 人`;
+            if (!hasRequirements) labelText += `${labelText ? ' · ' : ''}未标注练度`;
         }
         if (!iconText) {
             iconText = lowTraining.length ? 'missing' : unknownTraining.length ? 'support' : 'check';
             if (lowTraining.length) newClass += ' prts-label-missing';
             else if (unknownTraining.length) newClass += ' prts-label-support';
-            labelText = labelText.replace(/^ · /, '');
         }
 
-        if (existingLabel) {
-            updateStatusLabel(existingLabel, newClass, iconText, labelText);
+        const labelDiv = existingLabel || document.createElement('div');
+        if (CONFIG.trainingCheck && trainingIssues.length) {
+            updateTrainingStatusLabel(labelDiv, newClass, iconText, labelText, trainingIssues);
         } else {
-            const labelDiv = document.createElement('div');
             updateStatusLabel(labelDiv, newClass, iconText, labelText);
-
+        }
+        if (!existingLabel) {
             const descContainer = cardInner.querySelector('.prts-desc-wrapper') ||
                                  cardInner.querySelector('.grow.text-gray-700') ||
                                  cardInner.querySelector('.text-gray-700');
@@ -5148,20 +5403,44 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 target.appendChild(groupTitle);
                 currentGroup = definition.group;
             }
-            target.appendChild(createPrtsSwitch({
-                label: definition.label, checked: CONFIG[key], configKey: key, icon: definition.icon,
-                onChange: value => {
-                    CONFIG[key] = value;
-                    saveConfig();
-                    if (!value && definition.reloadOnDisable) {
-                        location.reload();
-                        return;
-                    }
-                    syncPageScaffold();
-                    document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
-                    requestFilterUpdate();
+            const onChange = value => {
+                CONFIG[key] = value;
+                saveConfig();
+                if (!value && definition.reloadOnDisable) {
+                    location.reload();
+                    return;
                 }
-            }));
+                syncPageScaffold();
+                document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
+                requestFilterUpdate();
+            };
+            if (definition.options) {
+                const item = document.createElement('label');
+                item.className = 'prts-panel-item';
+                const labelText = document.createElement('span');
+                labelText.className = 'prts-panel-item-label';
+                labelText.appendChild(createPrtsIcon(definition.icon));
+                labelText.appendChild(document.createTextNode(definition.label));
+                const select = document.createElement('select');
+                select.className = 'prts-panel-select';
+                select.dataset.prtsConfigKey = key;
+                select.setAttribute('aria-label', definition.label);
+                definition.options.forEach(value => {
+                    const option = document.createElement('option');
+                    option.value = value;
+                    option.textContent = definition.optionLabels[value];
+                    select.appendChild(option);
+                });
+                select.value = CONFIG[key];
+                select.onchange = event => onChange(event.target.value);
+                item.appendChild(labelText);
+                item.appendChild(select);
+                target.appendChild(item);
+            } else {
+                target.appendChild(createPrtsSwitch({
+                    label: definition.label, checked: CONFIG[key], configKey: key, icon: definition.icon, onChange
+                }));
+            }
         });
         panel.appendChild(debugOptions);
 

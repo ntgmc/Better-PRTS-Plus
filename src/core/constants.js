@@ -27,6 +27,7 @@
         cleanLink: { group: '作业卡片', label: '视频链接优化', icon: 'link', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'filter', default: false, legacyKey: 'prts_cfg_hide_video' },
         hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'filter', default: true, reloadOnDisable: true },
+        trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'check', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
         popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'operators', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'layout', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
         announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'filter', default: true, reloadOnDisable: true },

@@ -508,6 +508,98 @@
         }
     }
 
+    function updateTrainingStatusLabel(label, className, icon, text, issues) {
+        const compact = CONFIG.trainingPromptStyle === 'COMPACT';
+        const state = JSON.stringify([className, icon, text, issues, compact]);
+        if (label.dataset.prtsStatusState === state) return;
+        const expanded = label.querySelector('.prts-training-more')?.open;
+        const compactExpanded = label.querySelector('.prts-training-details')?.open;
+        label.className = `${className} prts-training-status${compact ? ' prts-training-compact' : ''}`;
+        label.removeAttribute('aria-label');
+        label.replaceChildren();
+
+        const heading = document.createElement(compact ? 'summary' : 'div');
+        heading.className = 'prts-training-heading';
+        const iconEl = createPrtsIcon(icon) || document.createElement('span');
+        iconEl.classList.add('prts-status-icon');
+        iconEl.setAttribute('aria-hidden', 'true');
+        heading.appendChild(iconEl);
+        const headingText = document.createElement('span');
+        headingText.className = 'prts-training-heading-text';
+        headingText.textContent = text;
+        headingText.title = text;
+        heading.appendChild(headingText);
+        let content = label;
+        if (compact) {
+            content = document.createElement('details');
+            content.className = 'prts-training-details';
+            content.open = Boolean(compactExpanded);
+            content.appendChild(heading);
+            label.appendChild(content);
+            const hint = document.createElement('span');
+            hint.className = 'prts-training-toggle';
+            hint.setAttribute('aria-hidden', 'true');
+            hint.textContent = '详情';
+            heading.appendChild(hint);
+        } else {
+            label.appendChild(heading);
+        }
+
+        const columns = document.createElement('div');
+        columns.className = 'prts-training-columns';
+        for (const title of ['项目', '当前', '作业要求']) {
+            const column = document.createElement('span');
+            column.textContent = title;
+            columns.appendChild(column);
+        }
+        content.appendChild(columns);
+
+        let extra;
+        const orderedIssues = [...issues].sort((left, right) =>
+            Number(left.status === 'unknown') - Number(right.status === 'unknown'));
+        orderedIssues.forEach((operator, index) => {
+            if (index === 2) {
+                extra = document.createElement('details');
+                extra.className = 'prts-training-more';
+                extra.open = Boolean(expanded);
+                const summary = document.createElement('summary');
+                summary.textContent = `还有 ${issues.length - 2} 项，展开查看`;
+                extra.appendChild(summary);
+                content.appendChild(extra);
+            }
+            const section = document.createElement('div');
+            section.className = 'prts-training-operator';
+            const name = document.createElement('div');
+            name.className = 'prts-training-name';
+            name.textContent = operator.name;
+            if (operator.group) {
+                const group = document.createElement('span');
+                group.className = 'prts-training-group';
+                group.textContent = `干员组：${operator.group}`;
+                name.appendChild(group);
+            }
+            section.appendChild(name);
+            operator.issues.forEach(issue => {
+                const row = document.createElement('div');
+                row.className = `prts-training-row prts-training-${issue.status}`;
+                for (const [className, value, title] of [
+                    ['prts-training-field', issue.label, '项目'],
+                    ['prts-training-current', issue.current, '当前'],
+                    ['prts-training-required', issue.required, '作业要求']
+                ]) {
+                    const cell = document.createElement('span');
+                    cell.className = className;
+                    cell.textContent = value;
+                    cell.setAttribute('aria-label', `${title}：${value}`);
+                    row.appendChild(cell);
+                }
+                section.appendChild(row);
+            });
+            (extra || content).appendChild(section);
+        });
+        label.dataset.prtsStatusState = state;
+    }
+
     function processOperationCard(card) {
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
@@ -534,7 +626,7 @@
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
         }
-        const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, hasRequirements } =
+        const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, trainingIssues, hasRequirements } =
             checkOperationAvailability(operation, ownedOpsSet, CONFIG.filterMode, accountsTraining[activeAccountId], CONFIG.trainingCheck);
 
         if (!isAvailable && CONFIG.displayMode === 'HIDE') {
@@ -579,23 +671,23 @@
             labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
         if (CONFIG.trainingCheck) {
-            if (lowTraining.length) labelText += ` · 练度不足：${lowTraining.slice(0, 2).join('、')}`;
-            if (unknownTraining.length) labelText += ` · 待核验：${unknownTraining.slice(0, 2).join('、')}`;
-            if (!hasRequirements) labelText += ' · 未标注练度';
+            if (!labelText && lowTraining.length) labelText = `练度不足 · ${lowTraining.length} 个位置`;
+            else if (!labelText && unknownTraining.length) labelText = `练度待核验 · ${unknownTraining.length} 人`;
+            if (!hasRequirements) labelText += `${labelText ? ' · ' : ''}未标注练度`;
         }
         if (!iconText) {
             iconText = lowTraining.length ? 'missing' : unknownTraining.length ? 'support' : 'check';
             if (lowTraining.length) newClass += ' prts-label-missing';
             else if (unknownTraining.length) newClass += ' prts-label-support';
-            labelText = labelText.replace(/^ · /, '');
         }
 
-        if (existingLabel) {
-            updateStatusLabel(existingLabel, newClass, iconText, labelText);
+        const labelDiv = existingLabel || document.createElement('div');
+        if (CONFIG.trainingCheck && trainingIssues.length) {
+            updateTrainingStatusLabel(labelDiv, newClass, iconText, labelText, trainingIssues);
         } else {
-            const labelDiv = document.createElement('div');
             updateStatusLabel(labelDiv, newClass, iconText, labelText);
-
+        }
+        if (!existingLabel) {
             const descContainer = cardInner.querySelector('.prts-desc-wrapper') ||
                                  cardInner.querySelector('.grow.text-gray-700') ||
                                  cardInner.querySelector('.text-gray-700');

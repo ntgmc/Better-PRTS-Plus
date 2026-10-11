@@ -113,7 +113,8 @@
         document.querySelectorAll('[data-prts-config-key]').forEach(input => {
             const key = input.dataset.prtsConfigKey;
             if (key && Object.prototype.hasOwnProperty.call(CONFIG, key)) {
-                input.checked = CONFIG[key] === true;
+                if (input.tagName === 'SELECT') input.value = CONFIG[key];
+                else input.checked = CONFIG[key] === true;
             }
         });
     }
