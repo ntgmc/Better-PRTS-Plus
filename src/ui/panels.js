@@ -484,20 +484,29 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const row = document.createElement('div');
             row.className = 'prts-account-row';
 
-            const accountCell = document.createElement('div');
-            accountCell.className = 'prts-account-cell';
-
             const accBtn = document.createElement('button');
             accBtn.type = 'button';
-            accBtn.className = 'prts-btn prts-acc-btn';
+            accBtn.className = 'prts-acc-btn';
             accBtn.dataset.id = i;
             accBtn.onclick = (e) => {
                 e.stopPropagation();
                 switchAccount(i);
             };
 
+            const heading = document.createElement('span');
+            heading.className = 'prts-account-heading';
+            const name = document.createElement('span');
+            name.className = 'prts-account-name';
+            heading.appendChild(name);
+            heading.appendChild(createPrtsIcon('check'));
+
+            const count = document.createElement('span');
+            count.className = 'prts-account-count';
             const syncMeta = document.createElement('span');
             syncMeta.className = 'prts-account-sync-meta';
+            accBtn.appendChild(heading);
+            accBtn.appendChild(count);
+            accBtn.appendChild(syncMeta);
 
             const renameBtn = document.createElement('button');
             renameBtn.type = 'button';
@@ -509,9 +518,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 renameAccount(i);
             };
 
-            accountCell.appendChild(accBtn);
-            accountCell.appendChild(syncMeta);
-            row.appendChild(accountCell);
+            row.appendChild(accBtn);
             row.appendChild(renameBtn);
             accBtnGroup.appendChild(row);
         }

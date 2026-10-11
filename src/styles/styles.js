@@ -84,32 +84,13 @@
     body.high-contrast-theme .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
 
 
-    /* [V12.0/3.1.0] 多账号悬浮面板小按钮专属样式 */
-    .prts-account-list { display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 6px; }
-    .prts-account-row { display: flex; align-items: center; gap: 6px; width: 100%; }
-    .prts-account-cell { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 3px; }
-    .prts-acc-btn { flex: 1 1 auto !important; min-width: 0 !important; justify-content: flex-start !important; padding: 5px 8px !important; border: 1px solid #cbd5e1 !important; margin: 0 !important; border-radius: 4px !important; transition: all 0.2s; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; }
-    .prts-account-cell .prts-acc-btn { width: 100% !important; }
-    .prts-account-sync-meta { display: none; min-width: 0; padding-left: 2px; font-size: 11px; line-height: 1.35; color: #64748b; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .prts-account-sync-meta.is-visible { display: block; }
     .prts-account-sync-chip { display: inline-flex; align-items: center; max-width: min(100%, 360px); min-height: 26px; padding: 3px 8px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .prts-account-rename { flex: 0 0 auto; border: 1px solid #cbd5e1; border-radius: 4px; background: transparent; color: #64748b; cursor: pointer; font-size: 12px; padding: 4px 6px; line-height: 1.2; }
-    .prts-account-rename:hover { color: #2563eb; border-color: #93c5fd; background-color: rgba(147, 197, 253, 0.16); }
     .prts-panel-actions { display: flex; gap: 8px; margin-top: 8px; width: 100%; }
     .prts-panel-actions .prts-btn { flex: 1 1 0 !important; margin: 0 !important; padding: 6px 8px !important; font-size: 13px !important; }
-    .prts-acc-btn.active { background-color: #3b82f6 !important; color: #fff !important; border-color: #3b82f6 !important; }
     .prts-debug-options { display: none; margin: 2px 0 12px; padding: 10px 0 0; border-top: 1px dashed #cbd5e1; }
     .prts-debug-options.is-visible { display: block; }
     .prts-debug-options .prts-panel-item { margin-bottom: 0; }
-    body.dark .prts-acc-btn { border-color: #415262 !important; color: #c4d0dc !important; }
-    body.dark .prts-acc-btn.active { background-color: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
-    body.dark .prts-account-rename { border-color: #415262; color: #c4d0dc; }
-    body.dark .prts-account-rename:hover { color: #60a5fa; border-color: #60a5fa; background-color: rgba(96, 165, 250, 0.16); }
     body.dark .prts-debug-options { border-color: #415262; }
-    body.high-contrast-theme .prts-acc-btn { border-color: #38383b !important; color: #d1d5db !important; }
-    body.high-contrast-theme .prts-acc-btn.active { background-color: #2563eb !important; border-color: #2563eb !important; color: #fff !important; }
-    body.high-contrast-theme .prts-account-rename { border-color: #38383b; color: #d1d5db; }
-    body.high-contrast-theme .prts-account-rename:hover { color: #60a5fa; border-color: #60a5fa; background-color: rgba(96, 165, 250, 0.16); }
     body.high-contrast-theme .prts-debug-options { border-color: #38383b; }
 
 
@@ -577,37 +558,72 @@
         color: var(--prts-color-text-subtle);
         flex: 0 0 auto;
     }
-    .prts-account-row { gap: var(--prts-space-2); }
-    .prts-account-cell {
+    /* Hallmark · component: account switcher · theme: existing PRTS · states: default, hover, focus, pressed, selected
+     * pre-emit critique: P4 H5 E4 S5 R5 V4 */
+    .prts-account-list { display: flex; flex-direction: column; gap: var(--prts-space-2); width: 100%; margin-top: var(--prts-space-2); }
+    .prts-account-row {
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 44px;
+        align-items: center;
+        width: 100%;
+        border: 1px solid var(--prts-color-border-soft);
+        border-radius: var(--prts-radius-lg);
+        background: var(--prts-color-surface-muted);
+    }
+    .prts-account-row.is-active { border-color: var(--prts-color-primary); background: var(--prts-color-primary-soft); }
+    .prts-acc-btn {
         display: flex;
-        flex: 1 1 auto;
-        min-width: 0;
         flex-direction: column;
-        gap: 3px;
+        align-items: stretch;
+        gap: var(--prts-space-1);
+        min-width: 0;
+        min-height: 64px;
+        margin: 0;
+        padding: var(--prts-space-2) var(--prts-space-3);
+        border: none;
+        border-radius: var(--prts-radius-lg);
+        background: transparent;
+        color: var(--prts-color-text);
+        font: inherit;
+        text-align: left;
+        cursor: pointer;
+        touch-action: manipulation;
     }
-    .prts-acc-btn, .prts-account-rename {
-        min-height: 34px !important;
-        border-color: var(--prts-color-border) !important;
-        border-radius: var(--prts-radius-md) !important;
-        color: var(--prts-color-text-muted) !important;
-        background: var(--prts-color-surface) !important;
+    .prts-account-heading { display: flex; align-items: center; gap: var(--prts-space-2); min-width: 0; }
+    .prts-account-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 1.5; }
+    .prts-account-heading .bp4-icon { display: flex; flex: 0 0 16px; color: var(--prts-color-primary); visibility: hidden; }
+    .prts-acc-btn.active .bp4-icon { visibility: visible; }
+    .prts-account-count, .prts-account-sync-meta { color: var(--prts-color-text-muted); font-size: 11px; line-height: 1.5; }
+    .prts-account-count { font-variant-numeric: tabular-nums; }
+    .prts-account-sync-meta { display: none; white-space: normal; overflow-wrap: anywhere; }
+    .prts-account-sync-meta.is-visible { display: block; }
+    .prts-account-rename {
+        justify-self: center;
+        width: 44px;
+        min-height: 44px;
+        padding: 0;
+        border: none;
+        border-radius: var(--prts-radius-md);
+        background: transparent;
+        color: var(--prts-color-text-muted);
+        font: inherit;
+        font-size: 12px;
+        white-space: nowrap;
+        cursor: pointer;
+        touch-action: manipulation;
     }
-    .prts-account-cell .prts-acc-btn {
-        width: 100% !important;
+    @media (hover: hover) {
+        .prts-account-row:hover { border-color: var(--prts-color-primary); }
+        .prts-account-rename:hover { background: var(--prts-color-surface-hover); color: var(--prts-color-primary); }
     }
-    .prts-account-sync-meta {
-        color: var(--prts-color-text-subtle);
-    }
+    .prts-acc-btn:active, .prts-account-rename:active { background: var(--prts-color-surface-hover); }
+    .prts-acc-btn:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
     .prts-account-sync-chip {
         border-color: var(--prts-color-primary);
         background: var(--prts-color-primary-soft);
         color: var(--prts-color-primary);
         flex: 0 1 auto;
-    }
-    .prts-acc-btn.active {
-        background: var(--prts-color-primary) !important;
-        border-color: var(--prts-color-primary) !important;
-        color: #ffffff !important;
     }
     .prts-divider {
         height: 24px !important;

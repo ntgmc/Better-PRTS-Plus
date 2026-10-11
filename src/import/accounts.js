@@ -98,15 +98,23 @@
         document.querySelectorAll('.prts-acc-btn').forEach(btn => {
             const id = normalizeAccountId(btn.dataset.id);
             const label = getAccountLabel(id);
-            btn.textContent = `${label} (${getAccountOperatorCount(id)})`;
+            btn.querySelector('.prts-account-name').textContent = label;
+            btn.querySelector('.prts-account-count').textContent = `${getAccountOperatorCount(id)} 名干员`;
             btn.title = formatAccountSklandTitle(id);
+            btn.setAttribute('aria-label', `切换到 ${label}`);
+            btn.setAttribute('aria-pressed', String(id === activeAccountId));
             btn.classList.toggle('active', id === activeAccountId);
+            const row = btn.closest('.prts-account-row');
+            row.classList.toggle('is-active', id === activeAccountId);
+            row.querySelector('.prts-account-rename').setAttribute('aria-label', `重命名 ${label}`);
 
-            const syncMetaEl = btn.closest('.prts-account-row')?.querySelector('.prts-account-sync-meta');
+            const syncMetaEl = btn.querySelector('.prts-account-sync-meta');
             if (syncMetaEl) {
-                const syncText = formatSklandSyncSummary(getAccountSklandSyncMeta(id));
-                syncMetaEl.textContent = syncText;
-                syncMetaEl.classList.toggle('is-visible', Boolean(syncText));
+                const meta = getAccountSklandSyncMeta(id);
+                syncMetaEl.textContent = meta ? `森空岛 · ${new Date(meta.importedAt).toLocaleString(undefined, {
+                    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+                })}` : '';
+                syncMetaEl.classList.toggle('is-visible', Boolean(meta));
             }
         });
 
