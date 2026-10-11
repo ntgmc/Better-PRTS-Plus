@@ -528,6 +528,10 @@
         const compactExpanded = label.querySelector('.prts-training-details')?.open;
         label.className = `${className} prts-training-status${compact ? ' prts-training-compact' : ''}`;
         label.removeAttribute('aria-label');
+        label.onclick = event => event.stopPropagation();
+        label.onkeydown = event => {
+            if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+        };
         label.replaceChildren();
 
         const heading = document.createElement(compact ? 'summary' : 'div');
@@ -697,6 +701,8 @@
         if (CONFIG.trainingCheck && trainingIssues.length) {
             updateTrainingStatusLabel(labelDiv, newClass, iconText, labelText, trainingIssues);
         } else {
+            labelDiv.onclick = null;
+            labelDiv.onkeydown = null;
             updateStatusLabel(labelDiv, newClass, iconText, labelText);
         }
         if (!existingLabel) {

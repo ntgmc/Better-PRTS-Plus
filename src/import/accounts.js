@@ -121,7 +121,7 @@
         document.querySelectorAll('[data-prts-config-key]').forEach(input => {
             const key = input.dataset.prtsConfigKey;
             if (key && Object.prototype.hasOwnProperty.call(CONFIG, key)) {
-                if (input.tagName === 'SELECT') input.value = CONFIG[key];
+                if (input.tagName === 'BUTTON') input.setAttribute('aria-pressed', String(input.value === CONFIG[key]));
                 else input.checked = CONFIG[key] === true;
             }
         });

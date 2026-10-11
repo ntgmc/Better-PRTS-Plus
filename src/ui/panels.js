@@ -432,26 +432,31 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 requestFilterUpdate();
             };
             if (definition.options) {
-                const item = document.createElement('label');
-                item.className = 'prts-panel-item';
+                const item = document.createElement('div');
+                item.className = 'prts-panel-item prts-panel-choice';
                 const labelText = document.createElement('span');
                 labelText.className = 'prts-panel-item-label';
                 labelText.appendChild(createPrtsIcon(definition.icon));
                 labelText.appendChild(document.createTextNode(definition.label));
-                const select = document.createElement('select');
-                select.className = 'prts-panel-select';
-                select.dataset.prtsConfigKey = key;
-                select.setAttribute('aria-label', definition.label);
+                const choices = document.createElement('div');
+                choices.className = 'prts-panel-segments';
+                choices.setAttribute('role', 'group');
+                choices.setAttribute('aria-label', definition.label);
                 definition.options.forEach(value => {
-                    const option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = definition.optionLabels[value];
-                    select.appendChild(option);
+                    const button = createPrtsButton({
+                        className: 'prts-panel-segment', text: definition.optionLabels[value],
+                        pressed: CONFIG[key] === value,
+                        onClick: () => {
+                            onChange(value);
+                            refreshAccountControls();
+                        }
+                    });
+                    button.dataset.prtsConfigKey = key;
+                    button.value = value;
+                    choices.appendChild(button);
                 });
-                select.value = CONFIG[key];
-                select.onchange = event => onChange(event.target.value);
                 item.appendChild(labelText);
-                item.appendChild(select);
+                item.appendChild(choices);
                 target.appendChild(item);
             } else {
                 target.appendChild(createPrtsSwitch({

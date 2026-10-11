@@ -1988,6 +1988,7 @@ function createSklandImportCancelledError() {
     }
     .prts-account-row.is-active { border-color: var(--prts-color-primary); background: var(--prts-color-primary-soft); }
     .prts-acc-btn {
+        position: relative;
         display: flex;
         flex-direction: column;
         align-items: stretch;
@@ -1996,6 +1997,7 @@ function createSklandImportCancelledError() {
         min-height: 64px;
         margin: 0;
         padding: var(--prts-space-2) var(--prts-space-3);
+        padding-right: calc(var(--prts-space-3) + 16px + var(--prts-space-2));
         border: none;
         border-radius: var(--prts-radius-lg);
         background: transparent;
@@ -2007,7 +2009,7 @@ function createSklandImportCancelledError() {
     }
     .prts-account-heading { display: flex; align-items: center; gap: var(--prts-space-2); min-width: 0; }
     .prts-account-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; line-height: 1.5; }
-    .prts-account-heading .bp4-icon { display: flex; flex: 0 0 16px; color: var(--prts-color-primary); visibility: hidden; }
+    .prts-account-heading .bp4-icon { position: absolute; top: 50%; right: var(--prts-space-3); transform: translateY(-50%); display: flex; color: var(--prts-color-primary); visibility: hidden; }
     .prts-acc-btn.active .bp4-icon { visibility: visible; }
     .prts-account-count, .prts-account-sync-meta { color: var(--prts-color-text-muted); font-size: 11px; line-height: 1.5; }
     .prts-account-count { font-variant-numeric: tabular-nums; }
@@ -2365,22 +2367,42 @@ function createSklandImportCancelledError() {
         border-color: var(--prts-color-border-soft) !important;
     }
     .prts-panel-item { color: var(--prts-color-text-muted) !important; }
-    .prts-panel-select {
-        min-width: 80px;
+    .prts-panel-choice { align-items: flex-start; flex-direction: column; gap: var(--prts-space-2); }
+    .prts-panel-segments {
+        display: flex;
+        width: 100%;
+        gap: var(--prts-space-1);
+        padding: var(--prts-space-1);
+        border: 1px solid var(--prts-color-border-soft);
+        border-radius: var(--prts-radius-md);
+        background: var(--prts-color-surface-muted);
+    }
+    .prts-panel-segment {
+        flex: 1 1 0;
+        min-width: 0;
         min-height: 44px;
         padding: var(--prts-space-1) var(--prts-space-2);
-        border: 1px solid var(--prts-color-border);
+        border: 1px solid transparent;
         border-radius: var(--prts-radius-sm);
-        background: var(--prts-color-surface-muted);
-        color: var(--prts-color-text);
+        background: transparent;
+        color: var(--prts-color-text-muted);
         font: inherit;
         cursor: pointer;
+        white-space: nowrap;
     }
-    .prts-panel-select:hover { background: var(--prts-color-surface-hover); }
-    .prts-panel-select:active { border-color: var(--prts-color-primary); }
-    .prts-panel-select:focus-visible {
+    .prts-panel-segment:hover { background: var(--prts-color-surface-hover); }
+    .prts-panel-segment[aria-pressed='true'] {
+        background: var(--prts-color-surface);
+        border-color: var(--prts-color-primary);
+        color: var(--prts-color-text);
+        box-shadow: var(--prts-shadow-sm);
+        font-weight: 600;
+    }
+    .prts-panel-segment:active { border-color: var(--prts-color-primary); }
+    .prts-panel-segment:focus-visible {
         outline: 2px solid var(--prts-color-primary);
-        outline-offset: 2px;
+        outline-offset: -2px;
+        box-shadow: none;
     }
     .prts-switch { width: 40px; height: 22px; flex: 0 0 auto; }
     .prts-switch input:focus-visible + .prts-slider {
@@ -3490,7 +3512,7 @@ function createSklandImportCancelledError() {
         document.querySelectorAll('[data-prts-config-key]').forEach(input => {
             const key = input.dataset.prtsConfigKey;
             if (key && Object.prototype.hasOwnProperty.call(CONFIG, key)) {
-                if (input.tagName === 'SELECT') input.value = CONFIG[key];
+                if (input.tagName === 'BUTTON') input.setAttribute('aria-pressed', String(input.value === CONFIG[key]));
                 else input.checked = CONFIG[key] === true;
             }
         });
@@ -4788,6 +4810,10 @@ function createSklandImportCancelledError() {
         const compactExpanded = label.querySelector('.prts-training-details')?.open;
         label.className = `${className} prts-training-status${compact ? ' prts-training-compact' : ''}`;
         label.removeAttribute('aria-label');
+        label.onclick = event => event.stopPropagation();
+        label.onkeydown = event => {
+            if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+        };
         label.replaceChildren();
 
         const heading = document.createElement(compact ? 'summary' : 'div');
@@ -4957,6 +4983,8 @@ function createSklandImportCancelledError() {
         if (CONFIG.trainingCheck && trainingIssues.length) {
             updateTrainingStatusLabel(labelDiv, newClass, iconText, labelText, trainingIssues);
         } else {
+            labelDiv.onclick = null;
+            labelDiv.onkeydown = null;
             updateStatusLabel(labelDiv, newClass, iconText, labelText);
         }
         if (!existingLabel) {
@@ -5452,26 +5480,31 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 requestFilterUpdate();
             };
             if (definition.options) {
-                const item = document.createElement('label');
-                item.className = 'prts-panel-item';
+                const item = document.createElement('div');
+                item.className = 'prts-panel-item prts-panel-choice';
                 const labelText = document.createElement('span');
                 labelText.className = 'prts-panel-item-label';
                 labelText.appendChild(createPrtsIcon(definition.icon));
                 labelText.appendChild(document.createTextNode(definition.label));
-                const select = document.createElement('select');
-                select.className = 'prts-panel-select';
-                select.dataset.prtsConfigKey = key;
-                select.setAttribute('aria-label', definition.label);
+                const choices = document.createElement('div');
+                choices.className = 'prts-panel-segments';
+                choices.setAttribute('role', 'group');
+                choices.setAttribute('aria-label', definition.label);
                 definition.options.forEach(value => {
-                    const option = document.createElement('option');
-                    option.value = value;
-                    option.textContent = definition.optionLabels[value];
-                    select.appendChild(option);
+                    const button = createPrtsButton({
+                        className: 'prts-panel-segment', text: definition.optionLabels[value],
+                        pressed: CONFIG[key] === value,
+                        onClick: () => {
+                            onChange(value);
+                            refreshAccountControls();
+                        }
+                    });
+                    button.dataset.prtsConfigKey = key;
+                    button.value = value;
+                    choices.appendChild(button);
                 });
-                select.value = CONFIG[key];
-                select.onchange = event => onChange(event.target.value);
                 item.appendChild(labelText);
-                item.appendChild(select);
+                item.appendChild(choices);
                 target.appendChild(item);
             } else {
                 target.appendChild(createPrtsSwitch({
