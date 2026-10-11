@@ -30,6 +30,7 @@
         trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'check', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
         popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'operators', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'layout', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
+        hideOperatorMatchingSettings: { group: '页面增强', label: '隐藏原站干员匹配设置', icon: 'filter', default: true },
         announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'filter', default: true, reloadOnDisable: true },
         compatDebug: { group: '诊断', label: '兼容诊断', icon: 'filter', default: false, legacyKey: 'prts_cfg_compat_debug' },
         filterMode: { default: 'NONE', options: ['NONE', 'PERFECT', 'SUPPORT'], legacyKey: 'prts_plus_filter_mode' },

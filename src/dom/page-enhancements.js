@@ -136,12 +136,24 @@
         });
     }
 
+    function syncOperatorMatchingSettings(hidden = CONFIG.hideOperatorMatchingSettings) {
+        document.querySelectorAll('button.bp4-button, button.bp6-button').forEach(button => {
+            if (button.textContent.trim() !== '干员匹配设置') return;
+            button.style.display = hidden ? 'none' : '';
+            const group = button.parentElement;
+            if (group?.matches('div.flex.flex-wrap.items-center.gap-1')) {
+                group.style.display = hidden && group.children.length === 1 ? 'none' : '';
+            }
+        });
+    }
+
     function syncPageScaffold() {
         applySidebarCollapse();
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
         syncOperationTypeButtons();
+        syncOperatorMatchingSettings();
         if (isFilterDisabledPage()) {
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
         } else {

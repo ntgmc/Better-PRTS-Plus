@@ -52,6 +52,7 @@ globalThis.__testExports = {
   getCardTypeTag,
   isVideoOperationCard,
   syncOperationTypeButtons,
+  syncOperatorMatchingSettings,
   syncOperationCardTime,
   updateTrainingStatusLabel,
   CONFIG,
@@ -138,6 +139,7 @@ const {
   getCardTypeTag,
   isVideoOperationCard,
   syncOperationTypeButtons,
+  syncOperatorMatchingSettings,
   syncOperationCardTime,
   updateTrainingStatusLabel,
   CONFIG,
@@ -182,6 +184,8 @@ test('unified settings migrate legacy values, validate types and prefer saved in
     assert.strictEqual(migrated.displayMode, 'HIDE');
     assert.strictEqual(migrated.trainingCheck, true);
     assert.strictEqual(migrated.trainingPromptStyle, 'COMPACT');
+    assert.strictEqual(migrated.hideOperatorMatchingSettings, true);
+    assert.strictEqual(normalizeConfig({ hideOperatorMatchingSettings: false }).hideOperatorMatchingSettings, false);
     assert.strictEqual(normalizeConfig({ trainingPromptStyle: 'DETAILED' }).trainingPromptStyle, 'DETAILED');
     assert.deepStrictEqual(hostObject(migrated.floatingPosition), { top: '95%', isRight: false });
     assert.deepStrictEqual(JSON.parse(storage.get(CONFIG_KEY)), hostObject(migrated));
@@ -472,6 +476,41 @@ test('operation type buttons follow video hiding without affecting other groups'
   syncOperationTypeButtons(false);
   assert.strictEqual(typeGroup.style.display, '');
   delete context.document;
+});
+
+test('native matching settings hide and restore without hiding neighboring controls', () => {
+  const savedDocument = context.document;
+  const button = createTestElement('button', ' 干员匹配设置 ');
+  const otherButton = createTestElement('button', '其他设置');
+  const group = createTestElement();
+  group.matches = selector => selector === 'div.flex.flex-wrap.items-center.gap-1';
+  group.appendChild(button);
+  context.document = {
+    querySelectorAll(selector) {
+      assert.strictEqual(selector, 'button.bp4-button, button.bp6-button');
+      return [button, otherButton];
+    }
+  };
+  try {
+    syncOperatorMatchingSettings();
+    syncOperatorMatchingSettings();
+    assert.strictEqual(button.style.display, 'none');
+    assert.strictEqual(group.style.display, 'none');
+    assert.strictEqual(otherButton.style.display, undefined);
+    group.appendChild(otherButton);
+    syncOperatorMatchingSettings();
+    assert.strictEqual(group.style.display, '');
+    assert.strictEqual(button.style.display, 'none');
+    assert.strictEqual(otherButton.style.display, undefined);
+    syncOperatorMatchingSettings(false);
+    assert.strictEqual(button.style.display, '');
+    assert.strictEqual(group.style.display, '');
+    button.remove();
+    syncOperatorMatchingSettings(true);
+    assert.strictEqual(button.style.display, 'none');
+  } finally {
+    context.document = savedDocument;
+  }
 });
 
 function hostObject(value) {
