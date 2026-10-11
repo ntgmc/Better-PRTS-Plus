@@ -710,6 +710,13 @@ test('compact training prompts expand full comparisons and update when the style
     const render = () => updateTrainingStatusLabel(label, 'prts-status-label prts-label-missing',
       'missing', '练度不足', issues);
     render();
+    let stopped = 0;
+    const event = { stopPropagation() { stopped++; }, preventDefault() { assert.fail('native disclosure should remain enabled'); } };
+    label.onclick(event);
+    label.onkeydown({ ...event, key: 'Enter' });
+    label.onkeydown({ ...event, key: ' ' });
+    label.onkeydown({ ...event, key: 'Tab' });
+    assert.strictEqual(stopped, 3);
     const details = label.querySelector('.prts-training-details');
     assert.strictEqual(details.open, false);
     assert.strictEqual(details.children[0].tagName, 'SUMMARY');
