@@ -3,7 +3,6 @@ param(
     [string]$Remote = "origin",
     [string]$Branch,
     [string]$CommitMessage,
-    [switch]$SkipOperatorDataUpdate,
     [switch]$DryRun,
     [switch]$PublishRelease
 )
@@ -14,7 +13,6 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $headerPath = Join-Path $repoRoot "src/meta/userscript-header.js"
 $buildScriptPath = Join-Path $PSScriptRoot "build-userscript.ps1"
 $syncReadmeScriptPath = Join-Path $PSScriptRoot "sync-readme-version.ps1"
-$updateOperatorDataScriptPath = Join-Path $PSScriptRoot "update-operator-data.ps1"
 $checkScriptPath = Join-Path $PSScriptRoot "check.ps1"
 $checkReleaseScriptPath = Join-Path $PSScriptRoot "check-release.ps1"
 $versionPattern = "[0-9]+(?:\.[0-9]+){1,3}(?:[-+][0-9A-Za-z.-]+)?"
@@ -22,6 +20,7 @@ $releasePaths = @(
     "src",
     "Better-PRTS-Plus.user.js",
     "README.md",
+    "resources",
     "tool/operator-data.generated.json",
     "tool/operator-data-update-summary.json"
 )
@@ -163,11 +162,6 @@ try {
     Write-Host "Preparing release files for $tagName"
     & $buildScriptPath
     & $syncReadmeScriptPath
-    if (-not $SkipOperatorDataUpdate -and -not $reuseReleaseTag) {
-        & $updateOperatorDataScriptPath
-    } else {
-        Write-Host "Skipping operator data update; using existing release data."
-    }
     & $checkScriptPath
 
     if ($PublishRelease) {

@@ -8,6 +8,7 @@ const sourceFiles = [
   'src/core/constants.js',
   'src/data/operators.generated.js',
   'src/data/module-types.generated.js',
+  'src/data/resources.js',
   'src/import/parsers.js',
   'src/core/account-state.js',
   'src/core/filter-scheduler.js',
@@ -37,6 +38,12 @@ globalThis.__testExports = {
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
   OP_MODULE_TYPES,
+  OP_ID_MAP,
+  RESOURCE_CACHE_KEY,
+  RESOURCE_URL,
+  validateResourceData,
+  refreshResourceViews,
+  buildFallbackOperation,
   parseImportedOperatorNames,
   parseImportedOperators,
   normalizeAccountMeta,
@@ -124,6 +131,12 @@ const {
   ACCOUNT_BACKUP_TYPE,
   ACCOUNT_BACKUP_VERSION,
   OP_MODULE_TYPES,
+  OP_ID_MAP,
+  RESOURCE_CACHE_KEY,
+  RESOURCE_URL,
+  validateResourceData,
+  refreshResourceViews,
+  buildFallbackOperation,
   parseImportedOperatorNames,
   parseImportedOperators,
   normalizeAccountMeta,
@@ -165,6 +178,158 @@ const tests = [];
 function test(name, fn) {
   tests.push({ name, fn });
 }
+
+const resourceSnapshot = JSON.parse(fs.readFileSync(path.join(repoRoot, 'resources/data.json'), 'utf8'));
+const updatedResource = {
+  schemaVersion: 1,
+  operators: [{ id: 'char_999999_hotupdate', name: '测试干员' }],
+  moduleTypes: { char_999999_hotupdate: 'YX' }
+};
+
+function createResourceHarness(cache = null) {
+  let now = 1700000000000;
+  let refreshes = 0;
+  let aborts = 0;
+  const timers = new Map();
+  const requests = [];
+  const saved = new Map();
+  const sandbox = {
+    OP_ID_MAP: { 旧干员: 'char_999998_old' },
+    OP_MODULE_TYPES: { char_999998_old: 'X' },
+    isPlainRecord: value => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
+    isPrtsHost: () => true,
+    refreshResourceViews: () => { refreshes++; },
+    console: { warn() {} },
+    Date: { now: () => now },
+    setTimeout: callback => { const id = Symbol(); timers.set(id, callback); return id; },
+    clearTimeout: id => timers.delete(id),
+    GM_getValue: (key, fallback) => saved.has(key) ? saved.get(key) : fallback,
+    GM_setValue: (key, value) => saved.set(key, value),
+    GM_xmlhttpRequest: request => { requests.push(request); return { abort: () => { aborts++; } }; }
+  };
+  if (cache !== null) saved.set(RESOURCE_CACHE_KEY, cache);
+  vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/data/resources.js'), 'utf8') + `
+    globalThis.api = { loadCachedResources, updateResources, applyResourceData };
+  `, sandbox);
+  return {
+    sandbox, requests, saved, timers,
+    get aborts() { return aborts; },
+    api: sandbox.api,
+    get refreshes() { return refreshes; },
+    advance: () => { now += 60 * 60 * 1000; },
+    respond: (data = updatedResource, status = 200) => requests.at(-1).onload({
+      status, responseText: typeof data === 'string' ? data : JSON.stringify(data)
+    })
+  };
+}
+
+test('published resources match embedded operator and module snapshots', () => {
+  validateResourceData(resourceSnapshot);
+  assert.deepStrictEqual(resourceSnapshot.operators,
+    JSON.parse(fs.readFileSync(path.join(repoRoot, 'tool/operator-data.generated.json'), 'utf8')));
+  assert.deepStrictEqual(resourceSnapshot.moduleTypes, hostObject(OP_MODULE_TYPES));
+  assert.deepStrictEqual(Object.fromEntries(resourceSnapshot.operators.map(op => [op.name, op.id])), hostObject(OP_ID_MAP));
+});
+
+test('resource hot update replaces live tables, persists cache and throttles duplicate requests', async () => {
+  const h = createResourceHarness();
+  const pending = h.api.updateResources();
+  assert.strictEqual(h.api.updateResources(), pending);
+  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.requests[0].url, RESOURCE_URL);
+  assert.strictEqual(h.requests[0].anonymous, true);
+  h.respond();
+  assert.strictEqual(await pending, true);
+  assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), { 测试干员: 'char_999999_hotupdate' });
+  assert.deepStrictEqual(hostObject(h.sandbox.OP_MODULE_TYPES), updatedResource.moduleTypes);
+  assert.deepStrictEqual(JSON.parse(h.saved.get(RESOURCE_CACHE_KEY)).data, updatedResource);
+  assert.strictEqual(h.refreshes, 1);
+  assert.strictEqual(h.timers.size, 0);
+  assert.strictEqual(await h.api.updateResources(), false);
+  assert.strictEqual(h.requests.length, 1);
+  h.advance();
+  const next = h.api.updateResources();
+  h.respond({ ...updatedResource, moduleTypes: { char_999999_hotupdate: 'YXA' } });
+  assert.strictEqual(await next, true);
+  assert.strictEqual(h.sandbox.OP_MODULE_TYPES.char_999999_hotupdate, 'YXA');
+});
+
+test('cached resources load immediately and survive failed refreshes', async () => {
+  const cache = JSON.stringify({ data: updatedResource, checkedAt: 1700000000000 });
+  const h = createResourceHarness(cache);
+  h.api.loadCachedResources();
+  assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
+  assert.strictEqual(await h.api.updateResources(), false);
+  assert.strictEqual(h.requests.length, 0);
+  h.advance();
+  for (const failure of ['onerror', 'ontimeout', 'onabort']) {
+    const pending = h.api.updateResources();
+    h.requests.at(-1)[failure]();
+    assert.strictEqual(await pending, false);
+    assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
+    assert.strictEqual(h.saved.get(RESOURCE_CACHE_KEY), cache);
+  }
+});
+
+test('a future cache timestamp does not prevent resource refresh', async () => {
+  const h = createResourceHarness(JSON.stringify({ data: updatedResource, checkedAt: 1800000000000 }));
+  h.api.loadCachedResources();
+  const pending = h.api.updateResources();
+  assert.strictEqual(h.requests.length, 1);
+  h.respond();
+  assert.strictEqual(await pending, true);
+});
+
+test('resource requests time out even when the browser ignores the native timeout', async () => {
+  const h = createResourceHarness();
+  const pending = h.api.updateResources();
+  h.timers.values().next().value();
+  assert.strictEqual(await pending, false);
+  assert.strictEqual(h.aborts, 1);
+  assert.strictEqual(h.timers.size, 0);
+  h.respond();
+  assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), { 旧干员: 'char_999998_old' });
+  const retry = h.api.updateResources();
+  h.respond();
+  assert.strictEqual(await retry, true);
+});
+
+test('invalid resources never replace working tables or cache', async () => {
+  const badData = [
+    '{broken',
+    { ...updatedResource, schemaVersion: 2 },
+    { ...updatedResource, operators: [] },
+    { ...updatedResource, operators: [...updatedResource.operators, ...updatedResource.operators] },
+    { ...updatedResource, operators: [{ id: '../secret', name: '无效' }] },
+    { ...updatedResource, operators: [{ id: 'char_999999_hotupdate', name: ' invalid ' }] },
+    { ...updatedResource, moduleTypes: {} },
+    { ...updatedResource, moduleTypes: { char_999999_hotupdate: 'INVALID' } },
+    ' '.repeat(2 * 1024 * 1024 + 1)
+  ];
+  const h = createResourceHarness('{broken');
+  h.api.loadCachedResources();
+  for (const data of badData) {
+    const pending = h.api.updateResources();
+    h.respond(data);
+    assert.strictEqual(await pending, false);
+    assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), { 旧干员: 'char_999998_old' });
+    assert.deepStrictEqual(hostObject(h.sandbox.OP_MODULE_TYPES), { char_999998_old: 'X' });
+    assert.strictEqual(h.saved.get(RESOURCE_CACHE_KEY), '{broken');
+  }
+  const pending = h.api.updateResources();
+  h.respond(updatedResource, 503);
+  assert.strictEqual(await pending, false);
+});
+
+test('resource update remains usable when cache persistence fails', async () => {
+  const h = createResourceHarness();
+  h.sandbox.GM_setValue = () => { throw new Error('storage failed'); };
+  const pending = h.api.updateResources();
+  h.respond();
+  assert.strictEqual(await pending, true);
+  assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
+  assert.strictEqual(h.refreshes, 1);
+});
 
 test('unified settings migrate legacy values, validate types and prefer saved independent choices', () => {
   const savedStorage = new Map(storage);
@@ -244,9 +409,10 @@ function createTestElement(tagName = 'div', text = '') {
         this.children.splice(this.children.indexOf(reference), 0, child);
       }
     },
-    replaceChildren() {
+    replaceChildren(...children) {
       this.children.slice().forEach(child => child.remove());
       text = '';
+      children.forEach(child => this.appendChild(child));
     },
     remove() {
       if (this.parentElement) this.parentElement.children.splice(this.parentElement.children.indexOf(this), 1);
@@ -264,10 +430,54 @@ function createTestElement(tagName = 'div', text = '') {
   node.classList = {
     contains: name => node.className.split(/\s+/).includes(name),
     add: name => { node.className = `${node.className} ${name}`.trim(); },
+    replace: (oldName, newName) => { node.className = node.className.split(/\s+/).map(value => value === oldName ? newName : value).join(' '); },
     remove: name => { node.className = node.className.split(/\s+/).filter(value => value !== name).join(' '); }
   };
   return node;
 }
+
+test('hot updates upgrade rendered unknown operators and keep fallback filtering requirements', () => {
+  const savedAvatars = CONFIG.operatorAvatars;
+  const savedContext = { document: context.document, requestFilterUpdate: context.requestFilterUpdate };
+  let refreshes = 0;
+  const item = createTestElement();
+  item.className = 'prts-op-text';
+  item.title = '测试干员 2';
+  item.setAttribute('aria-label', item.title);
+  item.appendChild(createTestElement('span', '测试干员'));
+  const skill = createTestElement('div', '2');
+  skill.className = 'prts-op-skill';
+  item.appendChild(skill);
+  const group = createTestElement('div', '干员组');
+  group.className = 'prts-op-text';
+  context.document = {
+    createElement: createTestElement,
+    querySelectorAll: () => [item, group].filter(node => node.className === 'prts-op-text')
+  };
+  context.requestFilterUpdate = () => { refreshes++; };
+  OP_ID_MAP.测试干员 = 'char_999999_hotupdate';
+  CONFIG.operatorAvatars = true;
+  try {
+    refreshResourceViews();
+    refreshResourceViews();
+    assert.strictEqual(refreshes, 2);
+    assert.strictEqual(item.className, 'prts-op-item');
+    assert.strictEqual(item.firstChild.alt, '测试干员');
+    assert.strictEqual(item.firstChild.src, '/assets/operator-avatars/webp96/char_999999_hotupdate.webp');
+    assert.strictEqual(item.lastChild, skill);
+    assert.strictEqual(item.attributes.get('aria-label'), '测试干员 2');
+    assert.strictEqual(group.className, 'prts-op-text');
+    const operation = buildFallbackOperation({ querySelectorAll: () => [item] });
+    assert.deepStrictEqual(hostObject(operation.parsedContent.opers), [{ name: '测试干员' }]);
+    CONFIG.operatorAvatars = false;
+    refreshResourceViews();
+    assert.strictEqual(refreshes, 3);
+  } finally {
+    delete OP_ID_MAP.测试干员;
+    CONFIG.operatorAvatars = savedAvatars;
+    Object.assign(context, savedContext);
+  }
+});
 
 test('card badges, avatars, descriptions and links work independently and remain idempotent', () => {
   const savedConfig = { ...CONFIG };

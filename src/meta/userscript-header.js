@@ -17,6 +17,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addValueChangeListener
 // @connect      zonai.skland.com
+// @connect      raw.githubusercontent.com
 // @run-at       document-body
 // @license      GPL-3.0 License
 // ==/UserScript==

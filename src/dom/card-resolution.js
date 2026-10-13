@@ -51,7 +51,7 @@
     }
 
     function buildFallbackOperation(card) {
-        const tags = Array.from(card.querySelectorAll(`${BP_SELECTORS.tag}, .prts-op-text`));
+        const tags = Array.from(card.querySelectorAll(`${BP_SELECTORS.tag}, .prts-op-text, .prts-op-item`));
         const requiredOps = [];
         const requiredGroups = [];
 
@@ -59,7 +59,7 @@
             if (tag.querySelector('h4')) return;
             if (tag.style.display === 'none') return;
 
-            const text = tag.innerText.trim();
+            const text = tag.querySelector('.prts-op-img')?.alt || tag.innerText.trim();
             if (!text || ['普通', '突袭', 'Beta'].includes(text) || text.includes('活动关卡') ||
                 text.includes('|') || text.includes('更新') || text.includes('作者')) return;
 

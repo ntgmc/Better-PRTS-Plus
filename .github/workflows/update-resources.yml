@@ -1,0 +1,49 @@
+name: Update resources
+
+on:
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-resources
+  cancel-in-progress: false
+
+jobs:
+  update:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Update operator and module resources
+        shell: pwsh
+        run: ./tool/update-operator-data.ps1
+
+      - name: Run project checks
+        shell: pwsh
+        run: ./tool/check.ps1
+
+      - name: Commit changed resources
+        shell: bash
+        run: |
+          git add resources/data.json src/data/operators.generated.js src/data/module-types.generated.js tool/operator-data.generated.json tool/operator-data-update-summary.json Better-PRTS-Plus.user.js
+          if git diff --cached --quiet; then
+            echo "Resources are unchanged."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m "chore(resources): update operator and module data"
+          git push origin HEAD:main

@@ -3,6 +3,10 @@
     // =========================================================================
 
     function init() {
+        if (!isSklandHost() && !isPrtsHost()) return;
+        loadCachedResources();
+        updateResources();
+        setInterval(updateResources, RESOURCE_CHECK_INTERVAL_MS);
         if (isSklandHost()) {
             initSklandImportPage();
             return;

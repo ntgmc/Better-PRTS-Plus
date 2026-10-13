@@ -13,6 +13,7 @@ $operatorSourcePath = Join-Path $repoRoot "src/data/operators.generated.js"
 $moduleOutputPath = Join-Path $repoRoot "src/data/module-types.generated.js"
 $operatorDataPath = Join-Path $PSScriptRoot "operator-data.generated.json"
 $operatorAuditPath = Join-Path $PSScriptRoot "operator-data-update-summary.json"
+$resourcePath = Join-Path $repoRoot "resources/data.json"
 $buildScriptPath = Join-Path $PSScriptRoot "build-userscript.ps1"
 $temporaryOperatorPattern = "^char_(50[4-9]|51[0-4]|60[0-9]|61[0-7])_"
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
@@ -115,7 +116,7 @@ function Test-GeneratedOperators {
     }
 }
 
-function ConvertTo-GeneratedModuleSource {
+function ConvertTo-GeneratedModules {
     param([object]$sourceData)
 
     if ($null -eq $sourceData.equipDict) {
@@ -138,7 +139,7 @@ function ConvertTo-GeneratedModuleSource {
     }
     if ($modules.Count -eq 0) { throw "Generated module table is empty" }
 
-    $groups = [ordered]@{}
+    $result = [ordered]@{}
     [string[]]$moduleIds = @($modules.Keys)
     [Array]::Sort($moduleIds, [StringComparer]::Ordinal)
     foreach ($id in $moduleIds) {
@@ -147,6 +148,17 @@ function ConvertTo-GeneratedModuleSource {
             if (-not $modules[$id].ContainsKey($index)) { throw "Missing module slot $index for $id" }
             $types += $modules[$id][$index]
         }
+        $result[$id] = $types
+    }
+    return $result
+}
+
+function ConvertTo-GeneratedModuleSource {
+    param([System.Collections.IDictionary]$modules)
+
+    $groups = [ordered]@{}
+    foreach ($id in $modules.Keys) {
+        $types = $modules[$id]
         if (-not $groups.Contains($types)) { $groups[$types] = [System.Collections.Generic.List[string]]::new() }
         $groups[$types].Add($id.Substring(5))
     }
@@ -345,7 +357,10 @@ if ([string]::IsNullOrWhiteSpace($ModuleSourcePath)) {
 } else {
     $moduleData = Get-Content -LiteralPath $ModuleSourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
-$moduleSource = ConvertTo-GeneratedModuleSource -sourceData $moduleData
+$modules = ConvertTo-GeneratedModules -sourceData $moduleData
+$moduleSource = ConvertTo-GeneratedModuleSource -modules $modules
+$resource = [ordered]@{ schemaVersion = 1; operators = @($operators); moduleTypes = $modules }
+$resourceJson = ($resource | ConvertTo-Json -Depth 6 -Compress) + "`n"
 $auditSummary = New-OperatorAuditSummary -PreviousOperators $previousOperators -CurrentOperators $operators
 
 $json = $operators | ConvertTo-Json -Depth 4
@@ -354,6 +369,8 @@ $json = Convert-NewLine $json "`r`n"
 
 Update-OperatorSourceBlock -operators $operators
 [System.IO.File]::WriteAllText($moduleOutputPath, $moduleSource, $utf8NoBom)
+[System.IO.Directory]::CreateDirectory((Split-Path -Parent $resourcePath)) | Out-Null
+[System.IO.File]::WriteAllText($resourcePath, $resourceJson, $utf8NoBom)
 & $buildScriptPath
 if (($previousOperators | ConvertTo-Json -Compress -Depth 4) -cne ($operators | ConvertTo-Json -Compress -Depth 4) -or
     -not (Test-Path -LiteralPath $operatorAuditPath)) {
@@ -366,4 +383,5 @@ Write-Host "Generated $($operators.Count) operators"
 Write-Host "Updated $operatorDataPath"
 Write-Host "Updated $operatorSourcePath"
 Write-Host "Updated $moduleOutputPath"
+Write-Host "Updated $resourcePath"
 Write-Host "Updated $userScriptPath"

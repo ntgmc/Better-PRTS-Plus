@@ -3,7 +3,6 @@ param(
     [string]$Remote = "origin",
     [string]$Branch,
     [string]$CommitMessage,
-    [switch]$SkipOperatorDataUpdate,
     [switch]$DryRun
 )
 
@@ -22,9 +21,6 @@ if ($PSBoundParameters.ContainsKey("Branch")) {
 }
 if ($PSBoundParameters.ContainsKey("CommitMessage")) {
     $arguments.CommitMessage = $CommitMessage
-}
-if ($SkipOperatorDataUpdate) {
-    $arguments.SkipOperatorDataUpdate = $true
 }
 if ($DryRun) {
     $arguments.DryRun = $true

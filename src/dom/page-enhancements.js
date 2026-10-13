@@ -419,6 +419,26 @@
         }
     }
 
+    function refreshResourceViews() {
+        if (CONFIG.operatorAvatars) {
+            document.querySelectorAll('.prts-op-text').forEach(item => {
+                const name = item.firstChild?.textContent.trim();
+                const id = OP_ID_MAP[name];
+                if (!id) return;
+                const skill = item.querySelector('.prts-op-skill');
+                const img = document.createElement('img');
+                img.src = `/assets/operator-avatars/webp96/${id}.webp`;
+                img.className = 'prts-op-img';
+                img.loading = 'lazy';
+                img.alt = name;
+                item.classList.replace('prts-op-text', 'prts-op-item');
+                item.replaceChildren(img);
+                if (skill) item.appendChild(skill);
+            });
+        }
+        requestFilterUpdate();
+    }
+
     function enhancePopover(portalNode) {
         if (!CONFIG.popoverAvatars) return;
         const content = portalNode.querySelector(BP_SELECTORS.popoverContent);

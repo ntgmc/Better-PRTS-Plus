@@ -68,13 +68,15 @@ function Invoke-RestMethod {
 New-Item -ItemType Directory -Path $testRepo -Force | Out-Null
 Push-Location $testRoot
 try {
-    Copy-Item -Path (Join-Path $repoRoot "src"), (Join-Path $repoRoot "tool") -Destination $testRepo -Recurse
+    Copy-Item -Path (Join-Path $repoRoot "src"), (Join-Path $repoRoot "tool"), (Join-Path $repoRoot "resources") -Destination $testRepo -Recurse
     Copy-Item -Path (Join-Path $repoRoot "README.md"), (Join-Path $repoRoot "Better-PRTS-Plus.user.js") -Destination $testRepo
     Copy-Item -LiteralPath (Join-Path $testRepo "tool/operator-data.generated.json") -Destination $fixturePath
     $upload = Join-Path $testRepo "tool/upload-release.ps1"
     $publish = Join-Path $testRepo "tool/publish-release.ps1"
     $update = Join-Path $testRepo "tool/update-operator-data.ps1"
     $audit = Join-Path $testRepo "tool/operator-data-update-summary.json"
+    $resourcePath = Join-Path $testRepo "resources/data.json"
+    $headerHash = (Get-FileHash -LiteralPath (Join-Path $testRepo "src/meta/userscript-header.js")).Hash
     $auditHash = (Get-FileHash -LiteralPath $audit).Hash
 
     & $update -SourcePath $fixturePath
@@ -82,9 +84,14 @@ try {
     $moduleOutput = Join-Path $testRepo "src/data/module-types.generated.js"
     $moduleHash = (Get-FileHash -LiteralPath $moduleOutput).Hash
     Assert ($moduleHash -eq (Get-FileHash -LiteralPath (Join-Path $repoRoot "src/data/module-types.generated.js")).Hash) "Module regeneration changed the snapshot"
+    $resourceHash = (Get-FileHash -LiteralPath $resourcePath).Hash
+    Assert ($resourceHash -eq (Get-FileHash -LiteralPath (Join-Path $repoRoot "resources/data.json")).Hash) "Resource regeneration changed the snapshot"
+    & $update -SourcePath $fixturePath
+    Assert ((Get-FileHash -LiteralPath $resourcePath).Hash -eq $resourceHash) "Unchanged resources produced a new snapshot"
     $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "INVALID"
     Assert-Failure { & $update -SourcePath $fixturePath } "Unsupported module mapping"
     Assert ((Get-FileHash -LiteralPath $moduleOutput).Hash -eq $moduleHash) "Invalid module data overwrote the snapshot"
+    Assert ((Get-FileHash -LiteralPath $resourcePath).Hash -eq $resourceHash) "Invalid module data overwrote hot-update resources"
     $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "Y"
     $operators = Get-Content -LiteralPath $fixturePath -Raw -Encoding UTF8 | ConvertFrom-Json
     $operators += [pscustomobject]@{ id = "char_999999_release"; name = "Release test operator" }
@@ -92,9 +99,25 @@ try {
     & $update -SourcePath $fixturePath
     $summary = Get-Content -LiteralPath $audit -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert ($summary.addedCount -eq 1) "Changed data did not record the added operator"
+    $resource = Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert ($resource.schemaVersion -eq 1) "Resource schema version is missing"
+    Assert (@($resource.operators | Where-Object id -eq "char_999999_release").Count -eq 1) "New operator is missing from hot-update resources"
+    Assert ($resource.moduleTypes.char_4217_makoto -eq "Y") "Module types are missing from hot-update resources"
+    Assert ((Get-FileHash -LiteralPath (Join-Path $testRepo "src/meta/userscript-header.js")).Hash -eq $headerHash) "Resource update changed userscript version"
     $auditHash = (Get-FileHash -LiteralPath $audit).Hash
     & $update -SourcePath $fixturePath
     Assert ((Get-FileHash -LiteralPath $audit).Hash -eq $auditHash) "Retry lost the previous audit changes"
+    $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "X"
+    & $update -SourcePath $fixturePath
+    $resource = Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    Assert ($resource.moduleTypes.char_4217_makoto -eq "X") "Module-only update did not reach hot-update resources"
+    Assert ((Get-FileHash -LiteralPath $audit).Hash -eq $auditHash) "Module-only update changed the operator audit"
+    $resourceHash = (Get-FileHash -LiteralPath $resourcePath).Hash
+    & $update -SourcePath $fixturePath
+    Assert ((Get-FileHash -LiteralPath $resourcePath).Hash -eq $resourceHash) "Module-only retry changed resources"
+    $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "Y"
+    & $update -SourcePath $fixturePath
+    $releaseUpdateCalls = $operatorUpdateCalls
 
     Invoke-TestGit init -b main | Out-Null
     Invoke-TestGit config user.name "Release test" | Out-Null
@@ -197,6 +220,7 @@ done
     Assert ((Invoke-TestGit tag --list v99.0.4) -eq "") "Dry run created a tag"
     Assert ((Invoke-TestGit diff --cached --name-only) -eq "") "Dry run staged changes"
     Assert ((Get-Location).Path -eq $testRoot) "Release script changed the caller's directory"
+    Assert ($operatorUpdateCalls -eq $releaseUpdateCalls) "Release scripts still fetched resource data online"
     Write-Host "Release retry checks passed."
 } finally {
     Pop-Location
