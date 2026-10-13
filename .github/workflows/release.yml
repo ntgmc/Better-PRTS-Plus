@@ -69,7 +69,6 @@ jobs:
             --title "Better-PRTS-Plus ${{ github.ref_name }}"
             --notes-file RELEASE_NOTES.md
             --verify-tag
-            --fail-on-no-commits
           )
 
           if [ "${{ steps.meta.outputs.prerelease }}" = "true" ]; then
