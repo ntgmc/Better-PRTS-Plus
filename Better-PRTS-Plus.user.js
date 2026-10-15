@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      3.8.1
+// @version      3.8.2
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -1694,12 +1694,6 @@ function createSklandImportCancelledError() {
     body.high-contrast-theme .prts-op-text:hover { background-color: #2d2d30; border-color: #60a5fa; }
 
 
-    /* 关卡徽章 */
-    .prts-level-badge { display: inline-flex; align-items: center; justify-content: center; background-color: #3b82f6; color: #ffffff !important; padding: 2px 8px; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, monospace; font-weight: 700; font-size: 0.95em; margin-right: 8px; border: 1px solid #2563eb; vertical-align: middle; line-height: 1.2; flex-shrink: 0; box-shadow: 0 1px 2px rgba(37, 99, 235, 0.2); }
-    body.dark .prts-level-badge { background-color: #1e3a8a; border-color: #1e40af; color: #e0e7ff !important; box-shadow: none; }
-    body.high-contrast-theme .prts-level-badge { background-color: #1e3a8a; border-color: #1e40af; color: #e0e7ff !important; box-shadow: none; }
-
-
     /* 技能角标与 Grid Popover */
     .bp4-popover2-content, .bp6-popover-content { background-color: #ffffff !important; color: #18181b !important; border: 1px solid #e5e7eb !important; box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important; }
     body.dark .bp4-popover2-content, body.dark .bp6-popover-content { background-color: #30404d !important; color: #f5f8fa !important; border-color: #415262 !important; box-shadow: 0 4px 12px rgba(0,0,0,0.5) !important; }
@@ -1952,6 +1946,7 @@ function createSklandImportCancelledError() {
     /* Unified script UI tokens and accessibility polish */
     :root {
         --prts-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        --prts-font-mono: ui-monospace, SFMono-Regular, monospace;
         --prts-color-primary: #2563eb;
         --prts-color-primary-hover: #1d4ed8;
         --prts-color-primary-soft: #eff6ff;
@@ -2352,12 +2347,30 @@ function createSklandImportCancelledError() {
         outline: none;
     }
     .prts-op-img, .prts-popover-img { border-radius: calc(var(--prts-radius-md) - 1px) !important; }
+    /* Hallmark · component: stage badge · genre: modern-minimal · theme: existing PRTS tokens
+     * states: default; contrast: pass (40–41); pre-emit critique: P4 H5 E5 S5 R5 V4 */
     .prts-level-badge {
-        border-radius: var(--prts-radius-sm) !important;
-        background: var(--prts-color-primary) !important;
-        border-color: var(--prts-color-primary-hover) !important;
-        box-shadow: var(--prts-shadow-sm) !important;
+        display: inline-block;
+        box-sizing: border-box;
+        flex: 0 0 auto;
+        max-width: 50%;
+        margin-inline-end: var(--prts-space-2);
+        padding: 1px var(--prts-space-2);
+        overflow: hidden;
+        border: 1px solid var(--prts-color-ring);
+        border-radius: var(--prts-radius-sm);
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary-hover) !important;
+        font-family: var(--prts-font-mono);
+        font-size: clamp(12px, 0.75em, 14px);
+        font-weight: 700;
+        line-height: 1.4;
+        letter-spacing: 0.02em;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        vertical-align: middle;
     }
+    body.high-contrast-theme .prts-level-badge { border-color: var(--prts-color-primary); }
     [data-prts-tooltip]:hover::after, [data-prts-tooltip]:focus-visible::after {
         background: var(--prts-color-text) !important;
         color: var(--prts-color-surface) !important;
@@ -4727,7 +4740,7 @@ function createSklandImportCancelledError() {
         const heading = cardInner.querySelector(`h4, h5, ${BP_SELECTORS.heading}`);
         const stageCodeSpan = cardInner.querySelector('.flex.whitespace-pre .inline-block.font-bold.my-auto');
 
-        if (heading && !heading.dataset.badgeProcessed) {
+        if (heading && !heading.querySelector('.prts-level-badge')) {
             const titleTextNode = heading.querySelector('.whitespace-nowrap.overflow-hidden.text-ellipsis') || heading;
             let currentText = titleTextNode.innerText.trim();
 
@@ -4762,10 +4775,9 @@ function createSklandImportCancelledError() {
                 const badge = document.createElement('span');
                 badge.className = 'prts-level-badge';
                 badge.innerText = badgeText;
+                badge.title = badgeText;
                 heading.insertBefore(badge, heading.firstChild);
             }
-
-            heading.dataset.badgeProcessed = "true";
         }
     }
 
