@@ -18,6 +18,8 @@
 // @grant        GM_addValueChangeListener
 // @connect      zonai.skland.com
 // @connect      raw.githubusercontent.com
+// @connect      cdn.jsdelivr.net
+// @connect      gcore.jsdelivr.net
 // @run-at       document-body
 // @license      GPL-3.0 License
 // ==/UserScript==

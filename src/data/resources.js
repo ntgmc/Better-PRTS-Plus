@@ -1,4 +1,9 @@
     const RESOURCE_URL = 'https://raw.githubusercontent.com/ntgmc/Better-PRTS-Plus/main/resources/data.json';
+    const RESOURCE_URLS = [
+        RESOURCE_URL,
+        'https://cdn.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json',
+        'https://gcore.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json'
+    ];
     const RESOURCE_CACHE_KEY = 'prts_plus_resources_v1';
     const RESOURCE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
     let resourceUpdatePending = null;
@@ -51,33 +56,46 @@
         if (resourceUpdatePending) return resourceUpdatePending;
         if (Date.now() - resourceCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
         const updateToast = showPrtsToast('资源数据同步中…', 'loading', '已开始同步干员与模组数据，请稍候。', 0);
-        let request;
-        let timeoutId;
-        resourceUpdatePending = new Promise((resolve, reject) => {
-            // anonymous 请求在部分浏览器中忽略内置 timeout。
-            timeoutId = setTimeout(() => {
-                reject(new Error('资源请求超时'));
-                request?.abort();
-            }, 15000);
-            request = GM_xmlhttpRequest({
-                method: 'GET',
-                url: RESOURCE_URL,
-                anonymous: true,
-                timeout: 15000,
-                onload: response => {
-                    try {
-                        if (response.status !== 200) throw new Error(`资源请求失败: HTTP ${response.status}`);
-                        if (typeof response.responseText !== 'string' || response.responseText.length > 2 * 1024 * 1024) {
-                            throw new Error('资源文件过大或为空');
-                        }
-                        resolve(JSON.parse(response.responseText));
-                    } catch (error) { reject(error); }
-                },
-                onerror: () => reject(new Error('资源请求失败')),
-                ontimeout: () => reject(new Error('资源请求超时')),
-                onabort: () => reject(new Error('资源请求已取消'))
+        const cancellations = new Set();
+        // 复用并发择优思路：https://github.com/kkocdko/user-scripts/blob/master/scripts/snippets/snippets.js (Unlicense)
+        resourceUpdatePending = Promise.any(RESOURCE_URLS.map(url => {
+            let request;
+            let timeoutId;
+            let cancel;
+            return new Promise((resolve, reject) => {
+                cancel = () => {
+                    reject(new Error('资源请求已取消'));
+                    request?.abort();
+                };
+                cancellations.add(cancel);
+                // anonymous 请求在部分浏览器中忽略内置 timeout。
+                timeoutId = setTimeout(() => {
+                    reject(new Error('资源请求超时'));
+                    request?.abort();
+                }, 15000);
+                request = GM_xmlhttpRequest({
+                    method: 'GET',
+                    url,
+                    anonymous: true,
+                    timeout: 15000,
+                    onload: response => {
+                        try {
+                            if (response.status !== 200) throw new Error(`资源请求失败: HTTP ${response.status}`);
+                            if (typeof response.responseText !== 'string' || response.responseText.length > 2 * 1024 * 1024) {
+                                throw new Error('资源文件过大或为空');
+                            }
+                            resolve(validateResourceData(JSON.parse(response.responseText)));
+                        } catch (error) { reject(error); }
+                    },
+                    onerror: () => reject(new Error('资源请求失败')),
+                    ontimeout: () => reject(new Error('资源请求超时')),
+                    onabort: () => reject(new Error('资源请求已取消'))
+                });
+            }).finally(() => {
+                clearTimeout(timeoutId);
+                cancellations.delete(cancel);
             });
-        }).then(data => {
+        })).then(data => {
             applyResourceData(data);
             resourceCheckedAt = Date.now();
             let cacheSaved = true;
@@ -93,10 +111,11 @@
             return true;
         }).catch(error => {
             console.warn('[Better PRTS] 资源更新失败，继续使用已有资源', error);
-            updateToast('资源数据同步失败', 'error', `${error.message || '请稍后重试。'}\n继续使用已有数据。`);
+            const detail = error instanceof AggregateError ? '所有资源下载源均不可用，请稍后重试。' : error.message || '请稍后重试。';
+            updateToast('资源数据同步失败', 'error', `${detail}\n继续使用已有数据。`);
             return false;
         }).finally(() => {
-            clearTimeout(timeoutId);
+            cancellations.forEach(cancel => cancel());
             resourceUpdatePending = null;
         });
         return resourceUpdatePending;

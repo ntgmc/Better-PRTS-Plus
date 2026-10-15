@@ -190,6 +190,7 @@ function createResourceHarness(cache = null) {
   let now = 1700000000000;
   let refreshes = 0;
   let aborts = 0;
+  const abortedUrls = [];
   const timers = new Map();
   const requests = [];
   const toasts = [];
@@ -211,19 +212,22 @@ function createResourceHarness(cache = null) {
     clearTimeout: id => timers.delete(id),
     GM_getValue: (key, fallback) => saved.has(key) ? saved.get(key) : fallback,
     GM_setValue: (key, value) => saved.set(key, value),
-    GM_xmlhttpRequest: request => { requests.push(request); return { abort: () => { aborts++; } }; }
+    GM_xmlhttpRequest: request => {
+      requests.push(request);
+      return { abort: () => { aborts++; abortedUrls.push(request.url); } };
+    }
   };
   if (cache !== null) saved.set(RESOURCE_CACHE_KEY, cache);
   vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/data/resources.js'), 'utf8') + `
-    globalThis.api = { loadCachedResources, updateResources, applyResourceData };
+    globalThis.api = { RESOURCE_URLS, loadCachedResources, updateResources, applyResourceData };
   `, sandbox);
   return {
-    sandbox, requests, saved, timers, toasts,
+    sandbox, requests, saved, timers, toasts, abortedUrls,
     get aborts() { return aborts; },
     api: sandbox.api,
     get refreshes() { return refreshes; },
     advance: () => { now += 60 * 60 * 1000; },
-    respond: (data = updatedResource, status = 200) => requests.at(-1).onload({
+    respond: (data = updatedResource, status = 200, request = requests.at(-1)) => request.onload({
       status, responseText: typeof data === 'string' ? data : JSON.stringify(data)
     })
   };
@@ -241,9 +245,14 @@ test('resource hot update replaces live tables, persists cache and throttles dup
   const h = createResourceHarness();
   const pending = h.api.updateResources();
   assert.strictEqual(h.api.updateResources(), pending);
-  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.requests.length, h.api.RESOURCE_URLS.length);
   assert.strictEqual(h.requests[0].url, RESOURCE_URL);
-  assert.strictEqual(h.requests[0].anonymous, true);
+  assert.deepStrictEqual(h.requests.map(request => request.url), hostObject(h.api.RESOURCE_URLS));
+  const header = fs.readFileSync(path.join(repoRoot, 'src/meta/userscript-header.js'), 'utf8');
+  for (const request of h.requests) {
+    assert.strictEqual(request.anonymous, true);
+    assert(header.includes(`// @connect      ${new URL(request.url).hostname}`));
+  }
   assert.strictEqual(h.toasts.length, 1);
   assert.strictEqual(h.toasts[0][0][1], 'loading');
   assert.strictEqual(h.toasts[0][0][3], 0);
@@ -254,15 +263,49 @@ test('resource hot update replaces live tables, persists cache and throttles dup
   assert.deepStrictEqual(JSON.parse(h.saved.get(RESOURCE_CACHE_KEY)).data, updatedResource);
   assert.strictEqual(h.refreshes, 1);
   assert.strictEqual(h.timers.size, 0);
+  assert.deepStrictEqual(h.abortedUrls, h.requests.slice(0, -1).map(request => request.url));
+  // A cancelled request may still deliver a late response; it must not overwrite the winner.
+  h.respond(resourceSnapshot, 200, h.requests[0]);
+  assert.strictEqual(h.refreshes, 1);
+  assert.deepStrictEqual(JSON.parse(h.saved.get(RESOURCE_CACHE_KEY)).data, updatedResource);
   assert.strictEqual(h.toasts[0].at(-1)[1], 'success');
   assert.strictEqual(await h.api.updateResources(), false);
   assert.strictEqual(h.toasts.length, 1);
-  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.requests.length, h.api.RESOURCE_URLS.length);
   h.advance();
   const next = h.api.updateResources();
   h.respond({ ...updatedResource, moduleTypes: { char_999999_hotupdate: 'YXA' } });
   assert.strictEqual(await next, true);
   assert.strictEqual(h.sandbox.OP_MODULE_TYPES.char_999999_hotupdate, 'YXA');
+});
+
+test('invalid or unavailable sources do not block a valid mirror or origin', async () => {
+  for (const winner of [0, 1, 2]) {
+    const h = createResourceHarness();
+    const pending = h.api.updateResources();
+    const failures = h.requests.filter((_, index) => index !== winner);
+    h.respond({ ...updatedResource, schemaVersion: 2 }, 200, failures[0]);
+    failures[1].onerror();
+    h.respond(updatedResource, 200, h.requests[winner]);
+    assert.strictEqual(await pending, true);
+    assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
+    assert.strictEqual(h.refreshes, 1);
+    assert.strictEqual(h.timers.size, 0);
+  }
+});
+
+test('one source throwing on request startup does not block other mirrors', async () => {
+  const h = createResourceHarness();
+  const request = h.sandbox.GM_xmlhttpRequest;
+  h.sandbox.GM_xmlhttpRequest = options => {
+    if (options.url === RESOURCE_URL) throw new Error('source unavailable');
+    return request(options);
+  };
+  const pending = h.api.updateResources();
+  h.respond();
+  assert.strictEqual(await pending, true);
+  assert.strictEqual(h.requests.length, h.api.RESOURCE_URLS.length - 1);
+  assert.strictEqual(h.timers.size, 0);
 });
 
 test('cached resources load immediately and survive failed refreshes', async () => {
@@ -276,12 +319,14 @@ test('cached resources load immediately and survive failed refreshes', async () 
   h.advance();
   for (const failure of ['onerror', 'ontimeout', 'onabort']) {
     const pending = h.api.updateResources();
-    h.requests.at(-1)[failure]();
+    h.requests.slice(-h.api.RESOURCE_URLS.length).forEach(request => request[failure]());
     assert.strictEqual(await pending, false);
     assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
     assert.strictEqual(h.saved.get(RESOURCE_CACHE_KEY), cache);
     assert.strictEqual(h.toasts.at(-1).at(-1)[1], 'error');
+    assert(h.toasts.at(-1).at(-1)[2].includes('所有资源下载源均不可用'));
     assert(h.toasts.at(-1).at(-1)[2].includes('继续使用已有数据'));
+    assert.strictEqual(h.timers.size, 0);
   }
 });
 
@@ -289,7 +334,7 @@ test('a future cache timestamp does not prevent resource refresh', async () => {
   const h = createResourceHarness(JSON.stringify({ data: updatedResource, checkedAt: 1800000000000 }));
   h.api.loadCachedResources();
   const pending = h.api.updateResources();
-  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.requests.length, h.api.RESOURCE_URLS.length);
   h.respond();
   assert.strictEqual(await pending, true);
 });
@@ -297,9 +342,9 @@ test('a future cache timestamp does not prevent resource refresh', async () => {
 test('resource requests time out even when the browser ignores the native timeout', async () => {
   const h = createResourceHarness();
   const pending = h.api.updateResources();
-  h.timers.values().next().value();
+  [...h.timers.values()].forEach(callback => callback());
   assert.strictEqual(await pending, false);
-  assert.strictEqual(h.aborts, 1);
+  assert.strictEqual(h.aborts, h.api.RESOURCE_URLS.length);
   assert.strictEqual(h.timers.size, 0);
   h.respond();
   assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), { 旧干员: 'char_999998_old' });
@@ -324,14 +369,14 @@ test('invalid resources never replace working tables or cache', async () => {
   h.api.loadCachedResources();
   for (const data of badData) {
     const pending = h.api.updateResources();
-    h.respond(data);
+    h.requests.slice(-h.api.RESOURCE_URLS.length).forEach(request => h.respond(data, 200, request));
     assert.strictEqual(await pending, false);
     assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), { 旧干员: 'char_999998_old' });
     assert.deepStrictEqual(hostObject(h.sandbox.OP_MODULE_TYPES), { char_999998_old: 'X' });
     assert.strictEqual(h.saved.get(RESOURCE_CACHE_KEY), '{broken');
   }
   const pending = h.api.updateResources();
-  h.respond(updatedResource, 503);
+  h.requests.slice(-h.api.RESOURCE_URLS.length).forEach(request => h.respond(updatedResource, 503, request));
   assert.strictEqual(await pending, false);
 });
 
