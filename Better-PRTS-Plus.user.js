@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      3.8.0
+// @version      3.8.1
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -18,6 +18,8 @@
 // @grant        GM_addValueChangeListener
 // @connect      zonai.skland.com
 // @connect      raw.githubusercontent.com
+// @connect      cdn.jsdelivr.net
+// @connect      gcore.jsdelivr.net
 // @run-at       document-body
 // @license      GPL-3.0 License
 // ==/UserScript==
@@ -203,6 +205,11 @@ Object.entries({
     A: `4230_mcnist`
 }).forEach(([types, ids]) => ids.split(' ').forEach(id => { OP_MODULE_TYPES[`char_${id}`] = types; }));
     const RESOURCE_URL = 'https://raw.githubusercontent.com/ntgmc/Better-PRTS-Plus/main/resources/data.json';
+    const RESOURCE_URLS = [
+        RESOURCE_URL,
+        'https://cdn.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json',
+        'https://gcore.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json'
+    ];
     const RESOURCE_CACHE_KEY = 'prts_plus_resources_v1';
     const RESOURCE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
     let resourceUpdatePending = null;
@@ -254,47 +261,67 @@ Object.entries({
     function updateResources() {
         if (resourceUpdatePending) return resourceUpdatePending;
         if (Date.now() - resourceCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
-        let request;
-        let timeoutId;
-        resourceUpdatePending = new Promise((resolve, reject) => {
-            // anonymous 请求在部分浏览器中忽略内置 timeout。
-            timeoutId = setTimeout(() => {
-                reject(new Error('资源请求超时'));
-                request?.abort();
-            }, 15000);
-            request = GM_xmlhttpRequest({
-                method: 'GET',
-                url: RESOURCE_URL,
-                anonymous: true,
-                timeout: 15000,
-                onload: response => {
-                    try {
-                        if (response.status !== 200) throw new Error(`资源请求失败: HTTP ${response.status}`);
-                        if (typeof response.responseText !== 'string' || response.responseText.length > 2 * 1024 * 1024) {
-                            throw new Error('资源文件过大或为空');
-                        }
-                        resolve(JSON.parse(response.responseText));
-                    } catch (error) { reject(error); }
-                },
-                onerror: () => reject(new Error('资源请求失败')),
-                ontimeout: () => reject(new Error('资源请求超时')),
-                onabort: () => reject(new Error('资源请求已取消'))
+        const updateToast = showPrtsToast('资源数据同步中…', 'loading', '已开始同步干员与模组数据，请稍候。', 0);
+        const cancellations = new Set();
+        // 复用并发择优思路：https://github.com/kkocdko/user-scripts/blob/master/scripts/snippets/snippets.js (Unlicense)
+        resourceUpdatePending = Promise.any(RESOURCE_URLS.map(url => {
+            let request;
+            let timeoutId;
+            let cancel;
+            return new Promise((resolve, reject) => {
+                cancel = () => {
+                    reject(new Error('资源请求已取消'));
+                    request?.abort();
+                };
+                cancellations.add(cancel);
+                // anonymous 请求在部分浏览器中忽略内置 timeout。
+                timeoutId = setTimeout(() => {
+                    reject(new Error('资源请求超时'));
+                    request?.abort();
+                }, 15000);
+                request = GM_xmlhttpRequest({
+                    method: 'GET',
+                    url,
+                    anonymous: true,
+                    timeout: 15000,
+                    onload: response => {
+                        try {
+                            if (response.status !== 200) throw new Error(`资源请求失败: HTTP ${response.status}`);
+                            if (typeof response.responseText !== 'string' || response.responseText.length > 2 * 1024 * 1024) {
+                                throw new Error('资源文件过大或为空');
+                            }
+                            resolve(validateResourceData(JSON.parse(response.responseText)));
+                        } catch (error) { reject(error); }
+                    },
+                    onerror: () => reject(new Error('资源请求失败')),
+                    ontimeout: () => reject(new Error('资源请求超时')),
+                    onabort: () => reject(new Error('资源请求已取消'))
+                });
+            }).finally(() => {
+                clearTimeout(timeoutId);
+                cancellations.delete(cancel);
             });
-        }).then(data => {
+        })).then(data => {
             applyResourceData(data);
             resourceCheckedAt = Date.now();
+            let cacheSaved = true;
             try {
                 GM_setValue(RESOURCE_CACHE_KEY, JSON.stringify({ checkedAt: resourceCheckedAt, data }));
             } catch (error) {
+                cacheSaved = false;
                 console.warn('[Better PRTS] 资源缓存保存失败，本页已更新', error);
             }
             if (isPrtsHost()) refreshResourceViews();
+            updateToast(cacheSaved ? '资源数据同步成功' : '资源数据已更新，缓存保存失败', cacheSaved ? 'success' : 'warning',
+                cacheSaved ? '干员与模组数据已更新。' : '本页已使用最新数据，下次打开页面将重新同步。');
             return true;
         }).catch(error => {
             console.warn('[Better PRTS] 资源更新失败，继续使用已有资源', error);
+            const detail = error instanceof AggregateError ? '所有资源下载源均不可用，请稍后重试。' : error.message || '请稍后重试。';
+            updateToast('资源数据同步失败', 'error', `${detail}\n继续使用已有数据。`);
             return false;
         }).finally(() => {
-            clearTimeout(timeoutId);
+            cancellations.forEach(cancel => cancel());
             resourceUpdatePending = null;
         });
         return resourceUpdatePending;
@@ -1881,15 +1908,15 @@ function createSklandImportCancelledError() {
     }
 
     /* 9. 悬浮球 & 控制面板 */
-    #prts-float-container { position: fixed; z-index: 9999; display: flex; align-items: center; opacity: 0.6; user-select: none; transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-    #prts-float-container:hover, #prts-float-container.prts-float-open { opacity: 1; }
+    #prts-float-container { position: fixed; z-index: 9999; display: flex; align-items: center; opacity: 0.9; user-select: none; transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+    #prts-float-container:hover, #prts-float-container:focus-within, #prts-float-container.prts-float-open { opacity: 1; }
     #prts-float-container.is-dragging { opacity: 1; transition: none !important; }
     #prts-float-container.is-snapping { transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-    #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 12px)); }
-    #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 12px)); }
+    #prts-float-container.snap-right:not(:hover):not(:focus-within):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 16px)); }
+    #prts-float-container.snap-left:not(:hover):not(:focus-within):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 16px)); }
 
     .prts-float-btn { width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none; border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2; }
-    .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
+    .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; opacity: 0; }
     #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
     body.dark .prts-float-btn { background-color: #30404d; border-color: #415262; color: #f5f8fa; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
     body.high-contrast-theme .prts-float-btn { background-color: #2d2d30; border-color: #38383b; color: #e0e0e0; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
@@ -2358,6 +2385,10 @@ function createSklandImportCancelledError() {
         box-shadow: var(--prts-shadow-md) !important;
     }
     .prts-toast-detail { color: var(--prts-color-text-muted) !important; }
+    .prts-toast.loading { border-inline-start: 3px solid var(--prts-color-primary) !important; }
+    .prts-toast.success { border-inline-start: 3px solid var(--prts-color-success) !important; }
+    .prts-toast.warning { border-inline-start: 3px solid var(--prts-color-warning) !important; }
+    .prts-toast.error { border-inline-start: 3px solid var(--prts-color-danger) !important; }
     #prts-import-dialog-backdrop, #prts-modal-backdrop {
         background: rgba(15, 23, 42, 0.52) !important;
         font-family: var(--prts-font-sans) !important;
@@ -2441,12 +2472,25 @@ function createSklandImportCancelledError() {
     .prts-float-btn {
         padding: 0;
         font: inherit;
-        border-color: var(--prts-color-border-soft) !important;
-        background: var(--prts-color-surface) !important;
+        border-color: var(--prts-color-border) !important;
+        background: var(--prts-color-surface-muted) !important;
         color: var(--prts-color-text-muted) !important;
         box-shadow: var(--prts-shadow-sm) !important;
         touch-action: none;
     }
+    .prts-float-btn::after {
+        content: '';
+        position: absolute;
+        left: 5px;
+        width: 3px;
+        height: 16px;
+        border-radius: var(--prts-radius-sm);
+        background: var(--prts-color-text-subtle);
+        pointer-events: none;
+    }
+    #prts-float-container.snap-left .prts-float-btn::after { left: auto; right: 5px; }
+    #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn::after { opacity: 0; }
+    #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn svg { opacity: 1; }
     .prts-settings-panel {
         width: min(292px, calc(100vw - 72px)) !important;
         max-height: min(560px, calc(100vh - 24px));
@@ -2838,29 +2882,35 @@ function createSklandImportCancelledError() {
         return container;
     }
 
-    function showPrtsToast(message, type = 'info', detail = '') {
+    function showPrtsToast(message, type = 'info', detail = '', duration = 4000) {
         const container = ensurePrtsToastContainer();
-        const toastType = ['success', 'warning', 'error'].includes(type) ? type : '';
         const toast = document.createElement('div');
-        toast.className = `prts-toast${toastType ? ` ${toastType}` : ''}`;
-
         const title = document.createElement('div');
         title.className = 'prts-toast-title';
-        title.textContent = message;
         toast.appendChild(title);
 
-        if (detail) {
-            const detailEl = document.createElement('div');
-            detailEl.className = 'prts-toast-detail';
-            detailEl.textContent = detail;
-            toast.appendChild(detailEl);
-        }
-
+        const detailEl = document.createElement('div');
+        detailEl.className = 'prts-toast-detail';
+        toast.appendChild(detailEl);
         container.appendChild(toast);
-        window.setTimeout(() => {
-            toast.classList.add('is-leaving');
-            window.setTimeout(() => toast.remove(), 220);
-        }, 4000);
+
+        let timeoutId;
+        const update = (nextMessage, nextType = 'info', nextDetail = '', nextDuration = 4000) => {
+            window.clearTimeout(timeoutId);
+            const toastType = ['loading', 'success', 'warning', 'error'].includes(nextType) ? nextType : '';
+            toast.className = `prts-toast${toastType ? ` ${toastType}` : ''}`;
+            title.textContent = nextMessage;
+            detailEl.textContent = nextDetail;
+            detailEl.hidden = !nextDetail;
+            if (nextDuration > 0) {
+                timeoutId = window.setTimeout(() => {
+                    toast.classList.add('is-leaving');
+                    window.setTimeout(() => toast.remove(), 220);
+                }, nextDuration);
+            }
+        };
+        update(message, type, detail, duration);
+        return update;
     }
 
     function createSvgIconFromPath(pathData, viewBox = '0 0 16 16') {
@@ -5316,26 +5366,36 @@ function createSklandImportCancelledError() {
         body.appendChild(link);
 
         importBtn.onclick = async () => {
+            const accountId = targetAccountId;
+            const progressText = `正在读取森空岛数据，并导入到 ${getAccountLabel(accountId)}。`;
+            const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
             importBtn.disabled = true;
-            importBtn.textContent = '读取中...';
-            setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, 'loading');
+            importBtn.textContent = '同步中…';
+            accountButtons.forEach(button => { button.disabled = true; });
+            setSklandPanelStatus(status, progressText, 'loading');
             try {
-                const summary = await importSklandOperatorsToAccount(targetAccountId, {
-                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, targetAccountId)
+                const summary = await importSklandOperatorsToAccount(accountId, {
+                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
                 });
                 targetAccountId = summary.accountId;
                 renderSklandAccountButtons(accountButtons, targetAccountId);
-                setSklandPanelStatus(status, formatSklandImportSummary(summary), 'success');
+                const detail = formatSklandImportSummary(summary);
+                setSklandPanelStatus(status, detail, 'success');
+                updateToast('森空岛数据同步成功', 'success', detail);
             } catch (error) {
                 if (isSklandImportCancelledError(error)) {
                     setSklandPanelStatus(status, '已取消角色选择，未修改账号数据。', '');
+                    updateToast('已取消森空岛数据同步', 'info', '未修改账号数据。');
                     return;
                 }
                 console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
-                setSklandPanelStatus(status, error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。', 'error');
+                const detail = error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。';
+                setSklandPanelStatus(status, detail, 'error');
+                updateToast('森空岛数据同步失败', 'error', detail);
             } finally {
                 importBtn.disabled = false;
                 importBtn.textContent = '读取并导入干员';
+                accountButtons.forEach(button => { button.disabled = false; });
             }
         };
 
