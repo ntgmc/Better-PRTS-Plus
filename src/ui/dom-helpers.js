@@ -45,29 +45,35 @@
         return container;
     }
 
-    function showPrtsToast(message, type = 'info', detail = '') {
+    function showPrtsToast(message, type = 'info', detail = '', duration = 4000) {
         const container = ensurePrtsToastContainer();
-        const toastType = ['success', 'warning', 'error'].includes(type) ? type : '';
         const toast = document.createElement('div');
-        toast.className = `prts-toast${toastType ? ` ${toastType}` : ''}`;
-
         const title = document.createElement('div');
         title.className = 'prts-toast-title';
-        title.textContent = message;
         toast.appendChild(title);
 
-        if (detail) {
-            const detailEl = document.createElement('div');
-            detailEl.className = 'prts-toast-detail';
-            detailEl.textContent = detail;
-            toast.appendChild(detailEl);
-        }
-
+        const detailEl = document.createElement('div');
+        detailEl.className = 'prts-toast-detail';
+        toast.appendChild(detailEl);
         container.appendChild(toast);
-        window.setTimeout(() => {
-            toast.classList.add('is-leaving');
-            window.setTimeout(() => toast.remove(), 220);
-        }, 4000);
+
+        let timeoutId;
+        const update = (nextMessage, nextType = 'info', nextDetail = '', nextDuration = 4000) => {
+            window.clearTimeout(timeoutId);
+            const toastType = ['loading', 'success', 'warning', 'error'].includes(nextType) ? nextType : '';
+            toast.className = `prts-toast${toastType ? ` ${toastType}` : ''}`;
+            title.textContent = nextMessage;
+            detailEl.textContent = nextDetail;
+            detailEl.hidden = !nextDetail;
+            if (nextDuration > 0) {
+                timeoutId = window.setTimeout(() => {
+                    toast.classList.add('is-leaving');
+                    window.setTimeout(() => toast.remove(), 220);
+                }, nextDuration);
+            }
+        };
+        update(message, type, detail, duration);
+        return update;
     }
 
     function createSvgIconFromPath(pathData, viewBox = '0 0 16 16') {

@@ -50,6 +50,7 @@
     function updateResources() {
         if (resourceUpdatePending) return resourceUpdatePending;
         if (Date.now() - resourceCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
+        const updateToast = showPrtsToast('资源数据同步中…', 'loading', '已开始同步干员与模组数据，请稍候。', 0);
         let request;
         let timeoutId;
         resourceUpdatePending = new Promise((resolve, reject) => {
@@ -79,15 +80,20 @@
         }).then(data => {
             applyResourceData(data);
             resourceCheckedAt = Date.now();
+            let cacheSaved = true;
             try {
                 GM_setValue(RESOURCE_CACHE_KEY, JSON.stringify({ checkedAt: resourceCheckedAt, data }));
             } catch (error) {
+                cacheSaved = false;
                 console.warn('[Better PRTS] 资源缓存保存失败，本页已更新', error);
             }
             if (isPrtsHost()) refreshResourceViews();
+            updateToast(cacheSaved ? '资源数据同步成功' : '资源数据已更新，缓存保存失败', cacheSaved ? 'success' : 'warning',
+                cacheSaved ? '干员与模组数据已更新。' : '本页已使用最新数据，下次打开页面将重新同步。');
             return true;
         }).catch(error => {
             console.warn('[Better PRTS] 资源更新失败，继续使用已有资源', error);
+            updateToast('资源数据同步失败', 'error', `${error.message || '请稍后重试。'}\n继续使用已有数据。`);
             return false;
         }).finally(() => {
             clearTimeout(timeoutId);

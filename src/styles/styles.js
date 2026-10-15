@@ -368,15 +368,15 @@
     }
 
     /* 9. 悬浮球 & 控制面板 */
-    #prts-float-container { position: fixed; z-index: 9999; display: flex; align-items: center; opacity: 0.6; user-select: none; transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-    #prts-float-container:hover, #prts-float-container.prts-float-open { opacity: 1; }
+    #prts-float-container { position: fixed; z-index: 9999; display: flex; align-items: center; opacity: 0.9; user-select: none; transition: opacity 0.3s, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+    #prts-float-container:hover, #prts-float-container:focus-within, #prts-float-container.prts-float-open { opacity: 1; }
     #prts-float-container.is-dragging { opacity: 1; transition: none !important; }
     #prts-float-container.is-snapping { transition: all 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
-    #prts-float-container.snap-right:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 12px)); }
-    #prts-float-container.snap-left:not(:hover):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 12px)); }
+    #prts-float-container.snap-right:not(:hover):not(:focus-within):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(100% - 16px)); }
+    #prts-float-container.snap-left:not(:hover):not(:focus-within):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 16px)); }
 
     .prts-float-btn { width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none; border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2; }
-    .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; }
+    .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; opacity: 0; }
     #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
     body.dark .prts-float-btn { background-color: #30404d; border-color: #415262; color: #f5f8fa; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
     body.high-contrast-theme .prts-float-btn { background-color: #2d2d30; border-color: #38383b; color: #e0e0e0; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
@@ -845,6 +845,10 @@
         box-shadow: var(--prts-shadow-md) !important;
     }
     .prts-toast-detail { color: var(--prts-color-text-muted) !important; }
+    .prts-toast.loading { border-inline-start: 3px solid var(--prts-color-primary) !important; }
+    .prts-toast.success { border-inline-start: 3px solid var(--prts-color-success) !important; }
+    .prts-toast.warning { border-inline-start: 3px solid var(--prts-color-warning) !important; }
+    .prts-toast.error { border-inline-start: 3px solid var(--prts-color-danger) !important; }
     #prts-import-dialog-backdrop, #prts-modal-backdrop {
         background: rgba(15, 23, 42, 0.52) !important;
         font-family: var(--prts-font-sans) !important;
@@ -928,12 +932,25 @@
     .prts-float-btn {
         padding: 0;
         font: inherit;
-        border-color: var(--prts-color-border-soft) !important;
-        background: var(--prts-color-surface) !important;
+        border-color: var(--prts-color-border) !important;
+        background: var(--prts-color-surface-muted) !important;
         color: var(--prts-color-text-muted) !important;
         box-shadow: var(--prts-shadow-sm) !important;
         touch-action: none;
     }
+    .prts-float-btn::after {
+        content: '';
+        position: absolute;
+        left: 5px;
+        width: 3px;
+        height: 16px;
+        border-radius: var(--prts-radius-sm);
+        background: var(--prts-color-text-subtle);
+        pointer-events: none;
+    }
+    #prts-float-container.snap-left .prts-float-btn::after { left: auto; right: 5px; }
+    #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn::after { opacity: 0; }
+    #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn svg { opacity: 1; }
     .prts-settings-panel {
         width: min(292px, calc(100vw - 72px)) !important;
         max-height: min(560px, calc(100vh - 24px));

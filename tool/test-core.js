@@ -192,6 +192,7 @@ function createResourceHarness(cache = null) {
   let aborts = 0;
   const timers = new Map();
   const requests = [];
+  const toasts = [];
   const saved = new Map();
   const sandbox = {
     OP_ID_MAP: { 旧干员: 'char_999998_old' },
@@ -199,6 +200,11 @@ function createResourceHarness(cache = null) {
     isPlainRecord: value => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
     isPrtsHost: () => true,
     refreshResourceViews: () => { refreshes++; },
+    showPrtsToast: (...args) => {
+      const toast = [args];
+      toasts.push(toast);
+      return (...next) => toast.push(next);
+    },
     console: { warn() {} },
     Date: { now: () => now },
     setTimeout: callback => { const id = Symbol(); timers.set(id, callback); return id; },
@@ -212,7 +218,7 @@ function createResourceHarness(cache = null) {
     globalThis.api = { loadCachedResources, updateResources, applyResourceData };
   `, sandbox);
   return {
-    sandbox, requests, saved, timers,
+    sandbox, requests, saved, timers, toasts,
     get aborts() { return aborts; },
     api: sandbox.api,
     get refreshes() { return refreshes; },
@@ -238,6 +244,9 @@ test('resource hot update replaces live tables, persists cache and throttles dup
   assert.strictEqual(h.requests.length, 1);
   assert.strictEqual(h.requests[0].url, RESOURCE_URL);
   assert.strictEqual(h.requests[0].anonymous, true);
+  assert.strictEqual(h.toasts.length, 1);
+  assert.strictEqual(h.toasts[0][0][1], 'loading');
+  assert.strictEqual(h.toasts[0][0][3], 0);
   h.respond();
   assert.strictEqual(await pending, true);
   assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), { 测试干员: 'char_999999_hotupdate' });
@@ -245,7 +254,9 @@ test('resource hot update replaces live tables, persists cache and throttles dup
   assert.deepStrictEqual(JSON.parse(h.saved.get(RESOURCE_CACHE_KEY)).data, updatedResource);
   assert.strictEqual(h.refreshes, 1);
   assert.strictEqual(h.timers.size, 0);
+  assert.strictEqual(h.toasts[0].at(-1)[1], 'success');
   assert.strictEqual(await h.api.updateResources(), false);
+  assert.strictEqual(h.toasts.length, 1);
   assert.strictEqual(h.requests.length, 1);
   h.advance();
   const next = h.api.updateResources();
@@ -261,6 +272,7 @@ test('cached resources load immediately and survive failed refreshes', async () 
   assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
   assert.strictEqual(await h.api.updateResources(), false);
   assert.strictEqual(h.requests.length, 0);
+  assert.strictEqual(h.toasts.length, 0);
   h.advance();
   for (const failure of ['onerror', 'ontimeout', 'onabort']) {
     const pending = h.api.updateResources();
@@ -268,6 +280,8 @@ test('cached resources load immediately and survive failed refreshes', async () 
     assert.strictEqual(await pending, false);
     assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
     assert.strictEqual(h.saved.get(RESOURCE_CACHE_KEY), cache);
+    assert.strictEqual(h.toasts.at(-1).at(-1)[1], 'error');
+    assert(h.toasts.at(-1).at(-1)[2].includes('继续使用已有数据'));
   }
 });
 
@@ -329,6 +343,8 @@ test('resource update remains usable when cache persistence fails', async () => 
   assert.strictEqual(await pending, true);
   assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
   assert.strictEqual(h.refreshes, 1);
+  assert.strictEqual(h.toasts[0].at(-1)[1], 'warning');
+  assert(h.toasts[0].at(-1)[0].includes('缓存保存失败'));
 });
 
 test('unified settings migrate legacy values, validate types and prefer saved independent choices', () => {
@@ -430,11 +446,98 @@ function createTestElement(tagName = 'div', text = '') {
   node.classList = {
     contains: name => node.className.split(/\s+/).includes(name),
     add: name => { node.className = `${node.className} ${name}`.trim(); },
+    toggle: (name, force = !node.classList.contains(name)) => {
+      if (force) node.classList.add(name);
+      else node.classList.remove(name);
+      return force;
+    },
     replace: (oldName, newName) => { node.className = node.className.split(/\s+/).map(value => value === oldName ? newName : value).join(' '); },
     remove: name => { node.className = node.className.split(/\s+/).filter(value => value !== name).join(' '); }
   };
   return node;
 }
+
+test('sync toasts persist while loading, update in place and dismiss after completion', () => {
+  const body = createTestElement('body');
+  const timers = new Map();
+  const sandbox = {
+    document: {
+      body, createElement: createTestElement,
+      getElementById: id => body.children.find(child => child.id === id)
+    },
+    window: {
+      setTimeout: (callback, delay) => { const id = Symbol(); timers.set(id, { callback, delay }); return id; },
+      clearTimeout: id => timers.delete(id)
+    }
+  };
+  vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/ui/dom-helpers.js'), 'utf8'), sandbox);
+  const update = sandbox.showPrtsToast('同步中', 'loading', '正在读取数据', 0);
+  const container = body.firstChild;
+  const toast = container.firstChild;
+  assert.strictEqual(container.attributes.get('aria-live'), 'polite');
+  assert.strictEqual(toast.className, 'prts-toast loading');
+  assert.strictEqual(timers.size, 0);
+  update('同步成功', 'success', '已更新数据');
+  assert.strictEqual(container.children.length, 1);
+  assert.strictEqual(container.firstChild, toast);
+  assert.strictEqual(toast.className, 'prts-toast success');
+  assert.strictEqual(toast.firstChild.textContent, '同步成功');
+  assert.strictEqual(toast.lastChild.textContent, '已更新数据');
+  const dismiss = [...timers.values()][0];
+  assert.strictEqual(dismiss.delay, 4000);
+  timers.clear();
+  dismiss.callback();
+  assert(toast.classList.contains('is-leaving'));
+  const remove = [...timers.values()][0];
+  assert.strictEqual(remove.delay, 220);
+  remove.callback();
+  assert.strictEqual(container.children.length, 0);
+});
+
+test('Skland sync reports success, failure and cancellation and restores controls', async () => {
+  for (const outcome of ['success', 'error', 'cancel']) {
+    const body = createTestElement('body');
+    const messages = [];
+    let complete;
+    const sandbox = {
+      document: {
+        body, createElement: createTestElement,
+        getElementById: id => body.children.find(child => child.id === id)
+      },
+      activeAccountId: '1', ACCOUNT_IDS: ['1', '2', '3'],
+      normalizeAccountId: id => id,
+      getAccountLabel: id => `账号 ${id}`,
+      formatAccountSklandTitle: () => '',
+      getAccountSklandImportSummary: () => null,
+      createPrtsIcon: () => createTestElement('svg'),
+      showPrtsToast: (...args) => { messages.push(args); return (...next) => messages.push(next); },
+      importSklandOperatorsToAccount: () => new Promise((resolve, reject) => {
+        complete = () => outcome === 'success' ? resolve({ accountId: '1' }) : reject(new Error(outcome));
+      }),
+      isSklandImportCancelledError: error => error.message === 'cancel',
+      console: { error() {} }
+    };
+    vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/ui/panels.js'), 'utf8'), sandbox);
+    sandbox.formatSklandImportSummary = () => '账号 1 已导入 2 名干员。';
+    sandbox.createSklandImportPanel();
+    const panel = body.firstChild;
+    const button = panel.querySelector('.prts-skland-primary');
+    const status = panel.querySelector('.prts-skland-status');
+    const accounts = panel.querySelector('.prts-skland-accounts').children;
+    const pending = button.onclick();
+    assert.strictEqual(button.disabled, true);
+    assert(accounts.every(account => account.disabled));
+    assert.strictEqual(messages[0][1], 'loading');
+    assert.strictEqual(messages[0][3], 0);
+    complete();
+    await pending;
+    assert.strictEqual(button.disabled, false);
+    assert(accounts.every(account => !account.disabled));
+    assert.strictEqual(messages.length, 2);
+    assert.strictEqual(messages[1][1], outcome === 'cancel' ? 'info' : outcome);
+    assert.strictEqual(status.attributes.get('role'), outcome === 'error' ? 'alert' : 'status');
+  }
+});
 
 test('hot updates upgrade rendered unknown operators and keep fallback filtering requirements', () => {
   const savedAvatars = CONFIG.operatorAvatars;

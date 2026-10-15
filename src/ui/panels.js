@@ -150,26 +150,36 @@
         body.appendChild(link);
 
         importBtn.onclick = async () => {
+            const accountId = targetAccountId;
+            const progressText = `正在读取森空岛数据，并导入到 ${getAccountLabel(accountId)}。`;
+            const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
             importBtn.disabled = true;
-            importBtn.textContent = '读取中...';
-            setSklandPanelStatus(status, `正在读取森空岛数据，并导入到 ${getAccountLabel(targetAccountId)}。`, 'loading');
+            importBtn.textContent = '同步中…';
+            accountButtons.forEach(button => { button.disabled = true; });
+            setSklandPanelStatus(status, progressText, 'loading');
             try {
-                const summary = await importSklandOperatorsToAccount(targetAccountId, {
-                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, targetAccountId)
+                const summary = await importSklandOperatorsToAccount(accountId, {
+                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
                 });
                 targetAccountId = summary.accountId;
                 renderSklandAccountButtons(accountButtons, targetAccountId);
-                setSklandPanelStatus(status, formatSklandImportSummary(summary), 'success');
+                const detail = formatSklandImportSummary(summary);
+                setSklandPanelStatus(status, detail, 'success');
+                updateToast('森空岛数据同步成功', 'success', detail);
             } catch (error) {
                 if (isSklandImportCancelledError(error)) {
                     setSklandPanelStatus(status, '已取消角色选择，未修改账号数据。', '');
+                    updateToast('已取消森空岛数据同步', 'info', '未修改账号数据。');
                     return;
                 }
                 console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
-                setSklandPanelStatus(status, error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。', 'error');
+                const detail = error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。';
+                setSklandPanelStatus(status, detail, 'error');
+                updateToast('森空岛数据同步失败', 'error', detail);
             } finally {
                 importBtn.disabled = false;
                 importBtn.textContent = '读取并导入干员';
+                accountButtons.forEach(button => { button.disabled = false; });
             }
         };
 
