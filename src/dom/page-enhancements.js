@@ -332,6 +332,7 @@
                 const badge = document.createElement('span');
                 badge.className = 'prts-level-badge';
                 badge.innerText = badgeText;
+                badge.title = badgeText;
                 heading.insertBefore(badge, heading.firstChild);
             }
 
