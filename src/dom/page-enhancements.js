@@ -297,7 +297,7 @@
         const heading = cardInner.querySelector(`h4, h5, ${BP_SELECTORS.heading}`);
         const stageCodeSpan = cardInner.querySelector('.flex.whitespace-pre .inline-block.font-bold.my-auto');
 
-        if (heading && !heading.dataset.badgeProcessed) {
+        if (heading && !heading.querySelector('.prts-level-badge')) {
             const titleTextNode = heading.querySelector('.whitespace-nowrap.overflow-hidden.text-ellipsis') || heading;
             let currentText = titleTextNode.innerText.trim();
 
@@ -335,8 +335,6 @@
                 badge.title = badgeText;
                 heading.insertBefore(badge, heading.firstChild);
             }
-
-            heading.dataset.badgeProcessed = "true";
         }
     }
 

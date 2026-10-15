@@ -627,6 +627,39 @@ test('hot updates upgrade rendered unknown operators and keep fallback filtering
   }
 });
 
+test('stage badges retry delayed metadata and recover after a heading rerender', () => {
+  const savedStageBadge = CONFIG.stageBadge;
+  const savedDocument = context.document;
+  CONFIG.stageBadge = true;
+  context.document = { createElement: createTestElement };
+  try {
+    const heading = createTestElement('h4', '昨日海 - YW-8 - 鳞的记忆 一摆到底版');
+    const stageCode = createTestElement('span', 'act52side_08');
+    const card = { querySelector: selector => selector.startsWith('h4') ? heading : stageCode };
+
+    addStageBadge(card);
+    assert.strictEqual(heading.querySelector('.prts-level-badge'), null);
+
+    stageCode.innerText = 'YW-8';
+    addStageBadge(card);
+    const badge = heading.querySelector('.prts-level-badge');
+    assert.strictEqual(badge?.innerText, 'YW-8');
+    assert.strictEqual(badge.title, 'YW-8');
+    assert(heading.textContent.includes('昨日海 - YW-8 - 鳞的记忆'));
+
+    addStageBadge(card);
+    assert.strictEqual(heading.children.length, 1);
+
+    badge.remove();
+    addStageBadge(card);
+    assert.strictEqual(heading.querySelector('.prts-level-badge')?.innerText, 'YW-8');
+    assert.strictEqual(heading.children.length, 1);
+  } finally {
+    CONFIG.stageBadge = savedStageBadge;
+    context.document = savedDocument;
+  }
+});
+
 test('card badges, avatars, descriptions and links work independently and remain idempotent', () => {
   const savedConfig = { ...CONFIG };
   const savedContext = {
