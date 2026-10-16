@@ -28,6 +28,14 @@
         return searchInput?.closest('div') || null;
     }
 
+    function getOperationListRoot() {
+        const operationSetTab = document.querySelector('[role="tab"][data-tab-id="operationSet"][aria-selected="true"]');
+        if (operationSetTab || /[?&]opset=/.test(window.location.search)) {
+            return document.querySelector('.bp4-drawer, .bp6-drawer');
+        }
+        return document;
+    }
+
     function getCardSignature(card) {
         if (!card) return '';
 

@@ -2292,6 +2292,7 @@ function createFilterPage(displayMode) {
       focus() { page.document.activeElement = this; }
     }),
     createTextNode: text => createTestElement('span', text),
+    querySelector: () => null,
     querySelectorAll: () => cards,
     getElementById: id => {
       const find = node => node.id === id ? node : node.children.map(find).find(Boolean);
@@ -2350,6 +2351,90 @@ test('filter statistics partition cards using the same availability results as r
     assert.strictEqual(page.document.getElementById('prts-filter-results'), results);
     assert.strictEqual(page.document.getElementById('prts-filter-bar').lastChild, results);
   }
+});
+
+test('operation set statistics stay in the loaded drawer and exclude background jobs', () => {
+  const { page, addCard, cards, body } = createFilterPage('HIDE');
+  const background = addCard({ opers: [{ name: '阿米娅' }] });
+  let selectedTab = createTestElement();
+  let drawer = null;
+  page.document.querySelector = selector => selector.startsWith('[role="tab"]') ? selectedTab : drawer;
+  page.applyFilterLogic();
+  assert.strictEqual(page.getOperationCards().length, 0);
+  assert.strictEqual(page.document.getElementById('prts-filter-results'), null);
+
+  page.window.location.search = '?opset=123';
+  drawer = createTestElement();
+  drawer.querySelectorAll = () => [];
+  body.appendChild(drawer);
+  page.applyFilterLogic();
+  assert.strictEqual(page.document.getElementById('prts-filter-results'), null);
+
+  const content = createTestElement();
+  const list = createTestElement('ul');
+  content.appendChild(list);
+  drawer.appendChild(content);
+  drawer.querySelector = selector => selector === 'ul.grid' ? list : null;
+  const setCards = Array.from({ length: 8 }, () => addCard({ opers: [{ name: '阿米娅' }] }).card);
+  setCards.forEach(card => list.appendChild(card));
+  drawer.querySelectorAll = () => setCards;
+  // Direct links to a set can have no selected tab behind the drawer.
+  selectedTab = null;
+  page.applyFilterLogic();
+  const results = page.document.getElementById('prts-filter-results');
+  assert.strictEqual(results.parentElement, content);
+  assert.strictEqual(content.children[content.children.indexOf(list) - 1], results);
+  assert.strictEqual(page.document.getElementById('prts-filter-bar').children.includes(results), false);
+  assert(results.textContent.includes('本作业集 8 份作业，可用 8 份'));
+  assert.strictEqual(page.getCompatibilityDiagnostics().totalCards, 8);
+  page.injectFilterControls();
+  assert.strictEqual(results.parentElement, content);
+  assert.strictEqual(page.document.getElementById('prts-filter-results'), results);
+
+  drawer.remove();
+  drawer = null;
+  selectedTab = createTestElement();
+  page.window.location.search = '';
+  page.applyFilterLogic();
+  assert.strictEqual(page.document.getElementById('prts-filter-results'), null);
+  cards.splice(0, cards.length, background.card);
+  selectedTab = null;
+  page.applyFilterLogic();
+  assert(page.document.getElementById('prts-filter-results').textContent.includes('本页 1 份作业，可用 1 份'));
+});
+
+test('card text mutations retry delayed stage badges while script result text is ignored', () => {
+  const { page, addCard, frames } = createFilterPage('GRAY');
+  page.Node = { ELEMENT_NODE: 1 };
+  page.__testExports.CONFIG.stageBadge = true;
+  const { card, inner } = addCard({ opers: [{ name: '阿米娅' }] });
+  const heading = createTestElement('h4', '昨日海 - YW-8 - 鳞的记忆');
+  const stage = createTestElement('span', 'act52side_08');
+  const query = inner.querySelector.bind(inner);
+  inner.querySelector = selector => selector.startsWith('h4') ? heading
+    : selector === '.flex.whitespace-pre .inline-block.font-bold.my-auto' ? stage : query(selector);
+  card.matches = selector => selector === 'ul > li:has(> .bp4-card, > .bp6-card)';
+  stage.closest = selector => card.matches(selector) ? card : null;
+  page.applyFilterLogic();
+  assert.strictEqual(heading.querySelector('.prts-level-badge'), null);
+
+  stage.innerText = 'YW-8';
+  const mutations = [{ type: 'characterData', target: { nodeType: 3, parentElement: stage } }];
+  assert.strictEqual(page.hasRelevantDomMutation(mutations), true);
+  const dirtyCards = page.collectDirtyCardsFromMutations(mutations);
+  assert.strictEqual(dirtyCards.size, 1);
+  assert(dirtyCards.has(card));
+  page.requestFilterUpdate({ forceFull: false, dirtyCards });
+  runOnlyCallback(frames);
+  assert.strictEqual(heading.querySelector('.prts-level-badge')?.innerText, 'YW-8');
+
+  const results = page.document.getElementById('prts-filter-results');
+  results.closest = selector => selector.includes('#prts-filter-results') ? results : null;
+  const scriptText = [{ type: 'characterData', target: { nodeType: 3, parentElement: results } }];
+  assert.strictEqual(page.hasRelevantDomMutation(scriptText), false);
+  assert.strictEqual(page.collectDirtyCardsFromMutations(scriptText).size, 0);
+  const unrelatedText = [{ type: 'characterData', target: { nodeType: 3, parentElement: createTestElement() } }];
+  assert.strictEqual(page.hasRelevantDomMutation(unrelatedText), false);
 });
 
 test('an empty filtered page explains hiding and can reveal cards without clearing the filter', () => {

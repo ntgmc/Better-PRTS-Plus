@@ -97,14 +97,14 @@
     }
 
     function getOperationCards() {
-        return Array.from(document.querySelectorAll('ul.grid > li, .tabular-nums ul > li'));
+        return Array.from(getOperationListRoot()?.querySelectorAll(BP_SELECTORS.operationCard) || []);
     }
 
     function getCardFromMutationNode(node) {
         const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
         if (!element) return null;
-        if (element.matches?.('ul.grid > li, .tabular-nums ul > li')) return element;
-        return element.closest?.('ul.grid > li, .tabular-nums ul > li') || null;
+        if (element.matches?.(BP_SELECTORS.operationCard)) return element;
+        return element.closest?.(BP_SELECTORS.operationCard) || null;
     }
 
     const filterUpdateCoordinator = createFilterUpdateCoordinator({
@@ -255,8 +255,8 @@
     }
 
     function isScriptOwnedNode(node) {
-        if (!node || node.nodeType !== 1) return false;
-        return Boolean(node.closest?.('#prts-filter-bar, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
+        const element = node?.nodeType === 1 ? node : node?.parentElement;
+        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
     }
 
     function collectDirtyCardsFromMutations(mutations) {
@@ -273,7 +273,7 @@
                 const card = getCardFromMutationNode(node);
                 if (card) dirtyCards.add(card);
                 if (node?.nodeType === Node.ELEMENT_NODE) {
-                    node.querySelectorAll?.('ul.grid > li, .tabular-nums ul > li').forEach(childCard => dirtyCards.add(childCard));
+                    node.querySelectorAll?.(BP_SELECTORS.operationCard).forEach(childCard => dirtyCards.add(childCard));
                 }
             });
         }
@@ -283,6 +283,7 @@
     function hasRelevantDomMutation(mutations) {
         for (const mutation of mutations) {
             if (isScriptOwnedNode(mutation.target)) continue;
+            if (mutation.type === 'characterData' && getCardFromMutationNode(mutation.target)) return true;
 
             const added = Array.from(mutation.addedNodes || []);
             const removed = Array.from(mutation.removedNodes || []);

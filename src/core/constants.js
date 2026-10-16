@@ -82,6 +82,7 @@
     const BP_SELECTORS = {
         inputGroup: '.bp4-input-group, .bp6-input-group',
         card: '.bp4-card, .bp6-card',
+        operationCard: 'ul > li:has(> .bp4-card, > .bp6-card)',
         tag: '.bp4-tag, .bp6-tag',
         heading: '.bp4-heading, .bp6-heading',
         popoverTarget: '.bp4-popover2-target, .bp6-popover-target',

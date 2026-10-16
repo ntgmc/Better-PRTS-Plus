@@ -376,10 +376,14 @@
 
     function renderFilterResults(stats = filterResults) {
         filterResults = stats;
-        const bar = document.getElementById('prts-filter-bar');
-        if (!bar || isFilterDisabledPage()) return;
-
+        const root = getOperationListRoot();
+        const list = root && root !== document ? root.querySelector('ul.grid') : null;
+        const container = root === document ? document.getElementById('prts-filter-bar') : list?.parentElement;
         let results = document.getElementById('prts-filter-results');
+        if (!container || isFilterDisabledPage()) {
+            results?.remove();
+            return;
+        }
         if (!results) {
             results = document.createElement('div');
             results.id = 'prts-filter-results';
@@ -397,22 +401,27 @@
                 id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'eyeOn',
                 onClick: () => {
                     toggleDisplayMode();
-                    document.getElementById('btn-setting')?.focus();
+                    const activeRoot = getOperationListRoot();
+                    (activeRoot === document ? document.getElementById('btn-setting') : activeRoot)?.focus();
                 }
             }));
             results.appendChild(summary);
             results.appendChild(empty);
-            bar.appendChild(results);
         }
 
-        if (bar.lastChild !== results) bar.appendChild(results);
+        if (list) {
+            if (list.previousElementSibling !== results) container.insertBefore(results, list);
+        } else if (container.lastChild !== results) {
+            container.appendChild(results);
+        }
 
-        let summaryText = '正在统计本页作业…';
+        const scope = list ? '本作业集' : '本页';
+        let summaryText = `正在统计${scope}作业…`;
         let messageText = '';
         let showAll = false;
         if (stats) {
             const filtering = ownedOpsSet.size > 0 && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck);
-            summaryText = `本页 ${stats.totalCards} 份作业`;
+            summaryText = `${scope} ${stats.totalCards} 份作业`;
             if (filtering) {
                 summaryText += `，可用 ${stats.availableCards} 份，需助战 ${stats.supportCards} 份，待核验 ${stats.pendingCards} 份，不符合 ${stats.unavailableCards} 份`;
             } else if (stats.totalCards) {
@@ -422,17 +431,17 @@
             summaryText += '。';
 
             if (!stats.totalCards) {
-                messageText = '当前页面暂无作业。若正在加载，请稍候；也可调整搜索条件或翻页。';
+                messageText = list ? '本作业集暂无作业。' : '当前页面暂无作业。若正在加载，请稍候；也可调整搜索条件或翻页。';
             } else if (stats.hiddenVideoCards === stats.totalCards) {
-                messageText = '本页作业均为视频，已被隐藏。可在悬浮球中关闭“隐藏视频作业”，或查看其他页。';
+                messageText = `${scope}作业均为视频，已被隐藏。可在悬浮球中关闭“隐藏视频作业”${list ? '' : '，或查看其他页'}。`;
             } else if (filtering && !stats.availableCards && !stats.supportCards) {
                 if (stats.pendingCards) {
-                    messageText = `本页暂无已确认可用的作业，${stats.pendingCards} 份待核验作业已保留。请查看卡片提示或补充干员数据。`;
+                    messageText = `${scope}暂无已确认可用的作业，${stats.pendingCards} 份待核验作业已保留。请查看卡片提示或补充干员数据。`;
                 } else {
                     showAll = CONFIG.displayMode === 'HIDE' && !stats.visibleCards;
                     messageText = showAll
-                        ? `本页没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换置灰查看原因，或调整筛选条件、切换账号、查看其他页。`
-                        : '本页没有符合当前筛选条件的作业。请调整筛选条件、切换账号，或查看其他页。';
+                        ? `${scope}没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换置灰查看原因，或调整筛选条件、切换账号${list ? '' : '、查看其他页'}。`
+                        : `${scope}没有符合当前筛选条件的作业。请调整筛选条件、切换账号${list ? '' : '，或查看其他页'}。`;
                 }
             }
         }
