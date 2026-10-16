@@ -52,7 +52,8 @@
         document.getElementById('prts-import-dialog-backdrop')?.remove();
     }
 
-    function applyImportedOperatorNames(names, sourceLabel, statusEl, training = {}) {
+    function applyImportedOperatorNames(accountId, names, sourceLabel, statusEl, training = {}) {
+        const targetAccountId = normalizeAccountId(accountId);
         const sanitizedNames = sanitizeOperatorNames(names);
         if (sanitizedNames.length === 0) {
             const message = '未能识别有效的干员数据，请检查 JSON/TXT 内容。';
@@ -61,14 +62,14 @@
             return false;
         }
 
-        const accountLabel = getAccountLabel(activeAccountId);
-        const diff = getOperatorImportDiff(accountsData[activeAccountId] || [], sanitizedNames);
+        const accountLabel = getAccountLabel(targetAccountId);
+        const diff = getOperatorImportDiff(accountsData[targetAccountId] || [], sanitizedNames);
         const diffText = formatOperatorImportDiff(diff);
         const sourceText = sourceLabel ? `来源：${sourceLabel}` : '来源：导入内容';
 
         const nextState = getCurrentAccountState();
-        nextState.accountsData[nextState.activeAccountId] = sanitizedNames;
-        nextState.accountsTraining[nextState.activeAccountId] = training;
+        nextState.accountsData[targetAccountId] = sanitizedNames;
+        nextState.accountsTraining[targetAccountId] = training;
         commitAccountState(nextState);
         refreshAccountStateUi();
 
@@ -79,7 +80,7 @@
         return true;
     }
 
-    function readOperatorImportFile(file, statusEl) {
+    function readOperatorImportFile(accountId, file, statusEl) {
         if (!file) return Promise.resolve(false);
 
         if (file.size > OPERATOR_IMPORT_MAX_BYTES) {
@@ -95,7 +96,7 @@
             reader.onload = event => {
                 try {
                     const { names, training } = parseImportedOperators(event.target.result, file.name);
-                    resolve(applyImportedOperatorNames(names, file.name || '文件导入', statusEl, training));
+                    resolve(applyImportedOperatorNames(accountId, names, file.name || '文件导入', statusEl, training));
                 } catch (error) {
                     const message = getImportErrorMessage(error);
                     console.error('[Better PRTS] 导入干员数据失败', error);
@@ -121,6 +122,7 @@
             return;
         }
 
+        const targetAccountId = normalizeAccountId(activeAccountId);
         const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const backdrop = document.createElement('div');
         backdrop.id = 'prts-import-dialog-backdrop';
@@ -139,10 +141,10 @@
         const title = document.createElement('h2');
         title.id = 'prts-import-dialog-title';
         title.className = 'prts-import-title';
-        title.textContent = `导入到 ${getAccountLabel(activeAccountId)}`;
+        title.textContent = `导入到 ${getAccountLabel(targetAccountId)}`;
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-import-subtitle';
-        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，导入后会替换当前账号的干员列表。';
+        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，导入后会替换此账号的干员列表。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -215,7 +217,7 @@
             const file = event.target.files?.[0];
             if (!file) return;
             setBusy(true);
-            const imported = await readOperatorImportFile(file, status);
+            const imported = await readOperatorImportFile(targetAccountId, file, status);
             setBusy(false);
             fileInput.value = '';
             if (imported) window.setTimeout(closeOperatorImportDialog, 700);
@@ -233,7 +235,7 @@
 
             try {
                 const { names, training } = parseImportedOperators(rawText, '');
-                const imported = applyImportedOperatorNames(names, '粘贴内容', status, training);
+                const imported = applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
                 if (imported) window.setTimeout(closeOperatorImportDialog, 700);
             } catch (error) {
                 const message = getImportErrorMessage(error);

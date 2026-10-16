@@ -1708,6 +1708,99 @@ function createAccountPage(sharedStorage, hostname) {
   return page;
 }
 
+function createOperatorImportPage(sharedStorage) {
+  const page = createAccountPage(sharedStorage, 'prts.plus');
+  const body = createTestElement('body');
+  const readers = [];
+  const toasts = [];
+  page.document = {
+    body, activeElement: null,
+    createElement: tag => Object.assign(createTestElement(tag), { addEventListener() {}, focus() {} }),
+    getElementById: id => {
+      const find = node => node.id === id ? node : node.children.map(find).find(Boolean);
+      return find(body) || null;
+    },
+    addEventListener() {}, removeEventListener() {}
+  };
+  page.HTMLElement = class {};
+  page.FileReader = class {
+    constructor() { readers.push(this); }
+    readAsText(file) { this.file = file; }
+  };
+  page.window.setTimeout = () => 0;
+  page.createPrtsIcon = () => createTestElement('svg');
+  page.showPrtsToast = (...args) => toasts.push(args);
+  page.refreshAccountStateUi = () => {};
+  vm.runInContext(fs.readFileSync(path.join(repoRoot, 'src/ui/import-controls.js'), 'utf8'), page);
+  return { page, readers, toasts };
+}
+
+test('file and text imports keep the dialog target across remote account switches', async () => {
+  for (const scenario of ['paste', 'file-before-read', 'file-during-read']) {
+    const initial = createAccountState({
+      activeAccountId: 2,
+      accountsData: { 1: ['阿米娅'], 2: ['W'], 3: ['能天使'] },
+      accountsTraining: { 2: { W: { level: 10 } } },
+      accountMeta: {
+        2: { label: '导入账号', labelSource: 'manual' },
+        3: { label: '远端账号', labelSource: 'manual' }
+      }
+    });
+    const sharedStorage = new Map([['prts_plus_accounts_data', serializeAccountState(initial)]]);
+    const { page, readers, toasts } = createOperatorImportPage(sharedStorage);
+    const remotePage = createAccountPage(sharedStorage, 'prts.plus');
+    page.openOperatorImportDialog();
+    const dialog = page.document.getElementById('prts-import-dialog');
+    const status = dialog.querySelector('.prts-import-status');
+    const fileInput = dialog.querySelector('input');
+    const file = { name: 'operators.json', size: 100 };
+    let pending;
+    if (scenario === 'file-during-read') {
+      pending = fileInput.onchange({ target: { files: [file] } });
+      assert.strictEqual(readers.length, 1);
+    }
+
+    const latest = createAccountSwitchState(remotePage.getCurrentAccountState(), 3);
+    latest.accountsData[3] = ['凯尔希', '能天使'];
+    latest.accountsTraining[3] = { 凯尔希: { level: 90 } };
+    remotePage.commitAccountState(latest);
+    // Simulate delivery of the remote storage change while keeping the dialog open.
+    page.loadOwnedOps();
+    page.openOperatorImportDialog();
+    assert.strictEqual(page.document.getElementById('prts-import-dialog'), dialog);
+    assert.strictEqual(dialog.querySelector('.prts-import-title').textContent, '导入到 导入账号');
+    assert.strictEqual(page.getCurrentAccountState().activeAccountId, 3);
+
+    const raw = JSON.stringify([{ name: '阿米娅', own: true, elite: 2, level: 80 }]);
+    if (scenario === 'paste') {
+      dialog.querySelector('.prts-import-textarea').value = raw;
+      const pasteButton = dialog.querySelector('.prts-import-actions').children
+        .find(button => button.textContent === '导入粘贴内容');
+      pasteButton.onclick();
+    } else {
+      if (!pending) pending = fileInput.onchange({ target: { files: [file] } });
+      assert.strictEqual(readers[0].file, file);
+      readers[0].onload({ target: { result: raw } });
+      await pending;
+    }
+
+    const saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
+    assert.deepStrictEqual(saved.accountsData[2], ['阿米娅'], scenario);
+    assert.deepStrictEqual(saved.accountsTraining[2], { 阿米娅: { elite: 2, level: 80 } }, scenario);
+    for (const id of [1, 3]) {
+      assert.deepStrictEqual(saved.accountsData[id], hostArray(latest.accountsData[id]), scenario);
+      assert.deepStrictEqual(saved.accountsTraining[id], hostObject(latest.accountsTraining[id]), scenario);
+    }
+    assert.strictEqual(saved.activeAccountId, 3, scenario);
+    assert.deepStrictEqual(saved.accountMeta, hostObject(latest.accountMeta), scenario);
+    assert.deepStrictEqual(hostObject(page.getCurrentAccountState()), saved, scenario);
+    assert.deepStrictEqual(hostArray(page.__testExports.getOwnedOpsSnapshot()), ['凯尔希', '能天使'], scenario);
+    assert(status.textContent.startsWith('导入账号 导入成功\n新增 1 / 移除 1 / 当前 1'), scenario);
+    assert.strictEqual(toasts.at(-1)[0], '导入账号 导入成功', scenario);
+    assert.strictEqual(toasts.at(-1)[1], 'success', scenario);
+  }
+});
+
 test('Skland import from a stale page preserves other accounts updated during the request', async () => {
   const sharedStorage = new Map();
   const initial = createAccountState({
