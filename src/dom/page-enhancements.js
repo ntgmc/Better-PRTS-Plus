@@ -248,6 +248,7 @@
 
         lastRouteKey = routeKey;
         filterUpdateCoordinator.reset();
+        renderFilterResults(null);
         syncPageScaffold();
         scheduleFilterUpdate(120);
         return true;
@@ -522,7 +523,9 @@
         return {
             fiberCards: source === 'fiber' ? 1 : 0,
             fallbackCards: source === 'fallback' ? 1 : 0,
-            noDataCards: source === 'none' ? 1 : 0
+            noDataCards: source === 'none' ? 1 : 0,
+            filterStatus: 'pending',
+            visible: true
         };
     }
 
@@ -647,7 +650,10 @@
             const diagnostics = createCardDiagnostics('none');
             cardDiagnosticsCache.set(card, diagnostics);
             const cardInner = card.querySelector(BP_SELECTORS.card);
-            card.style.display = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation) ? 'none' : '';
+            const hiddenVideo = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation);
+            diagnostics.filterStatus = hiddenVideo ? 'hiddenVideo' : 'pending';
+            diagnostics.visible = !hiddenVideo;
+            card.style.display = hiddenVideo ? 'none' : '';
             card.classList.remove('prts-card-gray');
             if (cardInner) {
                 const label = cardInner.querySelector('.prts-status-label') || document.createElement('div');
@@ -664,6 +670,8 @@
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
             const diagnostics = createCardDiagnostics('none');
+            card.style.display = '';
+            card.classList.remove('prts-card-gray');
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
         }
@@ -682,6 +690,8 @@
             : createCardDiagnostics('none');
 
         if (CONFIG.hideVideo && isVideoOperationCard(cardInner, operation)) {
+            diagnostics.filterStatus = 'hiddenVideo';
+            diagnostics.visible = false;
             if (card.style.display !== 'none') card.style.display = 'none';
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
@@ -689,7 +699,16 @@
         const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, trainingIssues, hasRequirements } =
             checkOperationAvailability(operation, ownedOpsSet, CONFIG.filterMode, accountsTraining[activeAccountId], CONFIG.trainingCheck);
 
+        if (!isAvailable || (CONFIG.trainingCheck && CONFIG.filterMode === 'NONE' && missingCount > 0)) {
+            diagnostics.filterStatus = 'unavailable';
+        } else if (diagnostics.noDataCards || (CONFIG.trainingCheck && (unknownTraining.length || !hasRequirements))) {
+            diagnostics.filterStatus = 'pending';
+        } else {
+            diagnostics.filterStatus = CONFIG.filterMode === 'SUPPORT' && missingCount === 1 ? 'support' : 'available';
+        }
+
         if (!isAvailable && CONFIG.displayMode === 'HIDE') {
+            diagnostics.visible = false;
             if (card.style.display !== 'none') card.style.display = 'none';
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
@@ -769,7 +788,13 @@
             totalCards: cards.length,
             fiberCards: 0,
             fallbackCards: 0,
-            noDataCards: 0
+            noDataCards: 0,
+            availableCards: 0,
+            supportCards: 0,
+            pendingCards: 0,
+            unavailableCards: 0,
+            hiddenVideoCards: 0,
+            visibleCards: 0
         };
 
         cards.forEach(card => {
@@ -777,6 +802,8 @@
             diagnostics.fiberCards += cached.fiberCards;
             diagnostics.fallbackCards += cached.fallbackCards;
             diagnostics.noDataCards += cached.noDataCards;
+            diagnostics[`${cached.filterStatus}Cards`] += 1;
+            diagnostics.visibleCards += Number(cached.visible);
         });
         return diagnostics;
     }
@@ -785,22 +812,21 @@
         if (isFilterDisabledPage()) {
             filterUpdateCoordinator.reset();
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
+            renderFilterResults(null);
             return;
         }
         isProcessingFilter = true;
 
         try {
             const cards = getOperationCards();
-            if (cards.length === 0) {
-                filterUpdateCoordinator.reset();
-                setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
-                return;
-            }
+            if (cards.length === 0) filterUpdateCoordinator.reset();
 
             const work = filterUpdateCoordinator.takeWork(cards);
             work.cards.forEach(processOperationCard);
 
-            setCompatibilityDiagnostics(aggregateCardDiagnostics(cards));
+            const diagnostics = aggregateCardDiagnostics(cards);
+            setCompatibilityDiagnostics(diagnostics);
+            renderFilterResults(diagnostics);
         } catch (error) {
             filterUpdateCoordinator.reset();
             throw error;

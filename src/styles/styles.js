@@ -500,6 +500,31 @@
         padding-left: 48px;
         margin-top: 2px;
     }
+    /* Hallmark · component: filter results · theme: existing PRTS tokens
+     * states: loading, summary, empty, pending, focus; pre-emit critique: P5 H4 E4 S5 R5 V4 */
+    #prts-filter-results {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        padding: var(--prts-space-2) var(--prts-space-3) 0;
+        color: var(--prts-color-text-muted);
+        font-size: 13px;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+        font-variant-numeric: tabular-nums;
+    }
+    .prts-filter-summary, .prts-filter-empty-message { margin: 0; }
+    .prts-filter-empty {
+        margin-top: var(--prts-space-2);
+        padding: var(--prts-space-3);
+        border: 1px solid var(--prts-color-border-soft);
+        border-radius: var(--prts-radius-md);
+        background: var(--prts-color-surface-muted);
+        color: var(--prts-color-text);
+    }
+    #btn-filter-show-all { min-height: 44px !important; margin-top: var(--prts-space-1); white-space: nowrap; }
+    #btn-filter-show-all:active { background: var(--prts-color-surface-hover) !important; }
+    .prts-filter-empty[hidden], #btn-filter-show-all[hidden] { display: none !important; }
     .prts-btn {
         gap: 6px !important;
         min-height: 34px !important;

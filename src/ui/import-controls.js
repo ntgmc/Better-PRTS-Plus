@@ -372,6 +372,79 @@
         }
     }
 
+    let filterResults = null;
+
+    function renderFilterResults(stats = filterResults) {
+        filterResults = stats;
+        const bar = document.getElementById('prts-filter-bar');
+        if (!bar || isFilterDisabledPage()) return;
+
+        let results = document.getElementById('prts-filter-results');
+        if (!results) {
+            results = document.createElement('div');
+            results.id = 'prts-filter-results';
+            results.setAttribute('role', 'status');
+            results.setAttribute('aria-live', 'polite');
+            results.setAttribute('aria-atomic', 'true');
+            const summary = document.createElement('p');
+            summary.className = 'prts-filter-summary';
+            const empty = document.createElement('div');
+            empty.className = 'prts-filter-empty';
+            const message = document.createElement('p');
+            message.className = 'prts-filter-empty-message';
+            empty.appendChild(message);
+            empty.appendChild(createPrtsButton({
+                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'eyeOn',
+                onClick: () => {
+                    toggleDisplayMode();
+                    document.getElementById('btn-setting')?.focus();
+                }
+            }));
+            results.appendChild(summary);
+            results.appendChild(empty);
+            bar.appendChild(results);
+        }
+
+        if (bar.lastChild !== results) bar.appendChild(results);
+
+        let summaryText = '正在统计本页作业…';
+        let messageText = '';
+        let showAll = false;
+        if (stats) {
+            const filtering = ownedOpsSet.size > 0 && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck);
+            summaryText = `本页 ${stats.totalCards} 份作业`;
+            if (filtering) {
+                summaryText += `，可用 ${stats.availableCards} 份，需助战 ${stats.supportCards} 份，待核验 ${stats.pendingCards} 份，不符合 ${stats.unavailableCards} 份`;
+            } else if (stats.totalCards) {
+                summaryText += ownedOpsSet.size ? '，未开启筛选' : '，请先导入干员数据后筛选';
+            }
+            if (stats.hiddenVideoCards) summaryText += `，视频已隐藏 ${stats.hiddenVideoCards} 份`;
+            summaryText += '。';
+
+            if (!stats.totalCards) {
+                messageText = '当前页面暂无作业。若正在加载，请稍候；也可调整搜索条件或翻页。';
+            } else if (stats.hiddenVideoCards === stats.totalCards) {
+                messageText = '本页作业均为视频，已被隐藏。可在悬浮球中关闭“隐藏视频作业”，或查看其他页。';
+            } else if (filtering && !stats.availableCards && !stats.supportCards) {
+                if (stats.pendingCards) {
+                    messageText = `本页暂无已确认可用的作业，${stats.pendingCards} 份待核验作业已保留。请查看卡片提示或补充干员数据。`;
+                } else {
+                    showAll = CONFIG.displayMode === 'HIDE' && !stats.visibleCards;
+                    messageText = showAll
+                        ? `本页没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换置灰查看原因，或调整筛选条件、切换账号、查看其他页。`
+                        : '本页没有符合当前筛选条件的作业。请调整筛选条件、切换账号，或查看其他页。';
+                }
+            }
+        }
+
+        const summary = results.querySelector('.prts-filter-summary');
+        const message = results.querySelector('.prts-filter-empty-message');
+        if (summary.textContent !== summaryText) summary.textContent = summaryText;
+        if (message.textContent !== messageText) message.textContent = messageText;
+        results.querySelector('.prts-filter-empty').hidden = !messageText;
+        document.getElementById('btn-filter-show-all').hidden = !showAll;
+    }
+
     function injectFilterControls() {
         if (isFilterDisabledPage()) {
             const existing = document.getElementById('prts-filter-bar');
@@ -498,7 +571,6 @@
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
         mainRow.appendChild(btnTraining);
 
-        if (isNew && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck)) {
-            requestFilterUpdate();
-        }
+        renderFilterResults();
+        if (isNew) requestFilterUpdate();
     }

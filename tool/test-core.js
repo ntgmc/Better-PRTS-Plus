@@ -2191,6 +2191,12 @@ function createFilterPage(displayMode) {
   const page = createAccountPage(sharedStorage, 'prts.plus');
   const cards = [];
   const errors = [];
+  const frames = new Map();
+  const body = createTestElement('body');
+  const searchRow = createTestElement();
+  const searchGroup = createTestElement();
+  searchRow.appendChild(searchGroup);
+  body.appendChild(searchRow);
   Object.assign(page.__testExports.CONFIG, {
     filterMode: 'PERFECT', displayMode, trainingCheck: false, compatDebug: false,
     hidePrtsBadge: false, hideVideo: false, showExactTime: false,
@@ -2198,13 +2204,27 @@ function createFilterPage(displayMode) {
   });
   page.console = { log() {}, warn: (...args) => errors.push(args) };
   page.document = {
-    createElement: createTestElement,
+    body,
+    createElement: tag => Object.assign(createTestElement(tag), {
+      addEventListener(type, listener) { this[`on${type}`] = listener; },
+      removeEventListener(type) { this[`on${type}`] = null; },
+      focus() { page.document.activeElement = this; }
+    }),
     createTextNode: text => createTestElement('span', text),
     querySelectorAll: () => cards,
-    getElementById: () => null
+    getElementById: id => {
+      const find = node => node.id === id ? node : node.children.map(find).find(Boolean);
+      return find(body) || null;
+    }
   };
+  page.requestAnimationFrame = callback => { const id = Symbol(); frames.set(id, callback); return id; };
+  page.cancelAnimationFrame = id => frames.delete(id);
+  vm.runInContext(['src/ui/dom-helpers.js', 'src/ui/import-controls.js']
+    .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), page);
   page.isFilterDisabledPage = () => false;
+  page.findSearchInputGroup = () => searchGroup;
   page.createPrtsIcon = () => createTestElement('svg');
+  page.injectFilterControls();
   page.getCardSignature = () => 'unchanged card text';
   const addCard = operation => {
     const card = createTestElement('li');
@@ -2218,8 +2238,141 @@ function createFilterPage(displayMode) {
     cards.push(card);
     return { card, inner };
   };
-  return { page, addCard, errors };
+  return { page, addCard, errors, cards, frames, body };
 }
+
+test('filter statistics partition cards using the same availability results as rendering', () => {
+  for (const displayMode of ['GRAY', 'HIDE']) {
+    const { page, addCard, cards } = createFilterPage(displayMode);
+    Object.assign(page.__testExports.CONFIG, { filterMode: 'SUPPORT', hideVideo: true });
+    addCard({ opers: [{ name: '阿米娅' }] });
+    addCard({ opers: [{ name: 'W' }] });
+    addCard({ opers: [{ name: 'W' }, { name: '能天使' }] });
+    addCard({ opers: [null] });
+    addCard({ opers: [] });
+    addCard({ type: 'VIDEO', opers: [{ name: '阿米娅' }] });
+    page.applyFilterLogic();
+    const stats = page.aggregateCardDiagnostics(cards);
+    assert.strictEqual(stats.totalCards, 6);
+    assert.strictEqual(stats.availableCards, 1);
+    assert.strictEqual(stats.supportCards, 1);
+    assert.strictEqual(stats.unavailableCards, 1);
+    assert.strictEqual(stats.pendingCards, 2);
+    assert.strictEqual(stats.hiddenVideoCards, 1);
+    assert.strictEqual(stats.visibleCards, displayMode === 'HIDE' ? 4 : 5);
+    const results = page.document.getElementById('prts-filter-results');
+    assert.strictEqual(results.querySelector('.prts-filter-summary').textContent,
+      '本页 6 份作业，可用 1 份，需助战 1 份，待核验 2 份，不符合 1 份，视频已隐藏 1 份。');
+    assert.strictEqual(results.querySelector('.prts-filter-empty').hidden, true);
+    assert.strictEqual(results.attributes.get('aria-live'), 'polite');
+    page.injectFilterControls();
+    assert.strictEqual(page.document.getElementById('prts-filter-results'), results);
+    assert.strictEqual(page.document.getElementById('prts-filter-bar').lastChild, results);
+  }
+});
+
+test('an empty filtered page explains hiding and can reveal cards without clearing the filter', () => {
+  const { page, addCard, frames } = createFilterPage('HIDE');
+  const missing = addCard({ opers: [{ name: 'W' }] });
+  page.applyFilterLogic();
+  const results = page.document.getElementById('prts-filter-results');
+  assert.strictEqual(missing.card.style.display, 'none');
+  assert(results.querySelector('.prts-filter-empty-message').textContent.includes('已隐藏 1 份'));
+  const button = page.document.getElementById('btn-filter-show-all');
+  assert.strictEqual(button.hidden, false);
+  button.onclick();
+  runOnlyCallback(frames);
+  assert.strictEqual(page.__testExports.CONFIG.displayMode, 'GRAY');
+  assert.strictEqual(page.__testExports.CONFIG.filterMode, 'PERFECT');
+  assert.strictEqual(missing.card.style.display, '');
+  assert.strictEqual(missing.card.classList.contains('prts-card-gray'), true);
+  assert.strictEqual(page.document.activeElement, page.document.getElementById('btn-setting'));
+  assert.strictEqual(page.document.getElementById('btn-filter-show-all').hidden, true);
+  assert(!page.document.getElementById('prts-filter-results').textContent.includes('已隐藏 1 份'));
+});
+
+test('filter statistics distinguish uncertain training and standalone training failures from usable cards', () => {
+  const { page, addCard, cards } = createFilterPage('HIDE');
+  page.__testExports.CONFIG.trainingCheck = true;
+  addCard({ opers: [{ name: '阿米娅', requirements: { level: 80 } }] });
+  addCard({ opers: [{ name: '阿米娅' }] });
+  page.applyFilterLogic();
+  assert.strictEqual(page.aggregateCardDiagnostics(cards).pendingCards, 2);
+  const results = page.document.getElementById('prts-filter-results');
+  assert(results.querySelector('.prts-filter-empty-message').textContent.includes('2 份待核验作业已保留'));
+  assert(cards.every(card => card.style.display !== 'none'));
+  page.__testExports.CONFIG.filterMode = 'NONE';
+  const state = page.getCurrentAccountState();
+  state.accountsTraining[1] = { 阿米娅: { elite: 2, level: 20 } };
+  page.publishAccountState(state);
+  page.requestFilterUpdate();
+  page.applyFilterLogic();
+  const stats = page.aggregateCardDiagnostics(cards);
+  assert.strictEqual(stats.availableCards, 0);
+  assert.strictEqual(stats.pendingCards, 1);
+  assert.strictEqual(stats.unavailableCards, 1);
+});
+
+test('statistics refresh dirty cards and exclude removed cards without reprocessing unchanged cards', () => {
+  const { page, addCard, cards, frames } = createFilterPage('HIDE');
+  const available = addCard({ opers: [{ name: '阿米娅' }] });
+  const missing = addCard({ opers: [{ name: 'W' }] });
+  page.applyFilterLogic();
+  let processed = 0;
+  const process = page.processOperationCard;
+  page.processOperationCard = card => { processed++; return process(card); };
+  // A real card text mutation also invalidates operationCache through its signature.
+  let signature = 'changed card text';
+  page.getCardSignature = card => card === missing.card ? signature : 'unchanged card text';
+  missing.inner.__reactFiber$test.memoizedProps.operation = { opers: [{ name: '阿米娅' }] };
+  page.requestFilterUpdate({ forceFull: false, dirtyCards: new Set([missing.card]) });
+  runOnlyCallback(frames);
+  assert.strictEqual(processed, 1);
+  assert(page.document.getElementById('prts-filter-results').textContent.includes('可用 2 份'));
+  cards.splice(cards.indexOf(available.card), 1);
+  signature = 'changed again';
+  page.requestFilterUpdate({ forceFull: false, dirtyCards: new Set([missing.card]) });
+  runOnlyCallback(frames);
+  assert.strictEqual(processed, 2);
+  assert(page.document.getElementById('prts-filter-results').textContent.includes('本页 1 份作业，可用 1 份'));
+});
+
+test('statistics reset for empty pages, disabled routes, inactive filters and accounts without data', () => {
+  const { page, addCard, cards, frames } = createFilterPage('HIDE');
+  const results = page.document.getElementById('prts-filter-results');
+  assert.strictEqual(results.querySelector('.prts-filter-summary').textContent, '正在统计本页作业…');
+  addCard({ opers: [{ name: 'W' }] });
+  page.applyFilterLogic();
+  page.toggleFilter('PERFECT');
+  runOnlyCallback(frames);
+  assert.strictEqual(results.querySelector('.prts-filter-summary').textContent, '本页 1 份作业，未开启筛选。');
+  assert.strictEqual(results.querySelector('.prts-filter-empty').hidden, true);
+  const state = page.getCurrentAccountState();
+  state.accountsData[1] = [];
+  page.publishAccountState(state);
+  page.requestFilterUpdate();
+  runOnlyCallback(frames);
+  assert(results.textContent.includes('请先导入干员数据后筛选'));
+  cards.length = 0;
+  page.applyFilterLogic();
+  assert.strictEqual(results.querySelector('.prts-filter-summary').textContent, '本页 0 份作业。');
+  assert(results.querySelector('.prts-filter-empty-message').textContent.includes('若正在加载，请稍候'));
+  page.renderFilterResults(null);
+  assert.strictEqual(results.querySelector('.prts-filter-summary').textContent, '正在统计本页作业…');
+  page.isFilterDisabledPage = () => true;
+  page.applyFilterLogic();
+  page.injectFilterControls();
+  assert.strictEqual(page.document.getElementById('prts-filter-results'), null);
+});
+
+test('video-only pages explain video hiding instead of offering an ineffective gray-mode action', () => {
+  const { page, addCard } = createFilterPage('HIDE');
+  page.__testExports.CONFIG.hideVideo = true;
+  addCard({ type: 'VIDEO', opers: [null] });
+  page.applyFilterLogic();
+  assert(page.document.getElementById('prts-filter-results').textContent.includes('本页作业均为视频，已被隐藏'));
+  assert.strictEqual(page.document.getElementById('btn-filter-show-all').hidden, true);
+});
 
 test('malformed cards stay pending while later cards filter and repaired cards recover', () => {
   for (const displayMode of ['GRAY', 'HIDE']) {
