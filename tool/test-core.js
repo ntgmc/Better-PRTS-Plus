@@ -16,7 +16,8 @@ const sourceFiles = [
   'src/dom/card-resolution.js',
   'src/filter/operation-matching.js',
   'src/import/accounts.js',
-  'src/dom/page-enhancements.js'
+  'src/dom/page-enhancements.js',
+  'src/ui/panels.js'
 ];
 
 const source = sourceFiles
@@ -880,8 +881,10 @@ test('backup round trips every registered option and restores unified settings',
     refreshAccountStateUi: context.refreshAccountStateUi, syncPageScaffold: context.syncPageScaffold
   };
   let reloads = 0;
+  const notice = { hidden: true };
   context.location = { reload() { reloads++; } };
-  context.refreshAccountStateUi = () => {};
+  context.document = { getElementById: () => notice, querySelectorAll: () => [] };
+  context.refreshAccountStateUi = () => context.updateSettingsReloadNotice();
   context.syncPageScaffold = () => {};
   try {
     Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
@@ -906,12 +909,13 @@ test('backup round trips every registered option and restores unified settings',
     assert.strictEqual(restored.trainingPromptStyle, 'DETAILED');
     assert.strictEqual(restored.compatDebug, true);
     assert.deepStrictEqual(restored.floatingPosition, { top: '61%', isRight: false });
-    assert.strictEqual(reloads, 1);
+    assert.strictEqual(reloads, 0);
+    assert.strictEqual(notice.hidden, false);
     assert.strictEqual(storage.has('prts_cfg_visuals'), false);
     assert.strictEqual(storage.has('prts_plus_filter_mode'), false);
-    context.document = { querySelectorAll: () => [] };
     applyAccountsBackup(backup);
-    assert.strictEqual(reloads, 1);
+    assert.strictEqual(reloads, 0);
+    assert.strictEqual(notice.hidden, false);
   } finally {
     Object.assign(CONFIG, savedConfig);
     Object.assign(context, savedContext);
@@ -924,6 +928,83 @@ test('backup round trips every registered option and restores unified settings',
 function hostArray(value) {
   return Array.from(value);
 }
+
+test('settings batch reload notices survive multiple changes and clear when reverted', () => {
+  const saved = new Map([[CONFIG_KEY, JSON.stringify({ operatorAvatars: false })]]);
+  const page = createAccountPage(saved, 'prts.plus');
+  const config = page.__testExports.CONFIG;
+  const notice = { hidden: true };
+  page.document = { getElementById: () => notice, querySelectorAll: () => [] };
+  const update = (key, value) => {
+    config[key] = value;
+    page.saveConfig();
+    page.refreshAccountControls();
+    assert.strictEqual(JSON.parse(saved.get(CONFIG_KEY))[key], value);
+  };
+
+  update('operatorAvatars', false);
+  assert.strictEqual(notice.hidden, true, 'an enhancement never enabled needs no reload');
+  update('hideVideo', true);
+  assert.strictEqual(notice.hidden, true, 'live settings need no reload');
+  update('collapseDescription', false);
+  update('stageBadge', false);
+  assert.strictEqual(notice.hidden, false);
+  update('collapseDescription', true);
+  assert.strictEqual(notice.hidden, false, 'another setting still needs reload');
+  update('stageBadge', true);
+  assert.strictEqual(notice.hidden, true);
+  update('operatorAvatars', true);
+  update('operatorAvatars', false);
+  assert.strictEqual(notice.hidden, false, 'enhancements enabled in this session need reload on disable');
+  const reloaded = createAccountPage(saved, 'prts.plus');
+  assert.strictEqual(reloaded.needsSettingsReload(), false);
+});
+
+test('floating layout clamps both edges and the panel to the visible viewport', () => {
+  const page = createAccountPage(new Map(), 'prts.plus');
+  const config = page.__testExports.CONFIG;
+  const container = Object.assign(createTestElement(), { offsetWidth: 48, offsetHeight: 48 });
+  const panel = {
+    classList: createTestElement().classList,
+    style: { setProperty(key, value) { this[key] = value; } },
+    get offsetWidth() { return Math.min(320, parseFloat(this.style['--prts-panel-width'])); },
+    get offsetHeight() { return Math.min(560, parseFloat(this.style['--prts-panel-max-height'])); }
+  };
+  page.document = { getElementById: id => id === 'prts-float-container' ? container : panel };
+  for (const [width, height, offsetLeft, offsetTop] of [
+    [320, 568, 0, 0], [375, 667, 0, 0], [414, 896, 0, 0],
+    [768, 1024, 0, 0], [667, 375, 0, 0], [192, 340, 80, 120], [160, 284, 0, 0], [333, 187, 0, 0]
+  ]) {
+    page.window.innerWidth = 1280;
+    page.window.innerHeight = 900;
+    page.window.visualViewport = { width, height, offsetLeft, offsetTop };
+    for (const isRight of [false, true]) {
+      for (const top of ['0%', '40%', '95%']) {
+        config.floatingPosition = { top, isRight };
+        page.updateFloatingLayout();
+        const ballTop = parseFloat(container.style.top);
+        const panelTop = ballTop + parseFloat(panel.style.top);
+        assert(ballTop >= offsetTop && ballTop + 48 <= offsetTop + height);
+        assert(panelTop >= offsetTop + 12);
+        assert(panelTop + panel.offsetHeight <= offsetTop + height - 12);
+        const ballLeft = offsetLeft + (isRight ? width - container.offsetWidth : 0);
+        const panelLeft = ballLeft + parseFloat(panel.style.left);
+        assert(panelLeft >= offsetLeft + 12);
+        assert(panelLeft + panel.offsetWidth <= offsetLeft + width - 12);
+        assert.strictEqual(parseFloat(panel.style['--prts-panel-width']), width - 24);
+        assert.strictEqual(container.classList.contains('snap-right'), isRight);
+        assert.strictEqual(panel.classList.contains('prts-settings-compact'), height < 240);
+        assert.strictEqual(container.style.left, isRight ? 'auto' : `${offsetLeft}px`);
+        assert.strictEqual(container.style.right, isRight ? `${1280 - offsetLeft - width}px` : 'auto');
+      }
+    }
+  }
+  page.window.visualViewport = undefined;
+  config.floatingPosition = { top: '95%', isRight: true };
+  page.updateFloatingLayout();
+  assert.strictEqual(container.style.top, '852px');
+  assert.strictEqual(parseFloat(panel.style['--prts-panel-max-height']), 876);
+});
 
 test('video cards use operation type or localized title tag', () => {
   const prtsTag = { textContent: 'PRTS' };

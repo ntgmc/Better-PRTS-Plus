@@ -342,23 +342,48 @@ ${formatSklandImportSummary(summary)}`, 'success');
         return lines.join('\n');
     }
 
+    function updateSettingsReloadNotice() {
+        const notice = document.getElementById('prts-settings-reload');
+        if (notice) notice.hidden = !needsSettingsReload();
+    }
+
+    function updateFloatingLayout() {
+        const container = document.getElementById('prts-float-container');
+        if (!container || container.classList.contains('is-dragging')) return;
+        const panel = document.getElementById('prts-settings-panel');
+        const viewport = window.visualViewport;
+        const left = viewport?.offsetLeft || 0;
+        const top = viewport?.offsetTop || 0;
+        const width = viewport?.width || window.innerWidth;
+        const height = viewport?.height || window.innerHeight;
+        const savedPos = CONFIG.floatingPosition;
+        const ballTop = Math.max(top, Math.min(
+            parseFloat(savedPos.top) / 100 * window.innerHeight, top + height - container.offsetHeight
+        ));
+
+        container.style.top = `${ballTop}px`;
+        container.style.left = savedPos.isRight ? 'auto' : `${left}px`;
+        container.style.right = savedPos.isRight ? `${window.innerWidth - left - width}px` : 'auto';
+        container.classList.toggle('snap-right', savedPos.isRight);
+        container.classList.toggle('snap-left', !savedPos.isRight);
+        panel.classList.toggle('prts-settings-compact', height < 240);
+        panel.style.setProperty('--prts-panel-width', `${Math.max(0, width - 24)}px`);
+        panel.style.setProperty('--prts-panel-max-height', `${Math.max(0, height - 24)}px`);
+        // 以悬浮球为锚点，空间不足时贴合可见视口；面板不参与拖拽区域的尺寸计算。
+        const ballLeft = left + (savedPos.isRight ? width - container.offsetWidth : 0);
+        const preferredLeft = savedPos.isRight ? ballLeft - 7 - panel.offsetWidth : ballLeft + container.offsetWidth + 7;
+        const panelLeft = Math.max(left + 12, Math.min(preferredLeft, left + width - panel.offsetWidth - 12));
+        const panelTop = Math.max(top + 12, Math.min(ballTop, top + height - panel.offsetHeight - 12));
+        panel.style.left = `${panelLeft - ballLeft}px`;
+        panel.style.right = 'auto';
+        panel.style.top = `${panelTop - ballTop}px`;
+    }
+
     function createFloatingBall() {
         if (document.getElementById('prts-float-container')) return;
 
-        const savedPos = CONFIG.floatingPosition;
         const container = document.createElement('div');
         container.id = 'prts-float-container';
-
-        container.style.top = savedPos.top;
-        if (savedPos.isRight) {
-            container.style.left = 'auto';
-            container.style.right = '0px';
-            container.classList.add('snap-right');
-        } else {
-            container.style.left = '0px';
-            container.style.right = 'auto';
-            container.classList.add('snap-left');
-        }
 
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -385,19 +410,36 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
-        title.tabIndex = 0;
-        title.setAttribute('role', 'button');
-        title.setAttribute('aria-label', '功能开关');
-        const titleText = document.createElement('span');
-        titleText.textContent = '功能开关';
-        titleText.style.marginRight = 'auto';
-        const titleHint = document.createElement('span');
-        titleHint.textContent = '部分关闭时刷新';
-        titleHint.style.fontSize = '12px';
-        titleHint.style.opacity = '0.6';
+        const titleText = document.createElement('button');
+        titleText.type = 'button';
+        titleText.className = 'prts-settings-heading';
+        titleText.textContent = '设置';
         title.appendChild(titleText);
-        title.appendChild(titleHint);
+        title.appendChild(createPrtsButton({
+            className: 'prts-btn prts-settings-close', icon: 'close', ariaLabel: '关闭脚本设置面板',
+            onClick: () => {
+                setFloatOpen(false);
+                btn.focus({ preventScroll: true });
+            }
+        }));
         panel.appendChild(title);
+
+        const content = document.createElement('div');
+        content.className = 'prts-settings-content';
+        panel.appendChild(content);
+
+        const reloadNotice = document.createElement('div');
+        reloadNotice.id = 'prts-settings-reload';
+        reloadNotice.hidden = true;
+        const reloadStatus = document.createElement('div');
+        reloadStatus.setAttribute('role', 'status');
+        reloadStatus.setAttribute('aria-live', 'polite');
+        reloadStatus.textContent = '已保存，刷新后生效';
+        reloadNotice.appendChild(reloadStatus);
+        reloadNotice.appendChild(createPrtsButton({
+            text: '立即刷新', icon: 'check', onClick: () => location.reload()
+        }));
+        panel.appendChild(reloadNotice);
 
         let debugOptionsRevealed = CONFIG.compatDebug === true;
         const debugOptions = document.createElement('div');
@@ -412,17 +454,12 @@ ${formatSklandImportSummary(summary)}`, 'success');
             debugOptions.classList.toggle('is-visible', debugOptionsRevealed);
         };
 
-        title.addEventListener('click', revealDebugOptions);
-        title.addEventListener('keydown', event => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                revealDebugOptions(event);
-            }
-        });
+        titleText.addEventListener('click', revealDebugOptions);
 
         let currentGroup = '';
         Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
             if (!definition.group) return;
-            const target = definition.group === '诊断' ? debugOptions : panel;
+            const target = definition.group === '诊断' ? debugOptions : content;
             if (definition.group !== currentGroup) {
                 const groupTitle = document.createElement('div');
                 groupTitle.className = 'prts-panel-title';
@@ -433,10 +470,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const onChange = value => {
                 CONFIG[key] = value;
                 saveConfig();
-                if (!value && definition.reloadOnDisable) {
-                    location.reload();
-                    return;
-                }
+                refreshAccountControls();
                 syncPageScaffold();
                 document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
                 requestFilterUpdate();
@@ -456,10 +490,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
                     const button = createPrtsButton({
                         className: 'prts-panel-segment', text: definition.optionLabels[value],
                         pressed: CONFIG[key] === value,
-                        onClick: () => {
-                            onChange(value);
-                            refreshAccountControls();
-                        }
+                        onClick: () => onChange(value)
                     });
                     button.dataset.prtsConfigKey = key;
                     button.value = value;
@@ -474,7 +505,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 }));
             }
         });
-        panel.appendChild(debugOptions);
+        content.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
         const accRow = document.createElement('div');
@@ -538,15 +569,15 @@ ${formatSklandImportSummary(summary)}`, 'success');
             accBtnGroup.appendChild(row);
         }
         accRow.appendChild(accBtnGroup);
-        panel.appendChild(accRow);
+        content.appendChild(accRow);
 
         const importBtn = createPrtsButton({ className: 'prts-btn', icon: 'import', text: '导入干员数据', onClick: handleImport });
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
-        panel.appendChild(importBtn);
+        content.appendChild(importBtn);
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
-        panel.appendChild(sklandBtn);
+        content.appendChild(sklandBtn);
 
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
@@ -557,16 +588,21 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
-        panel.appendChild(backupActions);
+        content.appendChild(backupActions);
 
         container.appendChild(panel);
         container.appendChild(btn);
         document.body.appendChild(container);
         refreshAccountControls();
+        updateFloatingLayout();
+        window.addEventListener('resize', updateFloatingLayout);
+        window.visualViewport?.addEventListener('resize', updateFloatingLayout);
+        window.visualViewport?.addEventListener('scroll', updateFloatingLayout);
+        new ResizeObserver(updateFloatingLayout).observe(panel);
 
         let isDragging = false;
         let hasMoved = false;
-        let startX, startY, initialLeft, initialTop, initialSnapRight, activePointerId;
+        let startX, startY, initialLeft, initialTop, activePointerId;
 
         btn.addEventListener('pointerdown', (e) => {
             activePointerId = e.pointerId;
@@ -577,8 +613,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const rect = container.getBoundingClientRect();
             initialLeft = rect.left;
             initialTop = rect.top;
-            initialSnapRight = container.style.right === '0px' || (container.classList.contains('snap-right') && !container.classList.contains('snap-left'));
-
             container.classList.remove('is-snapping');
             container.classList.add('is-dragging');
             container.style.left = initialLeft + 'px';
@@ -594,20 +628,21 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (activePointerId !== undefined && e.pointerId !== activePointerId) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                hasMoved = true;
+                setFloatOpen(false);
+            }
 
             let newLeft = initialLeft + dx;
             let newTop = initialTop + dy;
 
-            const winWidth = window.innerWidth;
-            const winHeight = window.innerHeight;
-            const elWidth = container.offsetWidth;
-            const elHeight = container.offsetHeight;
-
-            if (newLeft < 0) newLeft = 0;
-            if (newLeft > winWidth - elWidth) newLeft = winWidth - elWidth;
-            if (newTop < 0) newTop = 0;
-            if (newTop > winHeight - elHeight) newTop = winHeight - elHeight;
+            const viewport = window.visualViewport;
+            const left = viewport?.offsetLeft || 0;
+            const top = viewport?.offsetTop || 0;
+            const width = viewport?.width || window.innerWidth;
+            const height = viewport?.height || window.innerHeight;
+            newLeft = Math.max(left, Math.min(newLeft, left + width - container.offsetWidth));
+            newTop = Math.max(top, Math.min(newTop, top + height - container.offsetHeight));
 
             container.style.left = newLeft + 'px';
             container.style.top = newTop + 'px';
@@ -616,6 +651,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const finishDrag = (e) => {
             if (!isDragging) return;
             if (activePointerId !== undefined && e.pointerId !== activePointerId) return;
+            const rect = container.getBoundingClientRect();
             isDragging = false;
             btn.releasePointerCapture?.(activePointerId);
             activePointerId = undefined;
@@ -623,56 +659,31 @@ ${formatSklandImportSummary(summary)}`, 'success');
             container.style.transform = '';
 
             if (hasMoved) {
-                const winWidth = window.innerWidth;
-                const rect = container.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-
-                container.classList.add('is-snapping');
-                let isRight = true;
-                if (centerX < winWidth / 2) {
-                    container.style.left = '0px';
-                    container.style.right = 'auto';
-                    container.classList.remove('snap-right');
-                    container.classList.add('snap-left');
-                    isRight = false;
-                } else {
-                    container.style.left = 'auto';
-                    container.style.right = '0px';
-                    container.classList.remove('snap-left');
-                    container.classList.add('snap-right');
-                    isRight = true;
-                }
-                const topPercent = (rect.top / window.innerHeight * 100).toFixed(1) + '%';
-                container.style.top = topPercent;
-
-                CONFIG.floatingPosition = { top: topPercent, isRight: isRight };
+                const viewport = window.visualViewport;
+                const midpoint = (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth) / 2;
+                CONFIG.floatingPosition = {
+                    top: (rect.top / window.innerHeight * 100).toFixed(1) + '%',
+                    isRight: rect.left + rect.width / 2 >= midpoint
+                };
                 saveConfig();
-            } else {
-                if (initialSnapRight) {
-                    container.style.left = 'auto';
-                    container.style.right = '0px';
-                    container.classList.remove('snap-left');
-                    container.classList.add('snap-right');
-                } else {
-                    container.style.left = '0px';
-                    container.style.right = 'auto';
-                    container.classList.remove('snap-right');
-                    container.classList.add('snap-left');
-                }
+                container.classList.add('is-snapping');
             }
+            updateFloatingLayout();
         };
 
         document.addEventListener('pointerup', finishDrag);
         document.addEventListener('pointercancel', finishDrag);
 
         const setFloatOpen = isOpen => {
+            if (isOpen) updateFloatingLayout();
             container.classList.toggle('prts-float-open', isOpen);
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         };
 
         btn.onclick = (e) => {
             e.stopPropagation();
-            if (!hasMoved) setFloatOpen(!container.classList.contains('prts-float-open'));
+            if (!hasMoved || e.detail === 0) setFloatOpen(!container.classList.contains('prts-float-open'));
+            hasMoved = false;
         };
         panel.onclick = (e) => e.stopPropagation();
         document.addEventListener('click', () => {

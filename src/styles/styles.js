@@ -993,11 +993,17 @@
     #prts-float-container.snap-left .prts-float-btn::after { left: auto; right: 5px; }
     #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn::after { opacity: 0; }
     #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn svg { opacity: 1; }
+    /* Hallmark · component: settings panel · theme: existing PRTS tokens
+     * states: open, saved, pending reload, focus; pre-emit critique: P5 H4 E4 S5 R5 V4 */
     .prts-settings-panel {
-        width: min(292px, calc(100vw - 72px)) !important;
-        max-height: min(560px, calc(100vh - 24px));
-        overflow: auto;
-        overscroll-behavior: contain;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        z-index: 3;
+        width: min(292px, var(--prts-panel-width, calc(100vw - 24px))) !important;
+        max-height: min(560px, var(--prts-panel-max-height, calc(100dvh - 24px)));
+        overflow: hidden;
+        transition: visibility var(--prts-duration-base), opacity var(--prts-duration-base) var(--prts-ease-out), transform var(--prts-duration-base) var(--prts-ease-out);
         padding: var(--prts-space-4) !important;
         border-color: var(--prts-color-border-soft) !important;
         border-radius: var(--prts-radius-lg) !important;
@@ -1006,6 +1012,39 @@
         box-shadow: var(--prts-shadow-lg) !important;
         font-family: var(--prts-font-sans) !important;
     }
+    .prts-settings-panel * { box-sizing: border-box; }
+    .prts-settings-panel > .prts-panel-title { flex-shrink: 0; gap: var(--prts-space-2); }
+    .prts-settings-heading {
+        margin-right: auto;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .prts-settings-heading:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
+    .prts-settings-close { flex: 0 0 44px; width: 44px; min-height: 44px !important; margin: 0 !important; padding: 0 !important; }
+    .prts-settings-content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+    .prts-settings-content .prts-panel-actions { flex-wrap: wrap; }
+    .prts-settings-content .prts-panel-actions .prts-btn { flex: 1 1 118px !important; min-width: 0; }
+    .prts-settings-panel.prts-settings-compact { padding: var(--prts-space-2) !important; }
+    .prts-settings-compact > .prts-panel-title { margin-bottom: var(--prts-space-1); }
+    #prts-settings-reload {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--prts-space-2);
+        margin-top: var(--prts-space-2);
+        padding-top: var(--prts-space-2);
+        border-top: 1px solid var(--prts-color-border-soft);
+        font-size: 13px;
+    }
+    #prts-settings-reload[hidden] { display: none; }
+    #prts-settings-reload > [role='status'] { flex: 1 1 120px; min-width: 0; }
+    #prts-settings-reload .prts-btn { flex: 1 1 96px; min-width: 0; margin: 0 !important; min-height: 44px !important; white-space: nowrap; }
     .prts-panel-title {
         color: var(--prts-color-text) !important;
         border-color: var(--prts-color-border-soft) !important;
@@ -1075,8 +1114,8 @@
         }
         #prts-float-container { max-width: calc(100vw - 24px); }
         .prts-settings-panel {
-            width: min(320px, calc(100vw - 72px)) !important;
-            max-height: calc(100vh - 24px);
+            width: min(320px, var(--prts-panel-width, calc(100vw - 24px))) !important;
+            max-height: var(--prts-panel-max-height, calc(100dvh - 24px));
         }
         #prts-import-dialog, #prts-modal {
             border-radius: var(--prts-radius-lg) var(--prts-radius-lg) 0 0 !important;

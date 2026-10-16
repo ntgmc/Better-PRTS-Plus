@@ -125,6 +125,7 @@
                 else input.checked = CONFIG[key] === true;
             }
         });
+        updateSettingsReloadNotice();
     }
 
     function refreshAccountStateUi(forceFilterUpdate = false) {
@@ -132,7 +133,7 @@
         if (bar) bar.remove();
         injectFilterControls();
         refreshAccountControls();
-        applyFloatingPositionToContainer();
+        updateFloatingLayout();
         applySidebarCollapse();
         if (forceFilterUpdate || CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
     }
@@ -343,39 +344,13 @@
         return lines.join('\n');
     }
 
-    function applyFloatingPositionToContainer() {
-        const container = document.getElementById('prts-float-container');
-        if (!container) return;
-
-        const savedPos = CONFIG.floatingPosition;
-        container.style.top = savedPos.top;
-        if (savedPos.isRight) {
-            container.style.left = 'auto';
-            container.style.right = '0px';
-            container.classList.add('snap-right');
-            container.classList.remove('snap-left');
-        } else {
-            container.style.left = '0px';
-            container.style.right = 'auto';
-            container.classList.add('snap-left');
-            container.classList.remove('snap-right');
-        }
-    }
-
     function applyAccountsBackup(backup) {
         const nextState = createAccountState(backup);
         const preferences = normalizeBackupPreferences(backup.preferences);
         const nextConfig = normalizeConfig({ ...preferences.config, ...preferences });
-        const needsReload = Object.entries(CONFIG_DEFINITIONS).some(([key, definition]) =>
-            definition.reloadOnDisable && CONFIG[key] && !nextConfig[key]);
-
         commitAccountState(nextState);
         Object.assign(CONFIG, nextConfig);
         saveConfig();
-        if (needsReload) {
-            location.reload();
-            return;
-        }
 
         refreshAccountStateUi(true);
         syncPageScaffold();

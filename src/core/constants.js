@@ -64,9 +64,19 @@
     }
 
     const CONFIG = loadConfig();
+    // 这些增强会修改原站 DOM；本页启用过后，关闭需刷新才能完整还原。
+    const enabledReloadSettings = new Set(Object.keys(CONFIG_DEFINITIONS).filter(key =>
+        CONFIG_DEFINITIONS[key].reloadOnDisable && CONFIG[key]));
+
+    function needsSettingsReload() {
+        return [...enabledReloadSettings].some(key => !CONFIG[key]);
+    }
 
     function saveConfig() {
         GM_setValue(CONFIG_KEY, JSON.stringify(normalizeConfig(CONFIG)));
+        Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
+            if (definition.reloadOnDisable && CONFIG[key]) enabledReloadSettings.add(key);
+        });
     }
 
     const BP_SELECTORS = {
