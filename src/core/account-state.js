@@ -109,6 +109,37 @@
         return { state, migrated, diagnostics };
     }
 
+    function getOperatorImportDiff(previousNames, nextNames, previousTraining = {}, nextTraining = {}) {
+        const previousSet = new Set(sanitizeOperatorNames(previousNames));
+        const nextSet = new Set(sanitizeOperatorNames(nextNames));
+        const removedNames = [...previousSet].filter(name => !nextSet.has(name));
+        const diff = {
+            added: 0, removed: removedNames.length, total: nextSet.size, removedNames,
+            trainingCount: 0, decreasedTrainingNames: [], clearedTrainingNames: []
+        };
+
+        nextSet.forEach(name => {
+            if (!previousSet.has(name)) diff.added += 1;
+            const next = normalizeOperatorTraining(
+                Object.prototype.hasOwnProperty.call(nextTraining, name) ? nextTraining[name] : null
+            );
+            if (Object.keys(next).length) diff.trainingCount += 1;
+            if (!previousSet.has(name)) return;
+
+            const previous = normalizeOperatorTraining(
+                Object.prototype.hasOwnProperty.call(previousTraining, name) ? previousTraining[name] : null
+            );
+            const fields = Object.entries(previous);
+            if (fields.some(([key]) => next[key] === undefined)) diff.clearedTrainingNames.push(name);
+            // 精英化升级会重置等级，不能只比较等级数值。
+            if (fields.some(([key, value]) => next[key] < value
+                && !(key === 'level' && next.elite > previous.elite))) {
+                diff.decreasedTrainingNames.push(name);
+            }
+        });
+        return diff;
+    }
+
     function createAccountSwitchState(state, accountId) {
         return createAccountState({ ...createAccountState(state), activeAccountId: accountId });
     }

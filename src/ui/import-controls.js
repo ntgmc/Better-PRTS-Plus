@@ -11,22 +11,6 @@
         return error instanceof Error ? error.message : '未知错误';
     }
 
-    function getOperatorImportDiff(previousNames, nextNames) {
-        const previousSet = new Set(sanitizeOperatorNames(previousNames));
-        const nextSet = new Set(sanitizeOperatorNames(nextNames));
-        let added = 0;
-        let removed = 0;
-
-        nextSet.forEach(name => {
-            if (!previousSet.has(name)) added += 1;
-        });
-        previousSet.forEach(name => {
-            if (!nextSet.has(name)) removed += 1;
-        });
-
-        return { added, removed, total: nextSet.size };
-    }
-
     function formatOperatorImportDiff(diff) {
         return `新增 ${diff.added} / 移除 ${diff.removed} / 当前 ${diff.total}`;
     }
@@ -52,7 +36,7 @@
         document.getElementById('prts-import-dialog-backdrop')?.remove();
     }
 
-    function applyImportedOperatorNames(accountId, names, sourceLabel, statusEl, training = {}) {
+    async function applyImportedOperatorNames(accountId, names, sourceLabel, statusEl, training = {}) {
         const targetAccountId = normalizeAccountId(accountId);
         const sanitizedNames = sanitizeOperatorNames(names);
         if (sanitizedNames.length === 0) {
@@ -62,14 +46,18 @@
             return false;
         }
 
-        const accountLabel = getAccountLabel(targetAccountId);
-        const diff = getOperatorImportDiff(accountsData[targetAccountId] || [], sanitizedNames);
+        const nextState = await confirmOperatorImport(targetAccountId, sanitizedNames, training, sourceLabel);
+        if (!nextState) {
+            setOperatorImportStatus(statusEl, '已取消导入，未修改账号数据。');
+            return false;
+        }
+        const accountLabel = nextState.accountMeta[targetAccountId].label;
+        const diff = getOperatorImportDiff(nextState.accountsData[targetAccountId], sanitizedNames);
         const diffText = formatOperatorImportDiff(diff);
         const sourceText = sourceLabel ? `来源：${sourceLabel}` : '来源：导入内容';
         const unrecognizedNames = sanitizedNames.filter(name => !Object.prototype.hasOwnProperty.call(OP_ID_MAP, name));
         const recognitionText = `已识别 ${sanitizedNames.length - unrecognizedNames.length} 名 / 未识别 ${unrecognizedNames.length} 名`;
 
-        const nextState = getCurrentAccountState();
         nextState.accountsData[targetAccountId] = sanitizedNames;
         nextState.accountsTraining[targetAccountId] = training;
         commitAccountState(nextState);
@@ -99,10 +87,10 @@
         setOperatorImportStatus(statusEl, `正在读取 ${file.name || '导入文件'}...`, 'loading');
         return new Promise(resolve => {
             const reader = new FileReader();
-            reader.onload = event => {
+            reader.onload = async event => {
                 try {
                     const { names, training } = parseImportedOperators(event.target.result, file.name);
-                    resolve(applyImportedOperatorNames(accountId, names, file.name || '文件导入', statusEl, training));
+                    resolve(await applyImportedOperatorNames(accountId, names, file.name || '文件导入', statusEl, training));
                 } catch (error) {
                     const message = getImportErrorMessage(error);
                     console.error('[Better PRTS] 导入干员数据失败', error);
@@ -150,7 +138,7 @@
         title.textContent = `导入到 ${getAccountLabel(targetAccountId)}`;
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-import-subtitle';
-        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，导入后会替换此账号的干员列表。';
+        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，预览变化并确认后替换此账号的数据。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -228,7 +216,7 @@
             fileInput.value = '';
         };
 
-        pasteBtn.onclick = () => {
+        pasteBtn.onclick = async () => {
             const rawText = textarea.value;
             if (!rawText.trim()) {
                 const message = '请先粘贴 JSON 或逐行干员名称。';
@@ -238,14 +226,17 @@
                 return;
             }
 
+            setBusy(true);
             try {
                 const { names, training } = parseImportedOperators(rawText, '');
-                applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
+                await applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
             } catch (error) {
                 const message = getImportErrorMessage(error);
                 console.error('[Better PRTS] 粘贴导入干员数据失败', error);
                 setOperatorImportStatus(status, `导入失败：${message}`, 'error');
                 showPrtsToast('导入失败', 'error', message);
+            } finally {
+                setBusy(false);
             }
         };
 
@@ -269,6 +260,7 @@
         });
 
         const handleKeydown = event => {
+            if (document.getElementById('prts-modal')) return;
             if (event.key === 'Escape') closeOperatorImportDialog();
             if (event.key === 'Tab') {
                 const focusable = getFocusableDialogElements(dialog);

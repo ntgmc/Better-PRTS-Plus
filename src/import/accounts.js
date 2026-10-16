@@ -137,6 +137,46 @@
         if (forceFilterUpdate || CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
     }
 
+    async function confirmOperatorImport(accountId, names, training, sourceLabel) {
+        const id = normalizeAccountId(accountId);
+        while (true) {
+            const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
+            reportAccountStateDiagnostics(resolved.diagnostics);
+            const state = resolved.state;
+            const diff = getOperatorImportDiff(state.accountsData[id], names, state.accountsTraining[id], training);
+            const danger = diff.removed > 0 || diff.decreasedTrainingNames.length > 0 || diff.clearedTrainingNames.length > 0;
+            const lines = [
+                `导入到：${state.accountMeta[id].label}（账号 ${id}）`,
+                `来源：${sourceLabel || '导入内容'}`,
+                `当前 ${state.accountsData[id].length} 名 → 导入后 ${diff.total} 名`,
+                `新增 ${diff.added} 名 / 移除 ${diff.removed} 名`,
+                diff.trainingCount ? `包含练度：${diff.trainingCount} / ${diff.total} 名干员` : '不包含练度数据',
+                '导入会替换此账号的干员名单和练度。'
+            ];
+            if (diff.removed) lines.push(`将移除 ${diff.removed} 名干员：${diff.removedNames.join('、')}`);
+            if (diff.decreasedTrainingNames.length) {
+                lines.push(`练度将降低 ${diff.decreasedTrainingNames.length} 名：${diff.decreasedTrainingNames.join('、')}`);
+            }
+            if (diff.clearedTrainingNames.length) {
+                lines.push(`部分或全部练度将被清空 ${diff.clearedTrainingNames.length} 名：${diff.clearedTrainingNames.join('、')}`);
+            }
+            if (danger) lines.push('请核对账号和来源，确认要覆盖这些已有数据吗？');
+            const confirmed = await showPrtsConfirm({
+                title: danger ? '导入将覆盖已有数据' : '导入预览',
+                message: lines.join('\n'),
+                confirmText: danger ? '确认覆盖并导入' : '确认导入',
+                cancelText: '取消',
+                tone: danger ? 'danger' : ''
+            });
+            if (!confirmed) return null;
+
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            if (['accountsData', 'accountsTraining', 'accountMeta'].some(key =>
+                JSON.stringify(state[key][id]) !== JSON.stringify(latest[key][id]))) continue;
+            return latest;
+        }
+    }
+
     async function renameAccount(id) {
         const accountId = normalizeAccountId(id);
         const currentLabel = getAccountLabel(accountId);

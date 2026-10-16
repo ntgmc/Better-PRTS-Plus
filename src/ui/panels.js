@@ -103,7 +103,7 @@
 
         const body = document.createElement('div');
         body.className = 'prts-skland-body';
-        const defaultStatusText = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
+        const defaultStatusText = '请先确认当前页面已经登录森空岛。读取后将预览干员名单和练度变化，确认后导入。';
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
@@ -151,7 +151,7 @@
 
         importBtn.onclick = async () => {
             const accountId = targetAccountId;
-            const progressText = `正在读取森空岛数据，并导入到 ${getAccountLabel(accountId)}。`;
+            const progressText = `正在读取森空岛数据，稍后请确认导入到 ${getAccountLabel(accountId)} 的变化。`;
             const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
             importBtn.disabled = true;
             importBtn.textContent = '同步中…';
@@ -168,7 +168,7 @@
                 updateToast('森空岛数据同步成功', 'success', detail);
             } catch (error) {
                 if (isSklandImportCancelledError(error)) {
-                    setSklandPanelStatus(status, '已取消角色选择，未修改账号数据。', '');
+                    setSklandPanelStatus(status, '已取消导入，未修改账号数据。', '');
                     updateToast('已取消森空岛数据同步', 'info', '未修改账号数据。');
                     return;
                 }

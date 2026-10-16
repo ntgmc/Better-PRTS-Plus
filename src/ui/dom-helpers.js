@@ -374,7 +374,7 @@
             };
 
             document.body.appendChild(backdrop);
-            window.setTimeout(() => (inputEl || confirmBtn).focus(), 0);
+            window.setTimeout(() => (inputEl || (tone === 'danger' ? cancelBtn : confirmBtn)).focus(), 0);
         });
     }
 

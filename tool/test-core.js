@@ -23,6 +23,7 @@ const source = sourceFiles
   .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8'))
   .join('\n') + `
 globalThis.__testExports = {
+  getOperatorImportDiff,
   BUILTIN_RESOURCE_VERSION,
   CONFIG_KEY,
   CONFIG_DEFINITIONS,
@@ -117,6 +118,7 @@ vm.createContext(context);
 vm.runInContext(source, context, { filename: 'better-prts-plus-core.js' });
 
 const {
+  getOperatorImportDiff,
   BUILTIN_RESOURCE_VERSION,
   CONFIG_KEY,
   CONFIG_DEFINITIONS,
@@ -1096,7 +1098,7 @@ test('file and pasted imports preserve accounts on errors and report unrecognize
     const status = dialog.querySelector('.prts-import-status');
     if (method === 'paste') {
       dialog.querySelector('.prts-import-textarea').value = example.raw;
-      dialog.querySelector('.prts-import-action primary').onclick();
+      await dialog.querySelector('.prts-import-action primary').onclick();
     } else {
       const pending = dialog.querySelector('input').onchange({
         target: { files: [{ name: 'ops.txt', size: example.raw.length }] }
@@ -1130,6 +1132,33 @@ test('file and pasted imports preserve accounts on errors and report unrecognize
     }
     page.closeOperatorImportDialog();
   }
+});
+
+test('import differences detect removals, lower training and missing fields without treating promotion as a downgrade', () => {
+  const previous = { elite: 1, level: 80, potential: 6, mainSkill: 7, skill1: 3, skill2: 3, skill3: 3,
+    modX: 3, modY: 3, modD: 3, modA: 3, modB: 3 };
+  for (const key of Object.keys(previous)) {
+    const lower = { ...previous, [key]: previous[key] - 1 };
+    const diff = getOperatorImportDiff(['阿米娅'], ['阿米娅'], { 阿米娅: previous }, { 阿米娅: lower });
+    assert.deepStrictEqual(hostArray(diff.decreasedTrainingNames), ['阿米娅'], key);
+    assert.strictEqual(diff.clearedTrainingNames.length, 0, key);
+    delete lower[key];
+    const missing = getOperatorImportDiff(['阿米娅'], ['阿米娅'], { 阿米娅: previous }, { 阿米娅: lower });
+    assert.deepStrictEqual(hostArray(missing.clearedTrainingNames), ['阿米娅'], key);
+    assert.strictEqual(missing.decreasedTrainingNames.length, 0, key);
+  }
+  const promoted = getOperatorImportDiff(['阿米娅'], ['阿米娅', 'W', 'W'], { 阿米娅: previous },
+    { 阿米娅: { ...previous, elite: 2, level: 1 } });
+  assert.strictEqual(promoted.added, 1);
+  assert.strictEqual(promoted.total, 2);
+  assert.strictEqual(promoted.trainingCount, 1);
+  assert.strictEqual(promoted.decreasedTrainingNames.length, 0);
+  assert.strictEqual(promoted.clearedTrainingNames.length, 0);
+  const txt = getOperatorImportDiff(['阿米娅', 'W'], ['阿米娅'], { 阿米娅: previous });
+  assert.deepStrictEqual(hostArray(txt.removedNames), ['W']);
+  assert.deepStrictEqual(hostArray(txt.clearedTrainingNames), ['阿米娅']);
+  assert.strictEqual(txt.trainingCount, 0);
+  assert.strictEqual(getOperatorImportDiff(['W'], ['W'], { W: { modX: 0 } }).clearedTrainingNames.length, 1);
 });
 
 test('BOM JSON parses names and MAA training consistently for files and pasted text', () => {
@@ -1975,7 +2004,8 @@ function createAccountPage(sharedStorage, hostname) {
     ...context,
     window: { ...context.window, location: { ...context.window.location, hostname } },
     GM_getValue: (key, fallback) => sharedStorage.has(key) ? sharedStorage.get(key) : fallback,
-    GM_setValue: (key, value) => sharedStorage.set(key, value)
+    GM_setValue: (key, value) => sharedStorage.set(key, value),
+    showPrtsConfirm: async () => true
   });
   page.globalThis = page;
   vm.runInContext(source, page, { filename: 'better-prts-plus-account-page.js' });
@@ -1988,6 +2018,8 @@ function createOperatorImportPage(sharedStorage) {
   const body = createTestElement('body');
   const readers = [];
   const toasts = [];
+  const previews = [];
+  page.showPrtsConfirm = async options => { previews.push(options); return true; };
   page.document = {
     body, activeElement: null,
     createElement: tag => Object.assign(createTestElement(tag), { addEventListener() {}, focus() {} }),
@@ -2007,8 +2039,120 @@ function createOperatorImportPage(sharedStorage) {
   page.showPrtsToast = (...args) => toasts.push(args);
   page.refreshAccountStateUi = () => {};
   vm.runInContext(fs.readFileSync(path.join(repoRoot, 'src/ui/import-controls.js'), 'utf8'), page);
-  return { page, readers, toasts };
+  return { page, readers, toasts, previews };
 }
+
+test('file and paste imports preview destructive changes before writing and preserve data on cancellation', async () => {
+  const initial = createAccountState({ activeAccountId: 2,
+    accountsData: { 1: ['凯尔希'], 2: ['阿米娅', 'W'] },
+    accountsTraining: { 2: { 阿米娅: { elite: 2, level: 80, skill2: 3 } } },
+    accountMeta: { 2: { label: '大号', labelSource: 'manual' } }
+  });
+  for (const method of ['file', 'paste']) for (const confirmed of [false, true]) {
+    const stored = serializeAccountState(initial);
+    const sharedStorage = new Map([['prts_plus_accounts_data', stored]]);
+    const { page, readers, toasts } = createOperatorImportPage(sharedStorage);
+    let answer;
+    let preview;
+    let writes = 0;
+    page.showPrtsConfirm = options => { preview = options; return new Promise(resolve => { answer = resolve; }); };
+    page.GM_setValue = (key, value) => { writes++; sharedStorage.set(key, value); };
+    page.openOperatorImportDialog();
+    const dialog = page.document.getElementById('prts-import-dialog');
+    const paste = dialog.querySelector('.prts-import-action primary');
+    let pending;
+    if (method === 'file') {
+      pending = dialog.querySelector('input').onchange({ target: { files: [{ name: 'ops.txt', size: 9 }] } });
+      readers[0].onload({ target: { result: '阿米娅\n能天使' } });
+    } else {
+      dialog.querySelector('.prts-import-textarea').value = '阿米娅\n能天使';
+      pending = paste.onclick();
+    }
+    assert.strictEqual(writes, 0);
+    assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), stored);
+    assert.strictEqual(paste.disabled, true);
+    assert.strictEqual(preview.tone, 'danger');
+    assert.strictEqual(preview.confirmText, '确认覆盖并导入');
+    for (const text of ['大号（账号 2）', method === 'file' ? 'ops.txt' : '粘贴内容',
+      '当前 2 名 → 导入后 2 名', '新增 1 名 / 移除 1 名', '不包含练度数据', '将移除 1 名干员：W',
+      '部分或全部练度将被清空 1 名：阿米娅']) assert(preview.message.includes(text), text);
+    answer(confirmed);
+    await pending;
+    assert.strictEqual(paste.disabled, false);
+    assert.strictEqual(writes, confirmed ? 1 : 0);
+    if (confirmed) {
+      const saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
+      assert.deepStrictEqual(saved.accountsData[2], ['阿米娅', '能天使']);
+      assert.deepStrictEqual(saved.accountsTraining[2], {});
+      assert.strictEqual(toasts.at(-1)[1], 'success');
+    } else {
+      assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), stored);
+      assert.deepStrictEqual(hostObject(page.getCurrentAccountState()), hostObject(initial));
+      assert.strictEqual(dialog.querySelector('.prts-import-status').textContent, '已取消导入，未修改账号数据。');
+      assert.strictEqual(toasts.length, 0);
+    }
+  }
+});
+
+test('import preview repeats when the target changes and preserves other accounts changed during confirmation', async () => {
+  for (const targetChanged of [false, true]) {
+    const initial = createAccountState({ accountsData: { 1: ['阿米娅'] }, accountsTraining: { 1: { 阿米娅: { level: 10 } } } });
+    const sharedStorage = new Map([['prts_plus_accounts_data', serializeAccountState(initial)]]);
+    const { page, previews } = createOperatorImportPage(sharedStorage);
+    const remote = createAccountPage(sharedStorage, 'prts.plus');
+    page.showPrtsConfirm = async options => {
+      previews.push(options);
+      if (previews.length === 1) {
+        assert.strictEqual(options.tone, '');
+        assert(options.message.includes('包含练度：1 / 1 名干员'));
+        const latest = remote.getCurrentAccountState();
+        latest.activeAccountId = 3;
+        latest.accountsData[3] = ['W'];
+        if (targetChanged) latest.accountsTraining[1].阿米娅.level = 90;
+        remote.commitAccountState(latest);
+      } else {
+        assert.strictEqual(options.tone, 'danger');
+        assert(options.message.includes('练度将降低 1 名：阿米娅'));
+        return false;
+      }
+      return true;
+    };
+    const imported = await page.applyImportedOperatorNames(1, ['阿米娅'], '粘贴内容', null, { 阿米娅: { level: 20 } });
+    assert.strictEqual(imported, !targetChanged);
+    assert.strictEqual(previews.length, targetChanged ? 2 : 1);
+    const saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
+    assert.strictEqual(saved.accountsTraining[1].阿米娅.level, targetChanged ? 90 : 20);
+    assert.deepStrictEqual(saved.accountsData[3], ['W']);
+    assert.strictEqual(saved.activeAccountId, 3);
+  }
+});
+
+test('file and paste import write failures report errors and restore controls without changing published data', async () => {
+  for (const method of ['file', 'paste']) {
+    const initial = serializeAccountState({ accountsData: { 1: ['W'] } });
+    const sharedStorage = new Map([['prts_plus_accounts_data', initial]]);
+    const { page, readers, toasts } = createOperatorImportPage(sharedStorage);
+    vm.runInContext('GM_setValue = () => { throw new Error("storage failure"); };', page);
+    page.console = { ...page.console, error() {} };
+    page.openOperatorImportDialog();
+    const dialog = page.document.getElementById('prts-import-dialog');
+    const paste = dialog.querySelector('.prts-import-action primary');
+    let pending;
+    if (method === 'file') {
+      pending = dialog.querySelector('input').onchange({ target: { files: [{ name: 'ops.txt', size: 3 }] } });
+      readers[0].onload({ target: { result: '阿米娅' } });
+    } else {
+      dialog.querySelector('.prts-import-textarea').value = '阿米娅';
+      pending = paste.onclick();
+    }
+    await pending;
+    assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), initial);
+    assert.strictEqual(serializeAccountState(page.getCurrentAccountState()), initial);
+    assert.strictEqual(toasts.at(-1)[1], 'error');
+    assert.strictEqual(paste.disabled, false);
+    assert(dialog.querySelector('.prts-import-status error').textContent.includes('storage failure'));
+  }
+});
 
 test('file and paste imports preserve BOM JSON names and training through storage', async () => {
   for (const raw of [
@@ -2028,7 +2172,7 @@ test('file and paste imports preserve BOM JSON names and training through storag
         await pending;
       } else {
         dialog.querySelector('.prts-import-textarea').value = raw;
-        dialog.querySelector('.prts-import-actions').children
+        await dialog.querySelector('.prts-import-actions').children
           .find(button => button.textContent === '导入粘贴内容').onclick();
       }
       const saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
@@ -2181,7 +2325,7 @@ test('file and text imports keep the dialog target across remote account switche
       dialog.querySelector('.prts-import-textarea').value = raw;
       const pasteButton = dialog.querySelector('.prts-import-actions').children
         .find(button => button.textContent === '导入粘贴内容');
-      pasteButton.onclick();
+      await pasteButton.onclick();
     } else {
       if (!pending) pending = fileInput.onchange({ target: { files: [file] } });
       assert.strictEqual(readers[0].file, file);
@@ -2243,6 +2387,13 @@ test('Skland import from a stale page preserves other accounts updated during th
     return { data: { characters: [] } };
   };
 
+  sklandPage.showPrtsConfirm = async preview => {
+    assert.strictEqual(preview.tone, 'danger');
+    assert(preview.message.includes('最新手动昵称（账号 1）'));
+    assert(preview.message.includes('森空岛 · 导入博士 / UID 111'));
+    assert(preview.message.includes('将移除 1 名干员：凯尔希'));
+    return true;
+  };
   const summary = await sklandPage.importSklandOperatorsToAccount(1);
   const saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
   for (const id of [2, 3]) {
@@ -2260,6 +2411,22 @@ test('Skland import from a stale page preserves other accounts updated during th
   assert.deepStrictEqual(JSON.parse(sharedStorage.get('prts_plus_skland_last_import')), hostObject(summary));
   assert.deepStrictEqual(hostObject(sklandPage.getCurrentAccountState()), saved);
   assert.deepStrictEqual(hostArray(sklandPage.__testExports.getOwnedOpsSnapshot()), ['阿米娅']);
+});
+
+test('cancelling a Skland import preview preserves account data and sync metadata', async () => {
+  const initial = serializeAccountState({ accountsData: { 1: ['W'] } });
+  const sharedStorage = new Map([['prts_plus_accounts_data', initial], ['prts_plus_skland_last_import', 'previous summary']]);
+  const page = createAccountPage(sharedStorage, 'www.skland.com');
+  page.readSklandCredentialFromStorage = () => 'test-credential';
+  page.refreshSklandToken = async () => ({ token: 'test-token', timestamp: '1' });
+  page.getSklandArknightsBindingOptions = async () => ({ bindings: [{ uid: '111', nickname: '博士' }] });
+  page.getSklandGamePlayerInfo = async () => ({ data: { chars: [{ id: 'char_002_amiya', name: '阿米娅' }] } });
+  page.getSklandGameCultivateInfo = async () => ({ data: { characters: [] } });
+  page.showPrtsConfirm = async () => false;
+  await assert.rejects(page.importSklandOperatorsToAccount(1), { code: 'SKLAND_IMPORT_CANCELLED' });
+  assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), initial);
+  assert.strictEqual(sharedStorage.get('prts_plus_skland_last_import'), 'previous summary');
+  assert.strictEqual(serializeAccountState(page.getCurrentAccountState()), initial);
 });
 
 test('commitSklandImport leaves storage and published state unchanged when the account write fails', () => {

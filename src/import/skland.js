@@ -1,7 +1,7 @@
 const SKLAND_IMPORT_CANCELLED_CODE = 'SKLAND_IMPORT_CANCELLED';
 
 function createSklandImportCancelledError() {
-        const error = new Error('已取消森空岛角色选择。');
+        const error = new Error('已取消森空岛导入。');
         error.code = SKLAND_IMPORT_CANCELLED_CODE;
         return error;
     }
@@ -81,6 +81,10 @@ function createSklandImportCancelledError() {
         const cultivateInfo = await getSklandGameCultivateInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const training = convertSklandPlayerInfoToTraining(playerInfo, cultivateInfo);
         const importedAt = new Date().toISOString();
+        const confirmed = await confirmOperatorImport(
+            targetAccountId, names, training, `森空岛 · ${binding.nickname || '博士'} / UID ${binding.uid}`
+        );
+        if (!confirmed) throw createSklandImportCancelledError();
         return commitSklandImport({
             accountId: targetAccountId,
             names,
