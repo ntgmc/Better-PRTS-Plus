@@ -81,18 +81,20 @@ function createSklandImportCancelledError() {
         const cultivateInfo = await getSklandGameCultivateInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const training = convertSklandPlayerInfoToTraining(playerInfo, cultivateInfo);
         const importedAt = new Date().toISOString();
-        const result = createSklandImportState(getCurrentAccountState(), {
+        return commitSklandImport({
             accountId: targetAccountId,
             names,
             training,
             binding,
             importedAt
         });
-
-        return commitSklandImportResult(result);
     }
 
-    function commitSklandImportResult(result) {
+    function commitSklandImport(importData) {
+        // 以提交时的共享存储为基准，避免旧页面回写其他账号的数据。
+        const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
+        reportAccountStateDiagnostics(resolved.diagnostics);
+        const result = createSklandImportState(resolved.state, importData);
         commitAccountState(result.state);
         try {
             GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(result.summary));

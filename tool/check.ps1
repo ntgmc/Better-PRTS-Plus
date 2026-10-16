@@ -329,8 +329,9 @@ if ($userScript -notmatch "function commitAccountState\([^)]*\)[\s\S]*GM_setValu
 if ($userScript -notmatch "function loadOwnedOps\(\)[\s\S]*resolveStoredAccountState\(readAccountStorageSnapshot\(\)\)") {
     throw "loadOwnedOps should resolve storage through the account state boundary"
 }
-if ($userScript -notmatch "function importSklandOperatorsToAccount\([^)]*\)[\s\S]*createSklandImportState\([\s\S]*commitSklandImportResult\(result\)") {
-    throw "Skland import should compute and commit one complete account transition"
+if ($userScript -notmatch "function importSklandOperatorsToAccount\([^)]*\)[\s\S]*return commitSklandImport\(\{" -or
+    $userScript -notmatch "function commitSklandImport\(importData\)\s*\{\s*(?://[^\r\n]*\r?\n\s*)?const resolved = resolveStoredAccountState\(readAccountStorageSnapshot\(\)\);\s*reportAccountStateDiagnostics\(resolved\.diagnostics\);\s*const result = createSklandImportState\(resolved\.state, importData\);\s*commitAccountState\(result\.state\)") {
+    throw "Skland import should apply its transition to the latest stored account state at commit time"
 }
 if ($userScript -notmatch "function applyLegacySklandSummary\([^)]*\)[\s\S]*normalizeSklandSyncMeta\(summary\)") {
     throw "Legacy global Skland summaries should migrate through the pure state layer"

@@ -67,7 +67,7 @@ globalThis.__testExports = {
   getOwnedOpsSnapshot: () => Array.from(ownedOpsSet),
   publishAccountState,
   commitAccountState,
-  commitSklandImportResult,
+  commitSklandImport,
   matchOperatorGroups,
   checkOperationAvailability,
   checkOperatorTraining,
@@ -160,7 +160,7 @@ const {
   getOwnedOpsSnapshot,
   publishAccountState,
   commitAccountState,
-  commitSklandImportResult,
+  commitSklandImport,
   matchOperatorGroups,
   checkOperationAvailability,
   checkOperatorTraining,
@@ -1695,16 +1695,105 @@ test('createSklandImportState commits a complete transition and preserves manual
   assert.deepStrictEqual(hostArray(initial.accountsData[2]), []);
 });
 
-test('commitSklandImportResult treats the compatibility summary as non-critical', () => {
-  const result = createSklandImportState(createAccountState(), {
+function createAccountPage(sharedStorage, hostname) {
+  const page = vm.createContext({
+    ...context,
+    window: { ...context.window, location: { ...context.window.location, hostname } },
+    GM_getValue: (key, fallback) => sharedStorage.has(key) ? sharedStorage.get(key) : fallback,
+    GM_setValue: (key, value) => sharedStorage.set(key, value)
+  });
+  page.globalThis = page;
+  vm.runInContext(source, page, { filename: 'better-prts-plus-account-page.js' });
+  page.loadOwnedOps();
+  return page;
+}
+
+test('Skland import from a stale page preserves other accounts updated during the request', async () => {
+  const sharedStorage = new Map();
+  const initial = createAccountState({
+    accountsData: { 1: ['W'], 2: ['阿米娅'], 3: ['能天使'] },
+    accountsTraining: { 1: { W: { level: 1 } }, 2: { 阿米娅: { level: 1 } } }
+  });
+  sharedStorage.set('prts_plus_accounts_data', serializeAccountState(initial));
+  const sklandPage = createAccountPage(sharedStorage, 'www.skland.com');
+  const prtsPage = createAccountPage(sharedStorage, 'prts.plus');
+  const latest = createAccountState({
+    activeAccountId: 2,
+    accountsData: { 1: ['凯尔希'], 2: ['W', '能天使'], 3: [] },
+    accountsTraining: {
+      1: { 凯尔希: { level: 90 } },
+      2: { W: { elite: 2, level: 90, skill3: 3, modX: 3 } }
+    },
+    accountMeta: {
+      1: { label: '最新手动昵称', labelSource: 'manual' },
+      2: {
+        label: '最新二号', labelSource: 'manual',
+        skland: { uid: '222', nickname: '二号博士', importedAt: '2026-07-19T00:00:00.000Z', operatorCount: 2 }
+      },
+      3: { label: '已清空三号', labelSource: 'manual' }
+    }
+  });
+  sklandPage.readSklandCredentialFromStorage = () => 'test-credential';
+  sklandPage.refreshSklandToken = async () => ({ token: 'test-token', timestamp: '1' });
+  sklandPage.getSklandArknightsBindingOptions = async () => ({ bindings: [{ uid: '111', nickname: '导入博士' }] });
+  sklandPage.getSklandGamePlayerInfo = async () => ({ data: { chars: [
+    { id: 'char_002_amiya', name: '阿米娅', evolvePhase: 2, level: 80 }
+  ] } });
+  sklandPage.getSklandGameCultivateInfo = async () => {
+    prtsPage.commitAccountState(latest);
+    assert.deepStrictEqual(hostObject(sklandPage.getCurrentAccountState()), hostObject(initial));
+    return { data: { characters: [] } };
+  };
+
+  const summary = await sklandPage.importSklandOperatorsToAccount(1);
+  const saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
+  for (const id of [2, 3]) {
+    assert.deepStrictEqual(saved.accountsData[id], hostArray(latest.accountsData[id]));
+    assert.deepStrictEqual(saved.accountsTraining[id], hostObject(latest.accountsTraining[id]));
+    assert.deepStrictEqual(saved.accountMeta[id], hostObject(latest.accountMeta[id]));
+  }
+  assert.strictEqual(saved.activeAccountId, 1);
+  assert.deepStrictEqual(saved.accountsData[1], ['阿米娅']);
+  assert.deepStrictEqual(saved.accountsTraining[1], { 阿米娅: { elite: 2, level: 80 } });
+  assert.strictEqual(saved.accountMeta[1].label, '最新手动昵称');
+  assert.strictEqual(saved.accountMeta[1].labelSource, 'manual');
+  assert.strictEqual(saved.accountMeta[1].skland.uid, '111');
+  assert.strictEqual(summary.accountLabel, '最新手动昵称');
+  assert.deepStrictEqual(JSON.parse(sharedStorage.get('prts_plus_skland_last_import')), hostObject(summary));
+  assert.deepStrictEqual(hostObject(sklandPage.getCurrentAccountState()), saved);
+  assert.deepStrictEqual(hostArray(sklandPage.__testExports.getOwnedOpsSnapshot()), ['阿米娅']);
+});
+
+test('commitSklandImport leaves storage and published state unchanged when the account write fails', () => {
+  const sharedStorage = new Map([
+    ['prts_plus_accounts_data', serializeAccountState({ accountsData: { 2: ['W'] } })]
+  ]);
+  const page = createAccountPage(sharedStorage, 'www.skland.com');
+  const initial = hostObject(page.getCurrentAccountState());
+  const savedStorage = new Map(sharedStorage);
+  page.GM_setValue = () => { throw new Error('storage failure'); };
+
+  assert.throws(() => page.commitSklandImport({
+    accountId: 1,
+    names: ['阿米娅'],
+    binding: { uid: '111', nickname: '博士' },
+    importedAt: '2026-07-19T00:00:00.000Z'
+  }), /storage failure/);
+  assert.deepStrictEqual(sharedStorage, savedStorage);
+  assert.deepStrictEqual(hostObject(page.getCurrentAccountState()), initial);
+  assert.deepStrictEqual(hostArray(page.__testExports.getOwnedOpsSnapshot()), []);
+});
+
+test('commitSklandImport treats the compatibility summary as non-critical', () => {
+  const importData = {
     accountId: 3,
     names: ['阿米娅'],
     binding: { uid: '333', nickname: '博士三号' },
     importedAt: '2026-07-19T00:00:00.000Z'
-  });
+  };
   failStorageKey = 'prts_plus_skland_last_import';
   const warningCount = warnings.length;
-  const summary = commitSklandImportResult(result);
+  const summary = commitSklandImport(importData);
   failStorageKey = null;
   assert.strictEqual(summary.accountId, 3);
   assert.strictEqual(getCurrentAccountState().activeAccountId, 3);
