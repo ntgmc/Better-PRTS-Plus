@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      3.9.1
+// @version      3.10.0
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -98,9 +98,19 @@
     }
 
     const CONFIG = loadConfig();
+    // 这些增强会修改原站 DOM；本页启用过后，关闭需刷新才能完整还原。
+    const enabledReloadSettings = new Set(Object.keys(CONFIG_DEFINITIONS).filter(key =>
+        CONFIG_DEFINITIONS[key].reloadOnDisable && CONFIG[key]));
+
+    function needsSettingsReload() {
+        return [...enabledReloadSettings].some(key => !CONFIG[key]);
+    }
 
     function saveConfig() {
         GM_setValue(CONFIG_KEY, JSON.stringify(normalizeConfig(CONFIG)));
+        Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
+            if (definition.reloadOnDisable && CONFIG[key]) enabledReloadSettings.add(key);
+        });
     }
 
     const BP_SELECTORS = {
@@ -529,7 +539,7 @@ Object.entries({
     }
 
     function parseOperatorNamesFromJson(json) {
-        if (!Array.isArray(json)) throw new Error('数据格式非数组');
+        if (!Array.isArray(json)) throw new Error('JSON 数据格式错误：干员名单必须是数组。');
         if (json.length === 0) return [];
 
         if (typeof json[0] === 'string') {
@@ -560,9 +570,11 @@ Object.entries({
     function parseImportedOperatorNames(rawText, fileName = '') {
         const text = String(rawText || '');
 
-        const parsed = safeJsonParse(text, null);
-        if (parsed !== null) return parseOperatorNamesFromJson(parsed);
-        if (/\.json$/i.test(fileName)) throw new Error('文件格式错误：不是有效的 JSON 文件');
+        const parsed = safeJsonParse(text, undefined);
+        if (parsed !== undefined) return parseOperatorNamesFromJson(parsed);
+        if (/^[\[{]/.test(text.trimStart()) || /\.json$/i.test(fileName)) {
+            throw new Error('JSON 格式错误，请检查内容是否完整、语法是否正确。');
+        }
 
         return parseOperatorNamesFromText(text);
     }
@@ -712,6 +724,37 @@ Object.entries({
         return { state, migrated, diagnostics };
     }
 
+    function getOperatorImportDiff(previousNames, nextNames, previousTraining = {}, nextTraining = {}) {
+        const previousSet = new Set(sanitizeOperatorNames(previousNames));
+        const nextSet = new Set(sanitizeOperatorNames(nextNames));
+        const removedNames = [...previousSet].filter(name => !nextSet.has(name));
+        const diff = {
+            added: 0, removed: removedNames.length, total: nextSet.size, removedNames,
+            trainingCount: 0, decreasedTrainingNames: [], clearedTrainingNames: []
+        };
+
+        nextSet.forEach(name => {
+            if (!previousSet.has(name)) diff.added += 1;
+            const next = normalizeOperatorTraining(
+                Object.prototype.hasOwnProperty.call(nextTraining, name) ? nextTraining[name] : null
+            );
+            if (Object.keys(next).length) diff.trainingCount += 1;
+            if (!previousSet.has(name)) return;
+
+            const previous = normalizeOperatorTraining(
+                Object.prototype.hasOwnProperty.call(previousTraining, name) ? previousTraining[name] : null
+            );
+            const fields = Object.entries(previous);
+            if (fields.some(([key]) => next[key] === undefined)) diff.clearedTrainingNames.push(name);
+            // 精英化升级会重置等级，不能只比较等级数值。
+            if (fields.some(([key, value]) => next[key] < value
+                && !(key === 'level' && next.elite > previous.elite))) {
+                diff.decreasedTrainingNames.push(name);
+            }
+        });
+        return diff;
+    }
+
     function createAccountSwitchState(state, accountId) {
         return createAccountState({ ...createAccountState(state), activeAccountId: accountId });
     }
@@ -841,7 +884,7 @@ Object.entries({
 const SKLAND_IMPORT_CANCELLED_CODE = 'SKLAND_IMPORT_CANCELLED';
 
 function createSklandImportCancelledError() {
-        const error = new Error('已取消森空岛角色选择。');
+        const error = new Error('已取消森空岛导入。');
         error.code = SKLAND_IMPORT_CANCELLED_CODE;
         return error;
     }
@@ -921,6 +964,10 @@ function createSklandImportCancelledError() {
         const cultivateInfo = await getSklandGameCultivateInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const training = convertSklandPlayerInfoToTraining(playerInfo, cultivateInfo);
         const importedAt = new Date().toISOString();
+        const confirmed = await confirmOperatorImport(
+            targetAccountId, names, training, `森空岛 · ${binding.nickname || '博士'} / UID ${binding.uid}`
+        );
+        if (!confirmed) throw createSklandImportCancelledError();
         return commitSklandImport({
             accountId: targetAccountId,
             names,
@@ -1870,8 +1917,8 @@ function createSklandImportCancelledError() {
     .prts-modal-input:focus { border-color: #2563eb; outline: 2px solid rgba(37, 99, 235, 0.2); outline-offset: 1px; }
     .prts-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px; }
     .prts-modal-actions .prts-import-action { min-width: 88px; }
-    .prts-import-action.primary.danger { border-color: #dc2626; background: #dc2626; color: #ffffff; }
-    .prts-import-action.primary.danger:hover, .prts-import-action.primary.danger:focus-visible { border-color: #b91c1c; background: #b91c1c; color: #ffffff; }
+    .prts-import-action.primary.danger { border-color: #dc2626 !important; background: #dc2626 !important; color: #ffffff !important; }
+    .prts-import-action.primary.danger:hover, .prts-import-action.primary.danger:focus-visible { border-color: #b91c1c !important; background: #b91c1c !important; color: #ffffff !important; }
     body.dark #prts-import-dialog { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.52); }
     body.dark .prts-import-head { border-color: #415262; }
     body.dark .prts-import-title { color: #f5f8fa; }
@@ -2050,6 +2097,31 @@ function createSklandImportCancelledError() {
         padding-left: 48px;
         margin-top: 2px;
     }
+    /* Hallmark · component: filter results · theme: existing PRTS tokens
+     * states: loading, summary, empty, pending, focus; pre-emit critique: P5 H4 E4 S5 R5 V4 */
+    #prts-filter-results {
+        box-sizing: border-box;
+        width: 100%;
+        min-width: 0;
+        padding: var(--prts-space-2) var(--prts-space-3) 0;
+        color: var(--prts-color-text-muted);
+        font-size: 13px;
+        line-height: 1.6;
+        overflow-wrap: anywhere;
+        font-variant-numeric: tabular-nums;
+    }
+    .prts-filter-summary, .prts-filter-empty-message { margin: 0; }
+    .prts-filter-empty {
+        margin-top: var(--prts-space-2);
+        padding: var(--prts-space-3);
+        border: 1px solid var(--prts-color-border-soft);
+        border-radius: var(--prts-radius-md);
+        background: var(--prts-color-surface-muted);
+        color: var(--prts-color-text);
+    }
+    #btn-filter-show-all { min-height: 44px !important; margin-top: var(--prts-space-1); white-space: nowrap; }
+    #btn-filter-show-all:active { background: var(--prts-color-surface-hover) !important; }
+    .prts-filter-empty[hidden], #btn-filter-show-all[hidden] { display: none !important; }
     .prts-btn {
         gap: 6px !important;
         min-height: 34px !important;
@@ -2518,11 +2590,17 @@ function createSklandImportCancelledError() {
     #prts-float-container.snap-left .prts-float-btn::after { left: auto; right: 5px; }
     #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn::after { opacity: 0; }
     #prts-float-container:is(:hover, :focus-within, .prts-float-open, .is-dragging) .prts-float-btn svg { opacity: 1; }
+    /* Hallmark · component: settings panel · theme: existing PRTS tokens
+     * states: open, saved, pending reload, focus; pre-emit critique: P5 H4 E4 S5 R5 V4 */
     .prts-settings-panel {
-        width: min(292px, calc(100vw - 72px)) !important;
-        max-height: min(560px, calc(100vh - 24px));
-        overflow: auto;
-        overscroll-behavior: contain;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        z-index: 3;
+        width: min(292px, var(--prts-panel-width, calc(100vw - 24px))) !important;
+        max-height: min(560px, var(--prts-panel-max-height, calc(100dvh - 24px)));
+        overflow: hidden;
+        transition: visibility var(--prts-duration-base), opacity var(--prts-duration-base) var(--prts-ease-out), transform var(--prts-duration-base) var(--prts-ease-out);
         padding: var(--prts-space-4) !important;
         border-color: var(--prts-color-border-soft) !important;
         border-radius: var(--prts-radius-lg) !important;
@@ -2531,6 +2609,39 @@ function createSklandImportCancelledError() {
         box-shadow: var(--prts-shadow-lg) !important;
         font-family: var(--prts-font-sans) !important;
     }
+    .prts-settings-panel * { box-sizing: border-box; }
+    .prts-settings-panel > .prts-panel-title { flex-shrink: 0; gap: var(--prts-space-2); }
+    .prts-settings-heading {
+        margin-right: auto;
+        padding: 0;
+        border: none;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        cursor: pointer;
+        white-space: nowrap;
+    }
+    .prts-settings-heading:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
+    .prts-settings-close { flex: 0 0 44px; width: 44px; min-height: 44px !important; margin: 0 !important; padding: 0 !important; }
+    .prts-settings-content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+    .prts-settings-content .prts-panel-actions { flex-wrap: wrap; }
+    .prts-settings-content .prts-panel-actions .prts-btn { flex: 1 1 118px !important; min-width: 0; }
+    .prts-settings-panel.prts-settings-compact { padding: var(--prts-space-2) !important; }
+    .prts-settings-compact > .prts-panel-title { margin-bottom: var(--prts-space-1); }
+    #prts-settings-reload {
+        flex-shrink: 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--prts-space-2);
+        margin-top: var(--prts-space-2);
+        padding-top: var(--prts-space-2);
+        border-top: 1px solid var(--prts-color-border-soft);
+        font-size: 13px;
+    }
+    #prts-settings-reload[hidden] { display: none; }
+    #prts-settings-reload > [role='status'] { flex: 1 1 120px; min-width: 0; }
+    #prts-settings-reload .prts-btn { flex: 1 1 96px; min-width: 0; margin: 0 !important; min-height: 44px !important; white-space: nowrap; }
     .prts-panel-title {
         color: var(--prts-color-text) !important;
         border-color: var(--prts-color-border-soft) !important;
@@ -2600,8 +2711,8 @@ function createSklandImportCancelledError() {
         }
         #prts-float-container { max-width: calc(100vw - 24px); }
         .prts-settings-panel {
-            width: min(320px, calc(100vw - 72px)) !important;
-            max-height: calc(100vh - 24px);
+            width: min(320px, var(--prts-panel-width, calc(100vw - 24px))) !important;
+            max-height: var(--prts-panel-max-height, calc(100dvh - 24px));
         }
         #prts-import-dialog, #prts-modal {
             border-radius: var(--prts-radius-lg) var(--prts-radius-lg) 0 0 !important;
@@ -2778,6 +2889,8 @@ function createSklandImportCancelledError() {
         background: var(--prts-color-primary) !important;
         color: #ffffff !important;
     }
+    .prts-import-action.primary.danger { border-color: #dc2626 !important; background: #dc2626 !important; color: #ffffff !important; }
+    .prts-import-action.primary.danger:hover, .prts-import-action.primary.danger:focus-visible { border-color: #b91c1c !important; background: #b91c1c !important; color: #ffffff !important; }
     .prts-skland-close {
         display: inline-flex;
         align-items: center;
@@ -3238,7 +3351,7 @@ function createSklandImportCancelledError() {
             };
 
             document.body.appendChild(backdrop);
-            window.setTimeout(() => (inputEl || confirmBtn).focus(), 0);
+            window.setTimeout(() => (inputEl || (tone === 'danger' ? cancelBtn : confirmBtn)).focus(), 0);
         });
     }
 
@@ -3698,6 +3811,7 @@ function createSklandImportCancelledError() {
                 else input.checked = CONFIG[key] === true;
             }
         });
+        updateSettingsReloadNotice();
     }
 
     function refreshAccountStateUi(forceFilterUpdate = false) {
@@ -3705,9 +3819,49 @@ function createSklandImportCancelledError() {
         if (bar) bar.remove();
         injectFilterControls();
         refreshAccountControls();
-        applyFloatingPositionToContainer();
+        updateFloatingLayout();
         applySidebarCollapse();
         if (forceFilterUpdate || CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
+    }
+
+    async function confirmOperatorImport(accountId, names, training, sourceLabel) {
+        const id = normalizeAccountId(accountId);
+        while (true) {
+            const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
+            reportAccountStateDiagnostics(resolved.diagnostics);
+            const state = resolved.state;
+            const diff = getOperatorImportDiff(state.accountsData[id], names, state.accountsTraining[id], training);
+            const danger = diff.removed > 0 || diff.decreasedTrainingNames.length > 0 || diff.clearedTrainingNames.length > 0;
+            const lines = [
+                `导入到：${state.accountMeta[id].label}（账号 ${id}）`,
+                `来源：${sourceLabel || '导入内容'}`,
+                `当前 ${state.accountsData[id].length} 名 → 导入后 ${diff.total} 名`,
+                `新增 ${diff.added} 名 / 移除 ${diff.removed} 名`,
+                diff.trainingCount ? `包含练度：${diff.trainingCount} / ${diff.total} 名干员` : '不包含练度数据',
+                '导入会替换此账号的干员名单和练度。'
+            ];
+            if (diff.removed) lines.push(`将移除 ${diff.removed} 名干员：${diff.removedNames.join('、')}`);
+            if (diff.decreasedTrainingNames.length) {
+                lines.push(`练度将降低 ${diff.decreasedTrainingNames.length} 名：${diff.decreasedTrainingNames.join('、')}`);
+            }
+            if (diff.clearedTrainingNames.length) {
+                lines.push(`部分或全部练度将被清空 ${diff.clearedTrainingNames.length} 名：${diff.clearedTrainingNames.join('、')}`);
+            }
+            if (danger) lines.push('请核对账号和来源，确认要覆盖这些已有数据吗？');
+            const confirmed = await showPrtsConfirm({
+                title: danger ? '导入将覆盖已有数据' : '导入预览',
+                message: lines.join('\n'),
+                confirmText: danger ? '确认覆盖并导入' : '确认导入',
+                cancelText: '取消',
+                tone: danger ? 'danger' : ''
+            });
+            if (!confirmed) return null;
+
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            if (['accountsData', 'accountsTraining', 'accountMeta'].some(key =>
+                JSON.stringify(state[key][id]) !== JSON.stringify(latest[key][id]))) continue;
+            return latest;
+        }
     }
 
     async function renameAccount(id) {
@@ -3876,39 +4030,13 @@ function createSklandImportCancelledError() {
         return lines.join('\n');
     }
 
-    function applyFloatingPositionToContainer() {
-        const container = document.getElementById('prts-float-container');
-        if (!container) return;
-
-        const savedPos = CONFIG.floatingPosition;
-        container.style.top = savedPos.top;
-        if (savedPos.isRight) {
-            container.style.left = 'auto';
-            container.style.right = '0px';
-            container.classList.add('snap-right');
-            container.classList.remove('snap-left');
-        } else {
-            container.style.left = '0px';
-            container.style.right = 'auto';
-            container.classList.add('snap-left');
-            container.classList.remove('snap-right');
-        }
-    }
-
     function applyAccountsBackup(backup) {
         const nextState = createAccountState(backup);
         const preferences = normalizeBackupPreferences(backup.preferences);
         const nextConfig = normalizeConfig({ ...preferences.config, ...preferences });
-        const needsReload = Object.entries(CONFIG_DEFINITIONS).some(([key, definition]) =>
-            definition.reloadOnDisable && CONFIG[key] && !nextConfig[key]);
-
         commitAccountState(nextState);
         Object.assign(CONFIG, nextConfig);
         saveConfig();
-        if (needsReload) {
-            location.reload();
-            return;
-        }
 
         refreshAccountStateUi(true);
         syncPageScaffold();
@@ -3969,22 +4097,6 @@ function createSklandImportCancelledError() {
         return error instanceof Error ? error.message : '未知错误';
     }
 
-    function getOperatorImportDiff(previousNames, nextNames) {
-        const previousSet = new Set(sanitizeOperatorNames(previousNames));
-        const nextSet = new Set(sanitizeOperatorNames(nextNames));
-        let added = 0;
-        let removed = 0;
-
-        nextSet.forEach(name => {
-            if (!previousSet.has(name)) added += 1;
-        });
-        previousSet.forEach(name => {
-            if (!nextSet.has(name)) removed += 1;
-        });
-
-        return { added, removed, total: nextSet.size };
-    }
-
     function formatOperatorImportDiff(diff) {
         return `新增 ${diff.added} / 移除 ${diff.removed} / 当前 ${diff.total}`;
     }
@@ -4010,7 +4122,7 @@ function createSklandImportCancelledError() {
         document.getElementById('prts-import-dialog-backdrop')?.remove();
     }
 
-    function applyImportedOperatorNames(accountId, names, sourceLabel, statusEl, training = {}) {
+    async function applyImportedOperatorNames(accountId, names, sourceLabel, statusEl, training = {}) {
         const targetAccountId = normalizeAccountId(accountId);
         const sanitizedNames = sanitizeOperatorNames(names);
         if (sanitizedNames.length === 0) {
@@ -4020,21 +4132,31 @@ function createSklandImportCancelledError() {
             return false;
         }
 
-        const accountLabel = getAccountLabel(targetAccountId);
-        const diff = getOperatorImportDiff(accountsData[targetAccountId] || [], sanitizedNames);
+        const nextState = await confirmOperatorImport(targetAccountId, sanitizedNames, training, sourceLabel);
+        if (!nextState) {
+            setOperatorImportStatus(statusEl, '已取消导入，未修改账号数据。');
+            return false;
+        }
+        const accountLabel = nextState.accountMeta[targetAccountId].label;
+        const diff = getOperatorImportDiff(nextState.accountsData[targetAccountId], sanitizedNames);
         const diffText = formatOperatorImportDiff(diff);
         const sourceText = sourceLabel ? `来源：${sourceLabel}` : '来源：导入内容';
+        const unrecognizedNames = sanitizedNames.filter(name => !Object.prototype.hasOwnProperty.call(OP_ID_MAP, name));
+        const recognitionText = `已识别 ${sanitizedNames.length - unrecognizedNames.length} 名 / 未识别 ${unrecognizedNames.length} 名`;
 
-        const nextState = getCurrentAccountState();
         nextState.accountsData[targetAccountId] = sanitizedNames;
         nextState.accountsTraining[targetAccountId] = training;
         commitAccountState(nextState);
         refreshAccountStateUi();
 
-        const message = `${accountLabel} 导入成功`;
-        const detail = `${diffText}\n${sourceText}`;
-        setOperatorImportStatus(statusEl, `${message}\n${detail}`, 'success');
-        showPrtsToast(message, 'success', detail);
+        const type = unrecognizedNames.length ? 'warning' : 'success';
+        const message = unrecognizedNames.length ? `${accountLabel} 已导入，名称待核对` : `${accountLabel} 导入成功`;
+        const detail = [diffText, sourceText, recognitionText];
+        if (unrecognizedNames.length) {
+            detail.push(`未识别名称：${unrecognizedNames.join('、')}`, '这些名称已保留，请核对拼写；新干员可能尚未收录。');
+        }
+        setOperatorImportStatus(statusEl, `${message}\n${detail.join('\n')}`, type);
+        showPrtsToast(message, type, detail.join('\n'));
         return true;
     }
 
@@ -4051,10 +4173,10 @@ function createSklandImportCancelledError() {
         setOperatorImportStatus(statusEl, `正在读取 ${file.name || '导入文件'}...`, 'loading');
         return new Promise(resolve => {
             const reader = new FileReader();
-            reader.onload = event => {
+            reader.onload = async event => {
                 try {
                     const { names, training } = parseImportedOperators(event.target.result, file.name);
-                    resolve(applyImportedOperatorNames(accountId, names, file.name || '文件导入', statusEl, training));
+                    resolve(await applyImportedOperatorNames(accountId, names, file.name || '文件导入', statusEl, training));
                 } catch (error) {
                     const message = getImportErrorMessage(error);
                     console.error('[Better PRTS] 导入干员数据失败', error);
@@ -4102,7 +4224,7 @@ function createSklandImportCancelledError() {
         title.textContent = `导入到 ${getAccountLabel(targetAccountId)}`;
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-import-subtitle';
-        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，导入后会替换此账号的干员列表。';
+        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，预览变化并确认后替换此账号的数据。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -4157,7 +4279,7 @@ function createSklandImportCancelledError() {
         const cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'prts-import-action';
-        cancelBtn.textContent = '取消';
+        cancelBtn.textContent = '关闭';
         cancelBtn.onclick = closeOperatorImportDialog;
 
         const status = document.createElement('div');
@@ -4175,13 +4297,12 @@ function createSklandImportCancelledError() {
             const file = event.target.files?.[0];
             if (!file) return;
             setBusy(true);
-            const imported = await readOperatorImportFile(targetAccountId, file, status);
+            await readOperatorImportFile(targetAccountId, file, status);
             setBusy(false);
             fileInput.value = '';
-            if (imported) window.setTimeout(closeOperatorImportDialog, 700);
         };
 
-        pasteBtn.onclick = () => {
+        pasteBtn.onclick = async () => {
             const rawText = textarea.value;
             if (!rawText.trim()) {
                 const message = '请先粘贴 JSON 或逐行干员名称。';
@@ -4191,15 +4312,17 @@ function createSklandImportCancelledError() {
                 return;
             }
 
+            setBusy(true);
             try {
                 const { names, training } = parseImportedOperators(rawText, '');
-                const imported = applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
-                if (imported) window.setTimeout(closeOperatorImportDialog, 700);
+                await applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
             } catch (error) {
                 const message = getImportErrorMessage(error);
                 console.error('[Better PRTS] 粘贴导入干员数据失败', error);
                 setOperatorImportStatus(status, `导入失败：${message}`, 'error');
                 showPrtsToast('导入失败', 'error', message);
+            } finally {
+                setBusy(false);
             }
         };
 
@@ -4223,6 +4346,7 @@ function createSklandImportCancelledError() {
         });
 
         const handleKeydown = event => {
+            if (document.getElementById('prts-modal')) return;
             if (event.key === 'Escape') closeOperatorImportDialog();
             if (event.key === 'Tab') {
                 const focusable = getFocusableDialogElements(dialog);
@@ -4332,6 +4456,79 @@ function createSklandImportCancelledError() {
             trainingBtn.classList.toggle('prts-active', CONFIG.trainingCheck);
             trainingBtn.setAttribute('aria-pressed', String(CONFIG.trainingCheck));
         }
+    }
+
+    let filterResults = null;
+
+    function renderFilterResults(stats = filterResults) {
+        filterResults = stats;
+        const bar = document.getElementById('prts-filter-bar');
+        if (!bar || isFilterDisabledPage()) return;
+
+        let results = document.getElementById('prts-filter-results');
+        if (!results) {
+            results = document.createElement('div');
+            results.id = 'prts-filter-results';
+            results.setAttribute('role', 'status');
+            results.setAttribute('aria-live', 'polite');
+            results.setAttribute('aria-atomic', 'true');
+            const summary = document.createElement('p');
+            summary.className = 'prts-filter-summary';
+            const empty = document.createElement('div');
+            empty.className = 'prts-filter-empty';
+            const message = document.createElement('p');
+            message.className = 'prts-filter-empty-message';
+            empty.appendChild(message);
+            empty.appendChild(createPrtsButton({
+                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'eyeOn',
+                onClick: () => {
+                    toggleDisplayMode();
+                    document.getElementById('btn-setting')?.focus();
+                }
+            }));
+            results.appendChild(summary);
+            results.appendChild(empty);
+            bar.appendChild(results);
+        }
+
+        if (bar.lastChild !== results) bar.appendChild(results);
+
+        let summaryText = '正在统计本页作业…';
+        let messageText = '';
+        let showAll = false;
+        if (stats) {
+            const filtering = ownedOpsSet.size > 0 && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck);
+            summaryText = `本页 ${stats.totalCards} 份作业`;
+            if (filtering) {
+                summaryText += `，可用 ${stats.availableCards} 份，需助战 ${stats.supportCards} 份，待核验 ${stats.pendingCards} 份，不符合 ${stats.unavailableCards} 份`;
+            } else if (stats.totalCards) {
+                summaryText += ownedOpsSet.size ? '，未开启筛选' : '，请先导入干员数据后筛选';
+            }
+            if (stats.hiddenVideoCards) summaryText += `，视频已隐藏 ${stats.hiddenVideoCards} 份`;
+            summaryText += '。';
+
+            if (!stats.totalCards) {
+                messageText = '当前页面暂无作业。若正在加载，请稍候；也可调整搜索条件或翻页。';
+            } else if (stats.hiddenVideoCards === stats.totalCards) {
+                messageText = '本页作业均为视频，已被隐藏。可在悬浮球中关闭“隐藏视频作业”，或查看其他页。';
+            } else if (filtering && !stats.availableCards && !stats.supportCards) {
+                if (stats.pendingCards) {
+                    messageText = `本页暂无已确认可用的作业，${stats.pendingCards} 份待核验作业已保留。请查看卡片提示或补充干员数据。`;
+                } else {
+                    showAll = CONFIG.displayMode === 'HIDE' && !stats.visibleCards;
+                    messageText = showAll
+                        ? `本页没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换置灰查看原因，或调整筛选条件、切换账号、查看其他页。`
+                        : '本页没有符合当前筛选条件的作业。请调整筛选条件、切换账号，或查看其他页。';
+                }
+            }
+        }
+
+        const summary = results.querySelector('.prts-filter-summary');
+        const message = results.querySelector('.prts-filter-empty-message');
+        if (summary.textContent !== summaryText) summary.textContent = summaryText;
+        if (message.textContent !== messageText) message.textContent = messageText;
+        results.querySelector('.prts-filter-empty').hidden = !messageText;
+        document.getElementById('btn-filter-show-all').hidden = !showAll;
     }
 
     function injectFilterControls() {
@@ -4460,9 +4657,8 @@ function createSklandImportCancelledError() {
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
         mainRow.appendChild(btnTraining);
 
-        if (isNew && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck)) {
-            requestFilterUpdate();
-        }
+        renderFilterResults();
+        if (isNew) requestFilterUpdate();
     }
     function findBilibiliUrl(text) {
         const match = String(text || '').match(/(?:【.*?】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+)/i);
@@ -4714,6 +4910,7 @@ function createSklandImportCancelledError() {
 
         lastRouteKey = routeKey;
         filterUpdateCoordinator.reset();
+        renderFilterResults(null);
         syncPageScaffold();
         scheduleFilterUpdate(120);
         return true;
@@ -4988,7 +5185,9 @@ function createSklandImportCancelledError() {
         return {
             fiberCards: source === 'fiber' ? 1 : 0,
             fallbackCards: source === 'fallback' ? 1 : 0,
-            noDataCards: source === 'none' ? 1 : 0
+            noDataCards: source === 'none' ? 1 : 0,
+            filterStatus: 'pending',
+            visible: true
         };
     }
 
@@ -5113,7 +5312,10 @@ function createSklandImportCancelledError() {
             const diagnostics = createCardDiagnostics('none');
             cardDiagnosticsCache.set(card, diagnostics);
             const cardInner = card.querySelector(BP_SELECTORS.card);
-            card.style.display = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation) ? 'none' : '';
+            const hiddenVideo = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation);
+            diagnostics.filterStatus = hiddenVideo ? 'hiddenVideo' : 'pending';
+            diagnostics.visible = !hiddenVideo;
+            card.style.display = hiddenVideo ? 'none' : '';
             card.classList.remove('prts-card-gray');
             if (cardInner) {
                 const label = cardInner.querySelector('.prts-status-label') || document.createElement('div');
@@ -5130,6 +5332,8 @@ function createSklandImportCancelledError() {
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
             const diagnostics = createCardDiagnostics('none');
+            card.style.display = '';
+            card.classList.remove('prts-card-gray');
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
         }
@@ -5148,6 +5352,8 @@ function createSklandImportCancelledError() {
             : createCardDiagnostics('none');
 
         if (CONFIG.hideVideo && isVideoOperationCard(cardInner, operation)) {
+            diagnostics.filterStatus = 'hiddenVideo';
+            diagnostics.visible = false;
             if (card.style.display !== 'none') card.style.display = 'none';
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
@@ -5155,7 +5361,16 @@ function createSklandImportCancelledError() {
         const { isAvailable, missingCount, missingOps, lowTraining, unknownTraining, trainingIssues, hasRequirements } =
             checkOperationAvailability(operation, ownedOpsSet, CONFIG.filterMode, accountsTraining[activeAccountId], CONFIG.trainingCheck);
 
+        if (!isAvailable || (CONFIG.trainingCheck && CONFIG.filterMode === 'NONE' && missingCount > 0)) {
+            diagnostics.filterStatus = 'unavailable';
+        } else if (diagnostics.noDataCards || (CONFIG.trainingCheck && (unknownTraining.length || !hasRequirements))) {
+            diagnostics.filterStatus = 'pending';
+        } else {
+            diagnostics.filterStatus = CONFIG.filterMode === 'SUPPORT' && missingCount === 1 ? 'support' : 'available';
+        }
+
         if (!isAvailable && CONFIG.displayMode === 'HIDE') {
+            diagnostics.visible = false;
             if (card.style.display !== 'none') card.style.display = 'none';
             cardDiagnosticsCache.set(card, diagnostics);
             return diagnostics;
@@ -5235,7 +5450,13 @@ function createSklandImportCancelledError() {
             totalCards: cards.length,
             fiberCards: 0,
             fallbackCards: 0,
-            noDataCards: 0
+            noDataCards: 0,
+            availableCards: 0,
+            supportCards: 0,
+            pendingCards: 0,
+            unavailableCards: 0,
+            hiddenVideoCards: 0,
+            visibleCards: 0
         };
 
         cards.forEach(card => {
@@ -5243,6 +5464,8 @@ function createSklandImportCancelledError() {
             diagnostics.fiberCards += cached.fiberCards;
             diagnostics.fallbackCards += cached.fallbackCards;
             diagnostics.noDataCards += cached.noDataCards;
+            diagnostics[`${cached.filterStatus}Cards`] += 1;
+            diagnostics.visibleCards += Number(cached.visible);
         });
         return diagnostics;
     }
@@ -5251,22 +5474,21 @@ function createSklandImportCancelledError() {
         if (isFilterDisabledPage()) {
             filterUpdateCoordinator.reset();
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
+            renderFilterResults(null);
             return;
         }
         isProcessingFilter = true;
 
         try {
             const cards = getOperationCards();
-            if (cards.length === 0) {
-                filterUpdateCoordinator.reset();
-                setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
-                return;
-            }
+            if (cards.length === 0) filterUpdateCoordinator.reset();
 
             const work = filterUpdateCoordinator.takeWork(cards);
             work.cards.forEach(processOperationCard);
 
-            setCompatibilityDiagnostics(aggregateCardDiagnostics(cards));
+            const diagnostics = aggregateCardDiagnostics(cards);
+            setCompatibilityDiagnostics(diagnostics);
+            renderFilterResults(diagnostics);
         } catch (error) {
             filterUpdateCoordinator.reset();
             throw error;
@@ -5379,7 +5601,7 @@ function createSklandImportCancelledError() {
 
         const body = document.createElement('div');
         body.className = 'prts-skland-body';
-        const defaultStatusText = '请先确认当前页面已经登录森空岛。导入只会保存干员名称，不会保存森空岛凭据。';
+        const defaultStatusText = '请先确认当前页面已经登录森空岛。读取后将预览干员名单和练度变化，确认后导入。';
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
@@ -5427,7 +5649,7 @@ function createSklandImportCancelledError() {
 
         importBtn.onclick = async () => {
             const accountId = targetAccountId;
-            const progressText = `正在读取森空岛数据，并导入到 ${getAccountLabel(accountId)}。`;
+            const progressText = `正在读取森空岛数据，稍后请确认导入到 ${getAccountLabel(accountId)} 的变化。`;
             const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
             importBtn.disabled = true;
             importBtn.textContent = '同步中…';
@@ -5444,7 +5666,7 @@ function createSklandImportCancelledError() {
                 updateToast('森空岛数据同步成功', 'success', detail);
             } catch (error) {
                 if (isSklandImportCancelledError(error)) {
-                    setSklandPanelStatus(status, '已取消角色选择，未修改账号数据。', '');
+                    setSklandPanelStatus(status, '已取消导入，未修改账号数据。', '');
                     updateToast('已取消森空岛数据同步', 'info', '未修改账号数据。');
                     return;
                 }
@@ -5618,23 +5840,48 @@ ${formatSklandImportSummary(summary)}`, 'success');
         return lines.join('\n');
     }
 
+    function updateSettingsReloadNotice() {
+        const notice = document.getElementById('prts-settings-reload');
+        if (notice) notice.hidden = !needsSettingsReload();
+    }
+
+    function updateFloatingLayout() {
+        const container = document.getElementById('prts-float-container');
+        if (!container || container.classList.contains('is-dragging')) return;
+        const panel = document.getElementById('prts-settings-panel');
+        const viewport = window.visualViewport;
+        const left = viewport?.offsetLeft || 0;
+        const top = viewport?.offsetTop || 0;
+        const width = viewport?.width || window.innerWidth;
+        const height = viewport?.height || window.innerHeight;
+        const savedPos = CONFIG.floatingPosition;
+        const ballTop = Math.max(top, Math.min(
+            parseFloat(savedPos.top) / 100 * window.innerHeight, top + height - container.offsetHeight
+        ));
+
+        container.style.top = `${ballTop}px`;
+        container.style.left = savedPos.isRight ? 'auto' : `${left}px`;
+        container.style.right = savedPos.isRight ? `${window.innerWidth - left - width}px` : 'auto';
+        container.classList.toggle('snap-right', savedPos.isRight);
+        container.classList.toggle('snap-left', !savedPos.isRight);
+        panel.classList.toggle('prts-settings-compact', height < 240);
+        panel.style.setProperty('--prts-panel-width', `${Math.max(0, width - 24)}px`);
+        panel.style.setProperty('--prts-panel-max-height', `${Math.max(0, height - 24)}px`);
+        // 以悬浮球为锚点，空间不足时贴合可见视口；面板不参与拖拽区域的尺寸计算。
+        const ballLeft = left + (savedPos.isRight ? width - container.offsetWidth : 0);
+        const preferredLeft = savedPos.isRight ? ballLeft - 7 - panel.offsetWidth : ballLeft + container.offsetWidth + 7;
+        const panelLeft = Math.max(left + 12, Math.min(preferredLeft, left + width - panel.offsetWidth - 12));
+        const panelTop = Math.max(top + 12, Math.min(ballTop, top + height - panel.offsetHeight - 12));
+        panel.style.left = `${panelLeft - ballLeft}px`;
+        panel.style.right = 'auto';
+        panel.style.top = `${panelTop - ballTop}px`;
+    }
+
     function createFloatingBall() {
         if (document.getElementById('prts-float-container')) return;
 
-        const savedPos = CONFIG.floatingPosition;
         const container = document.createElement('div');
         container.id = 'prts-float-container';
-
-        container.style.top = savedPos.top;
-        if (savedPos.isRight) {
-            container.style.left = 'auto';
-            container.style.right = '0px';
-            container.classList.add('snap-right');
-        } else {
-            container.style.left = '0px';
-            container.style.right = 'auto';
-            container.classList.add('snap-left');
-        }
 
         const btn = document.createElement('button');
         btn.type = 'button';
@@ -5661,19 +5908,36 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         const title = document.createElement('div');
         title.className = 'prts-panel-title';
-        title.tabIndex = 0;
-        title.setAttribute('role', 'button');
-        title.setAttribute('aria-label', '功能开关');
-        const titleText = document.createElement('span');
-        titleText.textContent = '功能开关';
-        titleText.style.marginRight = 'auto';
-        const titleHint = document.createElement('span');
-        titleHint.textContent = '部分关闭时刷新';
-        titleHint.style.fontSize = '12px';
-        titleHint.style.opacity = '0.6';
+        const titleText = document.createElement('button');
+        titleText.type = 'button';
+        titleText.className = 'prts-settings-heading';
+        titleText.textContent = '设置';
         title.appendChild(titleText);
-        title.appendChild(titleHint);
+        title.appendChild(createPrtsButton({
+            className: 'prts-btn prts-settings-close', icon: 'close', ariaLabel: '关闭脚本设置面板',
+            onClick: () => {
+                setFloatOpen(false);
+                btn.focus({ preventScroll: true });
+            }
+        }));
         panel.appendChild(title);
+
+        const content = document.createElement('div');
+        content.className = 'prts-settings-content';
+        panel.appendChild(content);
+
+        const reloadNotice = document.createElement('div');
+        reloadNotice.id = 'prts-settings-reload';
+        reloadNotice.hidden = true;
+        const reloadStatus = document.createElement('div');
+        reloadStatus.setAttribute('role', 'status');
+        reloadStatus.setAttribute('aria-live', 'polite');
+        reloadStatus.textContent = '已保存，刷新后生效';
+        reloadNotice.appendChild(reloadStatus);
+        reloadNotice.appendChild(createPrtsButton({
+            text: '立即刷新', icon: 'check', onClick: () => location.reload()
+        }));
+        panel.appendChild(reloadNotice);
 
         let debugOptionsRevealed = CONFIG.compatDebug === true;
         const debugOptions = document.createElement('div');
@@ -5688,17 +5952,12 @@ ${formatSklandImportSummary(summary)}`, 'success');
             debugOptions.classList.toggle('is-visible', debugOptionsRevealed);
         };
 
-        title.addEventListener('click', revealDebugOptions);
-        title.addEventListener('keydown', event => {
-            if (event.key === 'Enter' || event.key === ' ') {
-                revealDebugOptions(event);
-            }
-        });
+        titleText.addEventListener('click', revealDebugOptions);
 
         let currentGroup = '';
         Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
             if (!definition.group) return;
-            const target = definition.group === '诊断' ? debugOptions : panel;
+            const target = definition.group === '诊断' ? debugOptions : content;
             if (definition.group !== currentGroup) {
                 const groupTitle = document.createElement('div');
                 groupTitle.className = 'prts-panel-title';
@@ -5709,10 +5968,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const onChange = value => {
                 CONFIG[key] = value;
                 saveConfig();
-                if (!value && definition.reloadOnDisable) {
-                    location.reload();
-                    return;
-                }
+                refreshAccountControls();
                 syncPageScaffold();
                 document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
                 requestFilterUpdate();
@@ -5732,10 +5988,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
                     const button = createPrtsButton({
                         className: 'prts-panel-segment', text: definition.optionLabels[value],
                         pressed: CONFIG[key] === value,
-                        onClick: () => {
-                            onChange(value);
-                            refreshAccountControls();
-                        }
+                        onClick: () => onChange(value)
                     });
                     button.dataset.prtsConfigKey = key;
                     button.value = value;
@@ -5750,7 +6003,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 }));
             }
         });
-        panel.appendChild(debugOptions);
+        content.appendChild(debugOptions);
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
         const accRow = document.createElement('div');
@@ -5814,15 +6067,15 @@ ${formatSklandImportSummary(summary)}`, 'success');
             accBtnGroup.appendChild(row);
         }
         accRow.appendChild(accBtnGroup);
-        panel.appendChild(accRow);
+        content.appendChild(accRow);
 
         const importBtn = createPrtsButton({ className: 'prts-btn', icon: 'import', text: '导入干员数据', onClick: handleImport });
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
-        panel.appendChild(importBtn);
+        content.appendChild(importBtn);
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
-        panel.appendChild(sklandBtn);
+        content.appendChild(sklandBtn);
 
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
@@ -5833,16 +6086,21 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
-        panel.appendChild(backupActions);
+        content.appendChild(backupActions);
 
         container.appendChild(panel);
         container.appendChild(btn);
         document.body.appendChild(container);
         refreshAccountControls();
+        updateFloatingLayout();
+        window.addEventListener('resize', updateFloatingLayout);
+        window.visualViewport?.addEventListener('resize', updateFloatingLayout);
+        window.visualViewport?.addEventListener('scroll', updateFloatingLayout);
+        new ResizeObserver(updateFloatingLayout).observe(panel);
 
         let isDragging = false;
         let hasMoved = false;
-        let startX, startY, initialLeft, initialTop, initialSnapRight, activePointerId;
+        let startX, startY, initialLeft, initialTop, activePointerId;
 
         btn.addEventListener('pointerdown', (e) => {
             activePointerId = e.pointerId;
@@ -5853,8 +6111,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const rect = container.getBoundingClientRect();
             initialLeft = rect.left;
             initialTop = rect.top;
-            initialSnapRight = container.style.right === '0px' || (container.classList.contains('snap-right') && !container.classList.contains('snap-left'));
-
             container.classList.remove('is-snapping');
             container.classList.add('is-dragging');
             container.style.left = initialLeft + 'px';
@@ -5870,20 +6126,21 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (activePointerId !== undefined && e.pointerId !== activePointerId) return;
             const dx = e.clientX - startX;
             const dy = e.clientY - startY;
-            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) hasMoved = true;
+            if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+                hasMoved = true;
+                setFloatOpen(false);
+            }
 
             let newLeft = initialLeft + dx;
             let newTop = initialTop + dy;
 
-            const winWidth = window.innerWidth;
-            const winHeight = window.innerHeight;
-            const elWidth = container.offsetWidth;
-            const elHeight = container.offsetHeight;
-
-            if (newLeft < 0) newLeft = 0;
-            if (newLeft > winWidth - elWidth) newLeft = winWidth - elWidth;
-            if (newTop < 0) newTop = 0;
-            if (newTop > winHeight - elHeight) newTop = winHeight - elHeight;
+            const viewport = window.visualViewport;
+            const left = viewport?.offsetLeft || 0;
+            const top = viewport?.offsetTop || 0;
+            const width = viewport?.width || window.innerWidth;
+            const height = viewport?.height || window.innerHeight;
+            newLeft = Math.max(left, Math.min(newLeft, left + width - container.offsetWidth));
+            newTop = Math.max(top, Math.min(newTop, top + height - container.offsetHeight));
 
             container.style.left = newLeft + 'px';
             container.style.top = newTop + 'px';
@@ -5892,6 +6149,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const finishDrag = (e) => {
             if (!isDragging) return;
             if (activePointerId !== undefined && e.pointerId !== activePointerId) return;
+            const rect = container.getBoundingClientRect();
             isDragging = false;
             btn.releasePointerCapture?.(activePointerId);
             activePointerId = undefined;
@@ -5899,56 +6157,31 @@ ${formatSklandImportSummary(summary)}`, 'success');
             container.style.transform = '';
 
             if (hasMoved) {
-                const winWidth = window.innerWidth;
-                const rect = container.getBoundingClientRect();
-                const centerX = rect.left + rect.width / 2;
-
-                container.classList.add('is-snapping');
-                let isRight = true;
-                if (centerX < winWidth / 2) {
-                    container.style.left = '0px';
-                    container.style.right = 'auto';
-                    container.classList.remove('snap-right');
-                    container.classList.add('snap-left');
-                    isRight = false;
-                } else {
-                    container.style.left = 'auto';
-                    container.style.right = '0px';
-                    container.classList.remove('snap-left');
-                    container.classList.add('snap-right');
-                    isRight = true;
-                }
-                const topPercent = (rect.top / window.innerHeight * 100).toFixed(1) + '%';
-                container.style.top = topPercent;
-
-                CONFIG.floatingPosition = { top: topPercent, isRight: isRight };
+                const viewport = window.visualViewport;
+                const midpoint = (viewport?.offsetLeft || 0) + (viewport?.width || window.innerWidth) / 2;
+                CONFIG.floatingPosition = {
+                    top: (rect.top / window.innerHeight * 100).toFixed(1) + '%',
+                    isRight: rect.left + rect.width / 2 >= midpoint
+                };
                 saveConfig();
-            } else {
-                if (initialSnapRight) {
-                    container.style.left = 'auto';
-                    container.style.right = '0px';
-                    container.classList.remove('snap-left');
-                    container.classList.add('snap-right');
-                } else {
-                    container.style.left = '0px';
-                    container.style.right = 'auto';
-                    container.classList.remove('snap-right');
-                    container.classList.add('snap-left');
-                }
+                container.classList.add('is-snapping');
             }
+            updateFloatingLayout();
         };
 
         document.addEventListener('pointerup', finishDrag);
         document.addEventListener('pointercancel', finishDrag);
 
         const setFloatOpen = isOpen => {
+            if (isOpen) updateFloatingLayout();
             container.classList.toggle('prts-float-open', isOpen);
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
         };
 
         btn.onclick = (e) => {
             e.stopPropagation();
-            if (!hasMoved) setFloatOpen(!container.classList.contains('prts-float-open'));
+            if (!hasMoved || e.detail === 0) setFloatOpen(!container.classList.contains('prts-float-open'));
+            hasMoved = false;
         };
         panel.onclick = (e) => e.stopPropagation();
         document.addEventListener('click', () => {
