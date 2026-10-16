@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      3.8.2
+// @version      3.9.0
 // @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
@@ -188,6 +188,8 @@
 
 // Generated from the Arknights game uniequip_table.json by tool/update-operator-data.ps1.
 // Branch order follows uniequip_002/003/004 IDs, not the displayed module order.
+// Resource version covers both operator and module snapshots.
+const BUILTIN_RESOURCE_VERSION = 1;
 const OP_MODULE_TYPES = Object.create(null);
 Object.entries({
     Y: `002_amiya 1022_flwr2 102_texas 1046_sbell2 1047_halo2 108_silent 110_deepcl 118_yuki 127_estell 129_bluep 130_doberm 131_flameb 135_halo 137_brownb 144_red 155_tiger 157_dagda 158_milu 164_nightm 166_skfire 181_flower 183_skgoat 187_ccheal 194_leto 195_glassb 199_yak 201_moeshd 2023_ling 214_kafka 219_meteo 226_hmau 235_jesica 241_panda 253_greyy 261_sddrag 271_spikes 274_astesi 277_sqrrel 289_gyuki 290_vigna 301_cutter 304_zebra 328_cammou 333_sidero 341_sntlla 345_folnic 349_chiave 365_aprl 367_swllow 369_bena 385_finlpp 393_toledo 4004_pudd 4006_melnte 4013_kjera 4014_lunacu 4023_rfalcn 4031_liesel 4037_demetr 4054_malist 4067_lolxh 4078_bdhkgt 4087_ines 4107_vrdant 4109_baslin 4110_delphn 411_tomimi 4125_rdoc 4126_fuze 4141_marcil 4142_laios 4143_sensi 4147_mitm 415_flint 4164_tecno 4166_varkis 4171_wulfen 4173_nowell 4182_oblvns 4183_mortis 4186_tmoris 4193_lemuen 4202_haruka 4217_makoto 4226_veen 4229_aphris 451_robin 452_bstalk 458_rfrost 466_qanik 497_ctable`,
@@ -214,9 +216,11 @@ Object.entries({
     const RESOURCE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
     let resourceUpdatePending = null;
     let resourceCheckedAt = 0;
+    let resourceVersion = BUILTIN_RESOURCE_VERSION;
 
     function validateResourceData(data) {
         if (!isPlainRecord(data) || data.schemaVersion !== 1 ||
+            !Number.isSafeInteger(data.resourceVersion) || data.resourceVersion < 1 ||
             !Array.isArray(data.operators) || !data.operators.length || !isPlainRecord(data.moduleTypes)) {
             throw new Error('资源格式无效');
         }
@@ -236,6 +240,9 @@ Object.entries({
             !/^char_\d+_[a-z0-9_]+$/.test(id) || typeof types !== 'string' || !/^[XYDAB]{1,3}$/.test(types))) {
             throw new Error('模组资源无效');
         }
+        if (data.resourceVersion < resourceVersion) {
+            throw new Error('资源版本早于当前数据');
+        }
         return data;
     }
 
@@ -245,6 +252,7 @@ Object.entries({
         data.operators.forEach(op => { OP_ID_MAP[op.name] = op.id; });
         Object.keys(OP_MODULE_TYPES).forEach(id => delete OP_MODULE_TYPES[id]);
         Object.assign(OP_MODULE_TYPES, data.moduleTypes);
+        resourceVersion = data.resourceVersion;
     }
 
     function loadCachedResources() {
@@ -504,7 +512,7 @@ Object.entries({
 
     function safeJsonParse(rawValue, fallback) {
         try {
-            return JSON.parse(rawValue);
+            return JSON.parse(typeof rawValue === 'string' ? rawValue.replace(/^\uFEFF/, '') : rawValue);
         } catch (e) {
             return fallback;
         }
@@ -913,18 +921,20 @@ function createSklandImportCancelledError() {
         const cultivateInfo = await getSklandGameCultivateInfo(credential, refreshed.token, refreshed.timestamp, binding.uid);
         const training = convertSklandPlayerInfoToTraining(playerInfo, cultivateInfo);
         const importedAt = new Date().toISOString();
-        const result = createSklandImportState(getCurrentAccountState(), {
+        return commitSklandImport({
             accountId: targetAccountId,
             names,
             training,
             binding,
             importedAt
         });
-
-        return commitSklandImportResult(result);
     }
 
-    function commitSklandImportResult(result) {
+    function commitSklandImport(importData) {
+        // 以提交时的共享存储为基准，避免旧页面回写其他账号的数据。
+        const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
+        reportAccountStateDiagnostics(resolved.diagnostics);
+        const result = createSklandImportState(resolved.state, importData);
         commitAccountState(result.state);
         try {
             GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(result.summary));
@@ -1539,6 +1549,38 @@ function createSklandImportCancelledError() {
         label.dataset.prtsStatusState = state;
     }
     // [样式] CSS 样式定义
+    const toastStyles = `
+    #prts-toast-container { position: fixed; right: 16px; bottom: 24px; z-index: 2147483647; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .prts-toast { pointer-events: auto; padding: 10px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #1f2937; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18); transform: translateY(0); opacity: 1; transition: opacity 0.18s ease, transform 0.18s ease; }
+    .prts-toast.is-leaving { opacity: 0; transform: translateY(6px); }
+    .prts-toast-title { font-size: 13px; line-height: 1.45; font-weight: 700; }
+    .prts-toast-detail { margin-top: 4px; color: #475569; font-size: 12px; line-height: 1.55; white-space: pre-line; }
+    .prts-toast.loading { border-inline-start: 3px solid var(--prts-color-primary, #2563eb); }
+    .prts-toast.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    .prts-toast.success .prts-toast-detail { color: #047857; }
+    .prts-toast.warning { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+    .prts-toast.warning .prts-toast-detail { color: #b45309; }
+    .prts-toast.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    .prts-toast.error .prts-toast-detail { color: #b91c1c; }
+    body.dark .prts-toast { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+    body.dark .prts-toast .prts-toast-detail { color: #c4d0dc; }
+    body.dark .prts-toast.success { border-color: #047857; background: rgba(16, 185, 129, 0.16); color: #bbf7d0; }
+    body.dark .prts-toast.success .prts-toast-detail { color: #86efac; }
+    body.dark .prts-toast.warning { border-color: #b45309; background: rgba(245, 158, 11, 0.16); color: #fde68a; }
+    body.dark .prts-toast.warning .prts-toast-detail { color: #fcd34d; }
+    body.dark .prts-toast.error { border-color: #b91c1c; background: rgba(239, 68, 68, 0.16); color: #fecaca; }
+    body.dark .prts-toast.error .prts-toast-detail { color: #fca5a5; }
+    body.high-contrast-theme .prts-toast { border-color: #38383b; background: #18181c; color: #e0e0e0; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+    body.high-contrast-theme .prts-toast .prts-toast-detail { color: #d1d5db; }
+    body.high-contrast-theme .prts-toast.success { border-color: #22c55e; color: #bbf7d0; }
+    body.high-contrast-theme .prts-toast.warning { border-color: #f59e0b; color: #fde68a; }
+    body.high-contrast-theme .prts-toast.error { border-color: #ef4444; color: #fecaca; }
+    @media (prefers-reduced-motion: reduce) {
+        .prts-toast { transition: none !important; }
+        .prts-toast.is-leaving { transform: none !important; }
+    }
+`;
+
     const mergedStyles = `
     /* ==========================================================================
        [PRTS 业务模块] 专有组件样式
@@ -1775,31 +1817,7 @@ function createSklandImportCancelledError() {
     .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; }
     .prts-tag-event { background-color: #3b82f6; } .prts-tag-note { background-color: #64748b; }
 
-    /* 8. 导入弹窗与 Toast */
-    #prts-toast-container { position: fixed; right: 16px; bottom: 24px; z-index: 2147483647; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
-    .prts-toast { pointer-events: auto; padding: 10px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #1f2937; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18); transform: translateY(0); opacity: 1; transition: opacity 0.18s ease, transform 0.18s ease; }
-    .prts-toast.is-leaving { opacity: 0; transform: translateY(6px); }
-    .prts-toast-title { font-size: 13px; line-height: 1.45; font-weight: 700; }
-    .prts-toast-detail { margin-top: 4px; color: #475569; font-size: 12px; line-height: 1.55; white-space: pre-line; }
-    .prts-toast.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
-    .prts-toast.success .prts-toast-detail { color: #047857; }
-    .prts-toast.warning { border-color: #fde68a; background: #fffbeb; color: #92400e; }
-    .prts-toast.warning .prts-toast-detail { color: #b45309; }
-    .prts-toast.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
-    .prts-toast.error .prts-toast-detail { color: #b91c1c; }
-    body.dark .prts-toast { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
-    body.dark .prts-toast .prts-toast-detail { color: #c4d0dc; }
-    body.dark .prts-toast.success { border-color: #047857; background: rgba(16, 185, 129, 0.16); color: #bbf7d0; }
-    body.dark .prts-toast.success .prts-toast-detail { color: #86efac; }
-    body.dark .prts-toast.warning { border-color: #b45309; background: rgba(245, 158, 11, 0.16); color: #fde68a; }
-    body.dark .prts-toast.warning .prts-toast-detail { color: #fcd34d; }
-    body.dark .prts-toast.error { border-color: #b91c1c; background: rgba(239, 68, 68, 0.16); color: #fecaca; }
-    body.dark .prts-toast.error .prts-toast-detail { color: #fca5a5; }
-    body.high-contrast-theme .prts-toast { border-color: #38383b; background: #18181c; color: #e0e0e0; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
-    body.high-contrast-theme .prts-toast .prts-toast-detail { color: #d1d5db; }
-    body.high-contrast-theme .prts-toast.success { border-color: #22c55e; color: #bbf7d0; }
-    body.high-contrast-theme .prts-toast.warning { border-color: #f59e0b; color: #fde68a; }
-    body.high-contrast-theme .prts-toast.error { border-color: #ef4444; color: #fecaca; }
+    /* 8. 导入弹窗 */
 
     #prts-compat-debug-panel { position: fixed; left: 16px; bottom: 24px; z-index: 2147483645; width: min(390px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #1e293b; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; pointer-events: none; }
     #prts-compat-debug-panel * { box-sizing: border-box; }
@@ -1895,10 +1913,6 @@ function createSklandImportCancelledError() {
         .prts-import-action { width: 100%; }
         .prts-modal-actions { flex-direction: column-reverse; }
         .prts-modal-actions .prts-import-action { width: 100%; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .prts-toast { transition: none; }
-        .prts-toast.is-leaving { transform: none; }
     }
 
     /* 9. 悬浮球 & 控制面板 */
@@ -2594,10 +2608,10 @@ function createSklandImportCancelledError() {
         }
     }
     @media (prefers-reduced-motion: reduce) {
-        #prts-float-container, #prts-float-container.is-snapping, .prts-settings-panel, .prts-btn, .prts-import-action, .prts-toast, .prts-op-item, .prts-op-text, .prts-popover-item, .prts-slider, .prts-slider:before {
+        #prts-float-container, #prts-float-container.is-snapping, .prts-settings-panel, .prts-btn, .prts-import-action, .prts-op-item, .prts-op-text, .prts-popover-item, .prts-slider, .prts-slider:before {
             transition: none !important;
         }
-        .prts-toast.is-leaving, .prts-op-item:hover, .prts-op-text:hover {
+        .prts-op-item:hover, .prts-op-text:hover {
             transform: none !important;
         }
     }
@@ -2614,7 +2628,7 @@ function createSklandImportCancelledError() {
 `;
 
     const sklandImportStyles = `
-    #prts-skland-import-panel { position: fixed; right: 16px; top: 96px; z-index: 2147483647; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
+    #prts-skland-import-panel { position: fixed; right: 16px; top: 96px; z-index: 2147483646; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
     #prts-skland-import-panel * { box-sizing: border-box; }
     .prts-skland-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 14px 10px; border-bottom: 1px solid #eef2f7; }
     .prts-skland-title { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 700; color: #111827; }
@@ -2847,7 +2861,7 @@ function createSklandImportCancelledError() {
     }
 `;
 
-    GM_addStyle(isSklandHost() ? sklandImportStyles : mergedStyles);
+    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles));
     // =========================================================================
     //                            MODULE 3.5: DOM UI HELPERS
     // =========================================================================
@@ -3272,7 +3286,7 @@ function createSklandImportCancelledError() {
             if (props) {
                 const candidate = props.operation || props.data || props.copilot || props.item;
                 if (candidate && typeof candidate === 'object') {
-                    if (candidate.parsedContent || Array.isArray(candidate.opers) || typeof candidate.content === 'string') {
+                    if (candidate.parsedContent || candidate.opers !== undefined || candidate.groups !== undefined || typeof candidate.content === 'string') {
                         return candidate;
                     }
                 }
@@ -3373,22 +3387,29 @@ function createSklandImportCancelledError() {
 
     function getParsedOperationContent(operation) {
         let parsed = operation?.parsedContent;
-        if (!parsed) {
-            if (Array.isArray(operation?.opers) || Array.isArray(operation?.groups)) {
+        if (parsed == null) {
+            if (operation?.opers !== undefined || operation?.groups !== undefined) {
                 parsed = operation;
-            } else if (typeof operation?.content === 'string') {
-                try { parsed = JSON.parse(operation.content); } catch(e) {}
+            } else if (typeof operation?.content === 'string' && operation.content.trim()) {
+                parsed = safeJsonParse(operation.content, undefined);
+                if (parsed === undefined) throw new Error('作业 JSON 格式异常。');
             }
         }
 
-        return {
-            requiredOps: Array.isArray(parsed?.opers) ? parsed.opers : [],
-            requiredGroups: Array.isArray(parsed?.groups) ? parsed.groups : []
-        };
+        const requiredOps = parsed?.opers ?? [];
+        const requiredGroups = parsed?.groups ?? [];
+        if ((parsed != null && !isPlainRecord(parsed)) ||
+            !Array.isArray(requiredOps) || !Array.isArray(requiredGroups) ||
+            !requiredOps.every(hasNamedOperatorEntry) ||
+            !requiredGroups.every(group => isPlainRecord(group) &&
+                (group.opers == null || (Array.isArray(group.opers) && group.opers.every(hasNamedOperatorEntry))))) {
+            throw new Error('作业干员数据格式异常。');
+        }
+        return { requiredOps, requiredGroups };
     }
 
     function hasNamedOperatorEntry(entry) {
-        return typeof entry?.name === 'string' && entry.name.trim().length > 0;
+        return isPlainRecord(entry) && typeof entry.name === 'string' && entry.name.trim().length > 0;
     }
 
     function hasKnownOperatorEntry(entry) {
@@ -3989,7 +4010,8 @@ function createSklandImportCancelledError() {
         document.getElementById('prts-import-dialog-backdrop')?.remove();
     }
 
-    function applyImportedOperatorNames(names, sourceLabel, statusEl, training = {}) {
+    function applyImportedOperatorNames(accountId, names, sourceLabel, statusEl, training = {}) {
+        const targetAccountId = normalizeAccountId(accountId);
         const sanitizedNames = sanitizeOperatorNames(names);
         if (sanitizedNames.length === 0) {
             const message = '未能识别有效的干员数据，请检查 JSON/TXT 内容。';
@@ -3998,14 +4020,14 @@ function createSklandImportCancelledError() {
             return false;
         }
 
-        const accountLabel = getAccountLabel(activeAccountId);
-        const diff = getOperatorImportDiff(accountsData[activeAccountId] || [], sanitizedNames);
+        const accountLabel = getAccountLabel(targetAccountId);
+        const diff = getOperatorImportDiff(accountsData[targetAccountId] || [], sanitizedNames);
         const diffText = formatOperatorImportDiff(diff);
         const sourceText = sourceLabel ? `来源：${sourceLabel}` : '来源：导入内容';
 
         const nextState = getCurrentAccountState();
-        nextState.accountsData[nextState.activeAccountId] = sanitizedNames;
-        nextState.accountsTraining[nextState.activeAccountId] = training;
+        nextState.accountsData[targetAccountId] = sanitizedNames;
+        nextState.accountsTraining[targetAccountId] = training;
         commitAccountState(nextState);
         refreshAccountStateUi();
 
@@ -4016,7 +4038,7 @@ function createSklandImportCancelledError() {
         return true;
     }
 
-    function readOperatorImportFile(file, statusEl) {
+    function readOperatorImportFile(accountId, file, statusEl) {
         if (!file) return Promise.resolve(false);
 
         if (file.size > OPERATOR_IMPORT_MAX_BYTES) {
@@ -4032,7 +4054,7 @@ function createSklandImportCancelledError() {
             reader.onload = event => {
                 try {
                     const { names, training } = parseImportedOperators(event.target.result, file.name);
-                    resolve(applyImportedOperatorNames(names, file.name || '文件导入', statusEl, training));
+                    resolve(applyImportedOperatorNames(accountId, names, file.name || '文件导入', statusEl, training));
                 } catch (error) {
                     const message = getImportErrorMessage(error);
                     console.error('[Better PRTS] 导入干员数据失败', error);
@@ -4058,6 +4080,7 @@ function createSklandImportCancelledError() {
             return;
         }
 
+        const targetAccountId = normalizeAccountId(activeAccountId);
         const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const backdrop = document.createElement('div');
         backdrop.id = 'prts-import-dialog-backdrop';
@@ -4076,10 +4099,10 @@ function createSklandImportCancelledError() {
         const title = document.createElement('h2');
         title.id = 'prts-import-dialog-title';
         title.className = 'prts-import-title';
-        title.textContent = `导入到 ${getAccountLabel(activeAccountId)}`;
+        title.textContent = `导入到 ${getAccountLabel(targetAccountId)}`;
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-import-subtitle';
-        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，导入后会替换当前账号的干员列表。';
+        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，导入后会替换此账号的干员列表。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -4152,7 +4175,7 @@ function createSklandImportCancelledError() {
             const file = event.target.files?.[0];
             if (!file) return;
             setBusy(true);
-            const imported = await readOperatorImportFile(file, status);
+            const imported = await readOperatorImportFile(targetAccountId, file, status);
             setBusy(false);
             fileInput.value = '';
             if (imported) window.setTimeout(closeOperatorImportDialog, 700);
@@ -4170,7 +4193,7 @@ function createSklandImportCancelledError() {
 
             try {
                 const { names, training } = parseImportedOperators(rawText, '');
-                const imported = applyImportedOperatorNames(names, '粘贴内容', status, training);
+                const imported = applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
                 if (imported) window.setTimeout(closeOperatorImportDialog, 700);
             } catch (error) {
                 const message = getImportErrorMessage(error);
@@ -4910,6 +4933,7 @@ function createSklandImportCancelledError() {
 
         const rawList = cleanText.split(/[,，]\s*/);
         const validOps =[];
+        let hasUnknownOps = false;
 
         rawList.forEach(entry => {
             const parts = entry.trim().split(/\s+/);
@@ -4920,11 +4944,12 @@ function createSklandImportCancelledError() {
             if (OP_ID_MAP[name]) {
                 validOps.push({ name: name, id: OP_ID_MAP[name], skill: skill });
             } else {
+                hasUnknownOps = true;
                 reportUnknownOperatorName(name, { source: 'popover', example: cleanText });
             }
         });
 
-        if (validOps.length > 0) {
+        if (!hasUnknownOps && validOps.length > 0) {
             content.replaceChildren();
             const grid = document.createElement('div');
             grid.className = 'prts-popover-grid';
@@ -5079,6 +5104,29 @@ function createSklandImportCancelledError() {
     }
 
     function processOperationCard(card) {
+        try {
+            return processOperationCardContent(card);
+        } catch (error) {
+            console.warn('[Better PRTS] 作业卡片处理失败', error instanceof Error ? error.message : '未知错误');
+            const operation = operationCache.get(card)?.resolution.operation;
+            operationCache.delete(card);
+            const diagnostics = createCardDiagnostics('none');
+            cardDiagnosticsCache.set(card, diagnostics);
+            const cardInner = card.querySelector(BP_SELECTORS.card);
+            card.style.display = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation) ? 'none' : '';
+            card.classList.remove('prts-card-gray');
+            if (cardInner) {
+                const label = cardInner.querySelector('.prts-status-label') || document.createElement('div');
+                label.onclick = null;
+                label.onkeydown = null;
+                updateStatusLabel(label, 'prts-status-label prts-label-support', 'support', '作业数据待核验');
+                if (!label.parentElement) cardInner.appendChild(label);
+            }
+            return diagnostics;
+        }
+    }
+
+    function processOperationCardContent(card) {
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
             const diagnostics = createCardDiagnostics('none');
