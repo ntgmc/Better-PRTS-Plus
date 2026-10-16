@@ -561,6 +561,22 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
+test('both host branches inject toast layout, state and reduced-motion styles', () => {
+  for (const skland of [false, true]) {
+    let css = '';
+    vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/styles/styles.js'), 'utf8'), {
+      isSklandHost: () => skland,
+      GM_addStyle: styles => { css += styles; }
+    });
+    assert.match(css, /#prts-toast-container\s*\{[^}]*position:\s*fixed/, skland ? 'Skland' : 'PRTS Plus');
+    for (const state of ['loading', 'success', 'error']) {
+      assert(css.includes(`.prts-toast.${state}`), `${skland ? 'Skland' : 'PRTS Plus'}: ${state}`);
+    }
+    assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.prts-toast/);
+    assert(css.includes('.prts-toast.is-leaving'));
+  }
+});
+
 test('sync toasts persist while loading, update in place and dismiss after completion', () => {
   const body = createTestElement('body');
   const timers = new Map();

@@ -1,4 +1,36 @@
     // [样式] CSS 样式定义
+    const toastStyles = `
+    #prts-toast-container { position: fixed; right: 16px; bottom: 24px; z-index: 2147483647; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    .prts-toast { pointer-events: auto; padding: 10px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #1f2937; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18); transform: translateY(0); opacity: 1; transition: opacity 0.18s ease, transform 0.18s ease; }
+    .prts-toast.is-leaving { opacity: 0; transform: translateY(6px); }
+    .prts-toast-title { font-size: 13px; line-height: 1.45; font-weight: 700; }
+    .prts-toast-detail { margin-top: 4px; color: #475569; font-size: 12px; line-height: 1.55; white-space: pre-line; }
+    .prts-toast.loading { border-inline-start: 3px solid var(--prts-color-primary, #2563eb); }
+    .prts-toast.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+    .prts-toast.success .prts-toast-detail { color: #047857; }
+    .prts-toast.warning { border-color: #fde68a; background: #fffbeb; color: #92400e; }
+    .prts-toast.warning .prts-toast-detail { color: #b45309; }
+    .prts-toast.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
+    .prts-toast.error .prts-toast-detail { color: #b91c1c; }
+    body.dark .prts-toast { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
+    body.dark .prts-toast .prts-toast-detail { color: #c4d0dc; }
+    body.dark .prts-toast.success { border-color: #047857; background: rgba(16, 185, 129, 0.16); color: #bbf7d0; }
+    body.dark .prts-toast.success .prts-toast-detail { color: #86efac; }
+    body.dark .prts-toast.warning { border-color: #b45309; background: rgba(245, 158, 11, 0.16); color: #fde68a; }
+    body.dark .prts-toast.warning .prts-toast-detail { color: #fcd34d; }
+    body.dark .prts-toast.error { border-color: #b91c1c; background: rgba(239, 68, 68, 0.16); color: #fecaca; }
+    body.dark .prts-toast.error .prts-toast-detail { color: #fca5a5; }
+    body.high-contrast-theme .prts-toast { border-color: #38383b; background: #18181c; color: #e0e0e0; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
+    body.high-contrast-theme .prts-toast .prts-toast-detail { color: #d1d5db; }
+    body.high-contrast-theme .prts-toast.success { border-color: #22c55e; color: #bbf7d0; }
+    body.high-contrast-theme .prts-toast.warning { border-color: #f59e0b; color: #fde68a; }
+    body.high-contrast-theme .prts-toast.error { border-color: #ef4444; color: #fecaca; }
+    @media (prefers-reduced-motion: reduce) {
+        .prts-toast { transition: none !important; }
+        .prts-toast.is-leaving { transform: none !important; }
+    }
+`;
+
     const mergedStyles = `
     /* ==========================================================================
        [PRTS 业务模块] 专有组件样式
@@ -235,31 +267,7 @@
     .prts-tag-update { background-color: #10b981; } .prts-tag-fix { background-color: #f59e0b; }
     .prts-tag-event { background-color: #3b82f6; } .prts-tag-note { background-color: #64748b; }
 
-    /* 8. 导入弹窗与 Toast */
-    #prts-toast-container { position: fixed; right: 16px; bottom: 24px; z-index: 2147483647; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
-    .prts-toast { pointer-events: auto; padding: 10px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #1f2937; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18); transform: translateY(0); opacity: 1; transition: opacity 0.18s ease, transform 0.18s ease; }
-    .prts-toast.is-leaving { opacity: 0; transform: translateY(6px); }
-    .prts-toast-title { font-size: 13px; line-height: 1.45; font-weight: 700; }
-    .prts-toast-detail { margin-top: 4px; color: #475569; font-size: 12px; line-height: 1.55; white-space: pre-line; }
-    .prts-toast.success { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
-    .prts-toast.success .prts-toast-detail { color: #047857; }
-    .prts-toast.warning { border-color: #fde68a; background: #fffbeb; color: #92400e; }
-    .prts-toast.warning .prts-toast-detail { color: #b45309; }
-    .prts-toast.error { border-color: #fecaca; background: #fef2f2; color: #991b1b; }
-    .prts-toast.error .prts-toast-detail { color: #b91c1c; }
-    body.dark .prts-toast { border-color: #415262; background: #30404d; color: #f5f8fa; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); }
-    body.dark .prts-toast .prts-toast-detail { color: #c4d0dc; }
-    body.dark .prts-toast.success { border-color: #047857; background: rgba(16, 185, 129, 0.16); color: #bbf7d0; }
-    body.dark .prts-toast.success .prts-toast-detail { color: #86efac; }
-    body.dark .prts-toast.warning { border-color: #b45309; background: rgba(245, 158, 11, 0.16); color: #fde68a; }
-    body.dark .prts-toast.warning .prts-toast-detail { color: #fcd34d; }
-    body.dark .prts-toast.error { border-color: #b91c1c; background: rgba(239, 68, 68, 0.16); color: #fecaca; }
-    body.dark .prts-toast.error .prts-toast-detail { color: #fca5a5; }
-    body.high-contrast-theme .prts-toast { border-color: #38383b; background: #18181c; color: #e0e0e0; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55); }
-    body.high-contrast-theme .prts-toast .prts-toast-detail { color: #d1d5db; }
-    body.high-contrast-theme .prts-toast.success { border-color: #22c55e; color: #bbf7d0; }
-    body.high-contrast-theme .prts-toast.warning { border-color: #f59e0b; color: #fde68a; }
-    body.high-contrast-theme .prts-toast.error { border-color: #ef4444; color: #fecaca; }
+    /* 8. 导入弹窗 */
 
     #prts-compat-debug-panel { position: fixed; left: 16px; bottom: 24px; z-index: 2147483645; width: min(390px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #1e293b; box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; pointer-events: none; }
     #prts-compat-debug-panel * { box-sizing: border-box; }
@@ -355,10 +363,6 @@
         .prts-import-action { width: 100%; }
         .prts-modal-actions { flex-direction: column-reverse; }
         .prts-modal-actions .prts-import-action { width: 100%; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .prts-toast { transition: none; }
-        .prts-toast.is-leaving { transform: none; }
     }
 
     /* 9. 悬浮球 & 控制面板 */
@@ -1054,10 +1058,10 @@
         }
     }
     @media (prefers-reduced-motion: reduce) {
-        #prts-float-container, #prts-float-container.is-snapping, .prts-settings-panel, .prts-btn, .prts-import-action, .prts-toast, .prts-op-item, .prts-op-text, .prts-popover-item, .prts-slider, .prts-slider:before {
+        #prts-float-container, #prts-float-container.is-snapping, .prts-settings-panel, .prts-btn, .prts-import-action, .prts-op-item, .prts-op-text, .prts-popover-item, .prts-slider, .prts-slider:before {
             transition: none !important;
         }
-        .prts-toast.is-leaving, .prts-op-item:hover, .prts-op-text:hover {
+        .prts-op-item:hover, .prts-op-text:hover {
             transform: none !important;
         }
     }
@@ -1074,7 +1078,7 @@
 `;
 
     const sklandImportStyles = `
-    #prts-skland-import-panel { position: fixed; right: 16px; top: 96px; z-index: 2147483647; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
+    #prts-skland-import-panel { position: fixed; right: 16px; top: 96px; z-index: 2147483646; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
     #prts-skland-import-panel * { box-sizing: border-box; }
     .prts-skland-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 14px 10px; border-bottom: 1px solid #eef2f7; }
     .prts-skland-title { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 700; color: #111827; }
@@ -1307,4 +1311,4 @@
     }
 `;
 
-    GM_addStyle(isSklandHost() ? sklandImportStyles : mergedStyles);
+    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles));
