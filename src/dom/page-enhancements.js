@@ -467,6 +467,7 @@
 
         const rawList = cleanText.split(/[,，]\s*/);
         const validOps =[];
+        let hasUnknownOps = false;
 
         rawList.forEach(entry => {
             const parts = entry.trim().split(/\s+/);
@@ -477,11 +478,12 @@
             if (OP_ID_MAP[name]) {
                 validOps.push({ name: name, id: OP_ID_MAP[name], skill: skill });
             } else {
+                hasUnknownOps = true;
                 reportUnknownOperatorName(name, { source: 'popover', example: cleanText });
             }
         });
 
-        if (validOps.length > 0) {
+        if (!hasUnknownOps && validOps.length > 0) {
             content.replaceChildren();
             const grid = document.createElement('div');
             grid.className = 'prts-popover-grid';

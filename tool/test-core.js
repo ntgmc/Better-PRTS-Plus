@@ -825,6 +825,50 @@ test('card badges, avatars, descriptions and links work independently and remain
   }
 });
 
+test('mixed operator group popovers keep all original content and can retry when names become known', () => {
+  const savedPopoverAvatars = CONFIG.popoverAvatars;
+  const savedDocument = context.document;
+  const unknownName = '未知新干员';
+  const savedId = OP_ID_MAP[unknownName];
+  CONFIG.popoverAvatars = true;
+  context.document = { createElement: createTestElement };
+  try {
+    for (const separator of [', ', '，']) for (const unknownFirst of [false, true]) {
+      delete OP_ID_MAP[unknownName];
+      const candidates = ['阿米娅 2', `${unknownName} 3`];
+      if (unknownFirst) candidates.reverse();
+      const content = createTestElement();
+      const originalNodes = ['-> ', candidates[0], separator, candidates[1]].map(text => createTestElement('span', text));
+      originalNodes.forEach(node => content.appendChild(node));
+      const originalText = content.textContent;
+      const portal = { querySelector: () => content };
+      enhancePopover(portal);
+      enhancePopover(portal);
+      assert.strictEqual(content.textContent, originalText);
+      assert.deepStrictEqual(content.children, originalNodes);
+      assert.strictEqual(content.dataset.optimized, undefined);
+      assert(context.window.BetterPRTSPlusDebug.getUnknownOperators().some(report =>
+        report.name === unknownName && report.contexts.includes('popover')));
+
+      OP_ID_MAP[unknownName] = 'char_999999_new';
+      enhancePopover(portal);
+      const grid = content.firstChild;
+      assert.strictEqual(grid.className, 'prts-popover-grid');
+      assert.strictEqual(grid.children.length, 2);
+      assert.deepStrictEqual(grid.children.map(item => item.firstChild.alt), candidates.map(entry => entry.split(' ')[0]));
+      assert.deepStrictEqual(grid.children.map(item => item.lastChild.innerText), candidates.map(entry => entry.split(' ')[1]));
+      assert.strictEqual(content.dataset.optimized, 'true');
+      enhancePopover(portal);
+      assert.strictEqual(content.firstChild, grid);
+    }
+  } finally {
+    CONFIG.popoverAvatars = savedPopoverAvatars;
+    context.document = savedDocument;
+    if (savedId === undefined) delete OP_ID_MAP[unknownName];
+    else OP_ID_MAP[unknownName] = savedId;
+  }
+});
+
 test('backup round trips every registered option and restores unified settings', () => {
   const savedConfig = { ...CONFIG };
   const savedStorage = new Map(storage);
