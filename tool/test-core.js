@@ -1115,6 +1115,27 @@ test('matchOperatorGroups reassigns wider candidates for narrow groups', () => {
   assert.deepStrictEqual([...used].sort(), ['A', 'B']);
 });
 
+test('operation availability matches overlapping groups and reserves fixed operators', () => {
+  const groups = [
+    { name: 'wide', opers: [{ name: 'A' }, { name: 'B' }] },
+    { name: 'left', opers: [{ name: 'A' }, { name: 'C' }] },
+    { name: 'right', opers: [{ name: 'A' }, { name: 'C' }] }
+  ];
+  const owned = new Set(['A', 'B', 'C']);
+  for (const order of [groups, [...groups].reverse()]) {
+    const matched = checkOperationAvailability({ groups: order }, owned, 'PERFECT');
+    assert.strictEqual(matched.isAvailable, true);
+    assert.strictEqual(matched.missingCount, 0);
+    const operation = { opers: [{ name: 'C' }], groups: order };
+    const reserved = checkOperationAvailability(operation, owned, 'PERFECT');
+    assert.strictEqual(reserved.isAvailable, false);
+    assert.strictEqual(reserved.missingCount, 1);
+    const support = checkOperationAvailability(operation, owned, 'SUPPORT');
+    assert.strictEqual(support.isAvailable, true);
+    assert.strictEqual(support.missingCount, 1);
+  }
+});
+
 test('training requirements distinguish insufficient, unknown and absent data', () => {
   const op = { name: '阿米娅', skill: 2, requirements: {
     elite: 2, level: 60, skill_level: 10, module: 1, module_level: 2, potential: 2

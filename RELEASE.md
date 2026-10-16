@@ -31,7 +31,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/upload-release.ps1 -Ver
 
 推送完成后，等待 GitHub Actions 创建 Release，确认发布附件中包含 `Better-PRTS-Plus.user.js`，再将 GreasyFork 同步或手动更新到对应版本。README 继续推荐从 GreasyFork 安装。
 
-运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tool/test-release.ps1` 可检查发布重试流程。检查使用离线数据源和临时本地 Git 远端，结束后自动清理。
+运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tool/test-release.ps1` 可检查发布重试流程。检查使用离线数据源和临时本地 Git 远端，结束后自动清理。Check CI 在 `tool/*.ps1`、`.githooks/` 或 `.github/workflows/` 变更时自动运行这套测试，首次推送或无法比较提交范围时也会运行；仅修改业务代码或文档时继续运行项目检查。离线发布测试步骤最多运行 5 分钟，可在 Actions 的步骤耗时中观察执行成本。
 
 ## 资源更新
 
@@ -53,7 +53,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/update-operator-data.ps
 
 ## 发布门禁
 
-- `tool/check.ps1` 检查 `src/` 拼接产物与 `Better-PRTS-Plus.user.js` 是否一致，并检查 userscript 语法、README 版本徽章、干员生成物与内嵌数据是否同步，以及已有安全约束。
+- `tool/check.ps1` 检查 `src/` 拼接产物与 `Better-PRTS-Plus.user.js` 是否一致，并检查 userscript 语法、README 版本徽章、干员生成物与内嵌数据是否同步，以及已有安全约束。干员组匹配由 `tool/test-core.js` 直接调用实际 JS 验证，覆盖候选重分配、固定干员占用和助战放行；检查脚本不再维护另一份匹配算法。
 - `tool/check-release.ps1 -Tag vX.Y.Z` 检查 tag 格式，要求 tag 版本与 userscript `@version` 完全一致。
 - `tool/publish-release.ps1` 在本地调用 `tool/check-release.ps1`，并在提交前检查已有 tag。只有 tag 指向当前 HEAD 且发布文件没有改动时，脚本才会复用该 tag；否则需要使用新版本号。
 - GitHub Release workflow 会在全部检查通过后创建 Release。tag 与 `@version` 不一致时，发布流程会在创建 Release 前停止。
