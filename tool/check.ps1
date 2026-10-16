@@ -110,7 +110,7 @@ if ($userScript -notmatch "function parseImportedOperatorNames") {
 if ($userScript -notmatch "function isOwnedOperatorRecord") {
     throw "Missing owned operator record normalizer"
 }
-if ($userScript -notmatch "if\s*\(parsed !== null\)\s*return parseOperatorNamesFromJson\(parsed\)") {
+if ($userScript -notmatch "if\s*\(parsed !== undefined\)\s*return parseOperatorNamesFromJson\(parsed\)") {
     throw "JSON imports should return parsed operators instead of falling through to text parsing"
 }
 if ($userScript -match "isTxtFile") {

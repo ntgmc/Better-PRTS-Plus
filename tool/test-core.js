@@ -1047,8 +1047,89 @@ test('parseImportedOperatorNames handles TXT comments and special characters', (
   assert.deepStrictEqual(hostArray(parseImportedOperatorNames(raw, 'ops.txt')), ['GALLUS²', 'Miss.Christine', 'U-Official']);
 });
 
-test('parseImportedOperatorNames rejects invalid JSON files', () => {
-  assert.throws(() => parseImportedOperatorNames('{bad json', 'ops.json'), /JSON/);
+test('operator imports reject broken JSON without falling back to TXT', () => {
+  for (const raw of ['["阿米娅",', '{bad json', '["阿米娅",]', '["阿米娅"] trailing', '[', '{']) {
+    for (const prefix of ['', ' \t\r\n', '\uFEFF', '\uFEFF \r\n']) {
+      for (const fileName of ['', 'ops.txt', 'ops.json', 'ops.JSON']) {
+        assert.throws(() => parseImportedOperatorNames(prefix + raw, fileName), /JSON 格式错误/);
+        assert.throws(() => parseImportedOperators(prefix + raw, fileName), /JSON 格式错误/);
+      }
+    }
+  }
+  assert.throws(() => parseImportedOperatorNames('阿米娅', 'ops.json'), /JSON 格式错误/);
+});
+
+test('valid JSON with an unsupported shape never falls back to TXT', () => {
+  for (const raw of ['null', '{}', '{"name":"阿米娅"}', '"阿米娅"', '123', 'true']) {
+    for (const fileName of ['', 'ops.txt', 'ops.json']) {
+      assert.throws(() => parseImportedOperators(raw, fileName), /JSON 数据格式错误/);
+    }
+  }
+});
+
+test('file and pasted imports preserve accounts on errors and report unrecognized names without rejecting them', async () => {
+  const initial = createAccountState({
+    activeAccountId: 2, accountsData: { 1: ['W'], 2: ['能天使'], 3: ['凯尔希'] },
+    accountsTraining: { 2: { 能天使: { elite: 2, level: 90 } } }
+  });
+  const cases = [
+    { raw: '["阿米娅",', type: 'error' },
+    { raw: '\uFEFF \n{bad json', type: 'error' },
+    { raw: '# comment\n// skip\n', type: 'warning' },
+    { raw: '阿米娅\n W \n阿米娅', names: ['阿米娅', 'W'], recognized: 2, unknown: [], type: 'success' },
+    { raw: '阿米娅\n未知新干员\n未知新干员', names: ['阿米娅', '未知新干员'], recognized: 1,
+      unknown: ['未知新干员'], type: 'warning' },
+    { raw: '未知新干员', names: ['未知新干员'], recognized: 0, unknown: ['未知新干员'], type: 'warning' },
+    { raw: '[{"name":"阿米娅","elite":2,"level":80}]', names: ['阿米娅'],
+      training: { 阿米娅: { elite: 2, level: 80 } }, recognized: 1, unknown: [], type: 'success' }
+  ];
+  for (const method of ['paste', 'file']) for (const example of cases) {
+    const sharedStorage = new Map([['prts_plus_accounts_data', serializeAccountState(initial)]]);
+    const { page, readers, toasts } = createOperatorImportPage(sharedStorage);
+    const scheduled = [];
+    let writes = 0;
+    page.GM_setValue = (key, value) => { writes++; sharedStorage.set(key, value); };
+    page.window.setTimeout = (...args) => scheduled.push(args);
+    page.console = { ...page.console, error() {} };
+    page.openOperatorImportDialog();
+    const dialog = page.document.getElementById('prts-import-dialog');
+    const status = dialog.querySelector('.prts-import-status');
+    if (method === 'paste') {
+      dialog.querySelector('.prts-import-textarea').value = example.raw;
+      dialog.querySelector('.prts-import-action primary').onclick();
+    } else {
+      const pending = dialog.querySelector('input').onchange({
+        target: { files: [{ name: 'ops.txt', size: example.raw.length }] }
+      });
+      readers[0].onload({ target: { result: example.raw } });
+      await pending;
+    }
+    assert.strictEqual(status.className, `prts-import-status ${example.type}`);
+    assert.strictEqual(toasts.at(-1)[1], example.type);
+    assert.strictEqual(page.document.getElementById('prts-import-dialog'), dialog);
+    assert.strictEqual(scheduled.length, 0, 'import results must stay visible for review');
+    if (example.names) {
+      assert.strictEqual(writes, 1);
+      const expected = hostObject(createAccountState({
+        ...initial, accountsData: { ...initial.accountsData, 2: example.names },
+        accountsTraining: { 2: example.training || {} }
+      }));
+      assert.deepStrictEqual(hostObject(page.getCurrentAccountState()), expected);
+      assert.deepStrictEqual(JSON.parse(sharedStorage.get('prts_plus_accounts_data')), expected);
+      assert(status.textContent.includes(`已识别 ${example.recognized} 名 / 未识别 ${example.unknown.length} 名`));
+      for (const name of example.unknown) assert(status.textContent.includes(name));
+      if (example.unknown.length) assert(status.textContent.includes('这些名称已保留，请核对拼写'));
+    } else {
+      assert.strictEqual(writes, 0);
+      assert.deepStrictEqual(hostObject(page.getCurrentAccountState()), hostObject(initial));
+      assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), serializeAccountState(initial));
+      if (example.type === 'error') {
+        assert(status.textContent.includes('JSON 格式错误'));
+        assert.strictEqual(status.attributes.get('role'), 'alert');
+      }
+    }
+    page.closeOperatorImportDialog();
+  }
 });
 
 test('BOM JSON parses names and MAA training consistently for files and pasted text', () => {
@@ -1063,7 +1144,7 @@ test('BOM JSON parses names and MAA training consistently for files and pasted t
     }
   ];
   for (const { raw, expected } of payloads) {
-    for (const fileName of ['operators.json', '']) {
+    for (const fileName of ['operators.json', 'operators.txt', '']) {
       assert.deepStrictEqual(hostObject(parseImportedOperators('\uFEFF' + raw, fileName)), expected);
       assert.deepStrictEqual(hostArray(parseImportedOperatorNames('\uFEFF' + raw, fileName)), expected.names);
     }

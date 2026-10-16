@@ -193,7 +193,7 @@
     }
 
     function parseOperatorNamesFromJson(json) {
-        if (!Array.isArray(json)) throw new Error('数据格式非数组');
+        if (!Array.isArray(json)) throw new Error('JSON 数据格式错误：干员名单必须是数组。');
         if (json.length === 0) return [];
 
         if (typeof json[0] === 'string') {
@@ -224,9 +224,11 @@
     function parseImportedOperatorNames(rawText, fileName = '') {
         const text = String(rawText || '');
 
-        const parsed = safeJsonParse(text, null);
-        if (parsed !== null) return parseOperatorNamesFromJson(parsed);
-        if (/\.json$/i.test(fileName)) throw new Error('文件格式错误：不是有效的 JSON 文件');
+        const parsed = safeJsonParse(text, undefined);
+        if (parsed !== undefined) return parseOperatorNamesFromJson(parsed);
+        if (/^[\[{]/.test(text.trimStart()) || /\.json$/i.test(fileName)) {
+            throw new Error('JSON 格式错误，请检查内容是否完整、语法是否正确。');
+        }
 
         return parseOperatorNamesFromText(text);
     }

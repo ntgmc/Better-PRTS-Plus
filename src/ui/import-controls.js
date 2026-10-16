@@ -66,6 +66,8 @@
         const diff = getOperatorImportDiff(accountsData[targetAccountId] || [], sanitizedNames);
         const diffText = formatOperatorImportDiff(diff);
         const sourceText = sourceLabel ? `来源：${sourceLabel}` : '来源：导入内容';
+        const unrecognizedNames = sanitizedNames.filter(name => !Object.prototype.hasOwnProperty.call(OP_ID_MAP, name));
+        const recognitionText = `已识别 ${sanitizedNames.length - unrecognizedNames.length} 名 / 未识别 ${unrecognizedNames.length} 名`;
 
         const nextState = getCurrentAccountState();
         nextState.accountsData[targetAccountId] = sanitizedNames;
@@ -73,10 +75,14 @@
         commitAccountState(nextState);
         refreshAccountStateUi();
 
-        const message = `${accountLabel} 导入成功`;
-        const detail = `${diffText}\n${sourceText}`;
-        setOperatorImportStatus(statusEl, `${message}\n${detail}`, 'success');
-        showPrtsToast(message, 'success', detail);
+        const type = unrecognizedNames.length ? 'warning' : 'success';
+        const message = unrecognizedNames.length ? `${accountLabel} 已导入，名称待核对` : `${accountLabel} 导入成功`;
+        const detail = [diffText, sourceText, recognitionText];
+        if (unrecognizedNames.length) {
+            detail.push(`未识别名称：${unrecognizedNames.join('、')}`, '这些名称已保留，请核对拼写；新干员可能尚未收录。');
+        }
+        setOperatorImportStatus(statusEl, `${message}\n${detail.join('\n')}`, type);
+        showPrtsToast(message, type, detail.join('\n'));
         return true;
     }
 
@@ -199,7 +205,7 @@
         const cancelBtn = document.createElement('button');
         cancelBtn.type = 'button';
         cancelBtn.className = 'prts-import-action';
-        cancelBtn.textContent = '取消';
+        cancelBtn.textContent = '关闭';
         cancelBtn.onclick = closeOperatorImportDialog;
 
         const status = document.createElement('div');
@@ -217,10 +223,9 @@
             const file = event.target.files?.[0];
             if (!file) return;
             setBusy(true);
-            const imported = await readOperatorImportFile(targetAccountId, file, status);
+            await readOperatorImportFile(targetAccountId, file, status);
             setBusy(false);
             fileInput.value = '';
-            if (imported) window.setTimeout(closeOperatorImportDialog, 700);
         };
 
         pasteBtn.onclick = () => {
@@ -235,8 +240,7 @@
 
             try {
                 const { names, training } = parseImportedOperators(rawText, '');
-                const imported = applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
-                if (imported) window.setTimeout(closeOperatorImportDialog, 700);
+                applyImportedOperatorNames(targetAccountId, names, '粘贴内容', status, training);
             } catch (error) {
                 const message = getImportErrorMessage(error);
                 console.error('[Better PRTS] 粘贴导入干员数据失败', error);
