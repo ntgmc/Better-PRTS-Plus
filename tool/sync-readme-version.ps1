@@ -4,8 +4,9 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot "..")
 $userScriptPath = Join-Path $repoRoot "src/meta/userscript-header.js"
 $readmePath = Join-Path $repoRoot "README.md"
 
+$versionPattern = "[0-9]+(?:\.[0-9]+){1,3}(?:[-+][0-9A-Za-z.-]+)?"
 $userScript = Get-Content -LiteralPath $userScriptPath -Raw -Encoding UTF8
-$versionMatch = [regex]::Match($userScript, "(?m)^//\s*@version\s+([0-9]+(?:\.[0-9]+){1,3}(?:[-+][0-9A-Za-z.-]+)?)\s*$")
+$versionMatch = [regex]::Match($userScript, "(?m)^//\s*@version\s+($versionPattern)\s*$")
 
 if (-not $versionMatch.Success) {
     throw "Cannot find @version in src/meta/userscript-header.js"
@@ -13,7 +14,7 @@ if (-not $versionMatch.Success) {
 
 $version = $versionMatch.Groups[1].Value
 $readme = (Get-Content -LiteralPath $readmePath -Raw -Encoding UTF8).TrimStart([char]0xFEFF)
-$badgePattern = [regex]"https://img\.shields\.io/badge/Version-[^-]+-blue\.svg\?style=flat-square"
+$badgePattern = [regex]"https://img\.shields\.io/badge/Version-$versionPattern-blue\.svg\?style=flat-square"
 
 if (-not $badgePattern.IsMatch($readme)) {
     throw "Cannot find README version badge"

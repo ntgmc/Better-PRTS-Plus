@@ -221,6 +221,18 @@ done
     Assert ((Invoke-TestGit diff --cached --name-only) -eq "") "Dry run staged changes"
     Assert ((Get-Location).Path -eq $testRoot) "Release script changed the caller's directory"
     Assert ($operatorUpdateCalls -eq $releaseUpdateCalls) "Release scripts still fetched resource data online"
+
+    Write-Hook $commitHook (Get-Content -LiteralPath (Join-Path $repoRoot ".githooks/pre-commit") -Raw -Encoding UTF8)
+    foreach ($version in @("99.0.4-beta.1", "99.0.4-beta.2", "99.0.4")) {
+        & $publish -Version $version
+        $releaseHead = Invoke-TestGit rev-parse HEAD
+        $readme = Get-Content -LiteralPath (Join-Path $testRepo "README.md") -Raw -Encoding UTF8
+        Assert ($readme.Contains("https://img.shields.io/badge/Version-$version-blue.svg?style=flat-square")) "README badge was not synced to $version"
+        & $publish -Version $version
+        Assert ((Invoke-TestGit rev-parse HEAD) -eq $releaseHead) "Retry for $version created another commit"
+        Assert ((Invoke-TestGit status --porcelain) -eq "") "Retry for $version left changes behind"
+        Assert ((Invoke-TestGit "--git-dir=$testRemote" rev-parse "refs/tags/v${version}^{commit}") -eq $releaseHead) "Remote tag for $version differs"
+    }
     Write-Host "Release retry checks passed."
 } finally {
     Pop-Location
