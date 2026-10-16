@@ -636,6 +636,29 @@
     }
 
     function processOperationCard(card) {
+        try {
+            return processOperationCardContent(card);
+        } catch (error) {
+            console.warn('[Better PRTS] 作业卡片处理失败', error instanceof Error ? error.message : '未知错误');
+            const operation = operationCache.get(card)?.resolution.operation;
+            operationCache.delete(card);
+            const diagnostics = createCardDiagnostics('none');
+            cardDiagnosticsCache.set(card, diagnostics);
+            const cardInner = card.querySelector(BP_SELECTORS.card);
+            card.style.display = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation) ? 'none' : '';
+            card.classList.remove('prts-card-gray');
+            if (cardInner) {
+                const label = cardInner.querySelector('.prts-status-label') || document.createElement('div');
+                label.onclick = null;
+                label.onkeydown = null;
+                updateStatusLabel(label, 'prts-status-label prts-label-support', 'support', '作业数据待核验');
+                if (!label.parentElement) cardInner.appendChild(label);
+            }
+            return diagnostics;
+        }
+    }
+
+    function processOperationCardContent(card) {
         const cardInner = card.querySelector(BP_SELECTORS.card);
         if (!cardInner) {
             const diagnostics = createCardDiagnostics('none');

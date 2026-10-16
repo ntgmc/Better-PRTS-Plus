@@ -28,7 +28,7 @@
             if (props) {
                 const candidate = props.operation || props.data || props.copilot || props.item;
                 if (candidate && typeof candidate === 'object') {
-                    if (candidate.parsedContent || Array.isArray(candidate.opers) || typeof candidate.content === 'string') {
+                    if (candidate.parsedContent || candidate.opers !== undefined || candidate.groups !== undefined || typeof candidate.content === 'string') {
                         return candidate;
                     }
                 }
@@ -129,22 +129,29 @@
 
     function getParsedOperationContent(operation) {
         let parsed = operation?.parsedContent;
-        if (!parsed) {
-            if (Array.isArray(operation?.opers) || Array.isArray(operation?.groups)) {
+        if (parsed == null) {
+            if (operation?.opers !== undefined || operation?.groups !== undefined) {
                 parsed = operation;
-            } else if (typeof operation?.content === 'string') {
-                try { parsed = JSON.parse(operation.content); } catch(e) {}
+            } else if (typeof operation?.content === 'string' && operation.content.trim()) {
+                parsed = safeJsonParse(operation.content, undefined);
+                if (parsed === undefined) throw new Error('作业 JSON 格式异常。');
             }
         }
 
-        return {
-            requiredOps: Array.isArray(parsed?.opers) ? parsed.opers : [],
-            requiredGroups: Array.isArray(parsed?.groups) ? parsed.groups : []
-        };
+        const requiredOps = parsed?.opers ?? [];
+        const requiredGroups = parsed?.groups ?? [];
+        if ((parsed != null && !isPlainRecord(parsed)) ||
+            !Array.isArray(requiredOps) || !Array.isArray(requiredGroups) ||
+            !requiredOps.every(hasNamedOperatorEntry) ||
+            !requiredGroups.every(group => isPlainRecord(group) &&
+                (group.opers == null || (Array.isArray(group.opers) && group.opers.every(hasNamedOperatorEntry))))) {
+            throw new Error('作业干员数据格式异常。');
+        }
+        return { requiredOps, requiredGroups };
     }
 
     function hasNamedOperatorEntry(entry) {
-        return typeof entry?.name === 'string' && entry.name.trim().length > 0;
+        return isPlainRecord(entry) && typeof entry.name === 'string' && entry.name.trim().length > 0;
     }
 
     function hasKnownOperatorEntry(entry) {

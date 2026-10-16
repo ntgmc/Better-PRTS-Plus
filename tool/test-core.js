@@ -932,6 +932,60 @@ test('parseImportedOperatorNames rejects invalid JSON files', () => {
   assert.throws(() => parseImportedOperatorNames('{bad json', 'ops.json'), /JSON/);
 });
 
+test('BOM JSON parses names and MAA training consistently for files and pasted text', () => {
+  const payloads = [
+    { raw: '["阿米娅","W"]', expected: { names: ['阿米娅', 'W'], training: {} } },
+    {
+      raw: JSON.stringify([
+        { name: '阿米娅', own: true, elite: 2, level: 80, mainSkill: 7, skill2: 3 },
+        { name: 'W', own: false, level: 90 }
+      ]),
+      expected: { names: ['阿米娅'], training: { 阿米娅: { elite: 2, level: 80, mainSkill: 7, skill2: 3 } } }
+    }
+  ];
+  for (const { raw, expected } of payloads) {
+    for (const fileName of ['operators.json', '']) {
+      assert.deepStrictEqual(hostObject(parseImportedOperators('\uFEFF' + raw, fileName)), expected);
+      assert.deepStrictEqual(hostArray(parseImportedOperatorNames('\uFEFF' + raw, fileName)), expected.names);
+    }
+  }
+});
+
+test('operation parsing rejects malformed entries instead of discarding requirements', () => {
+  const malformed = [
+    { opers: [null] }, { opers: [{ name: '阿米娅' }, null] },
+    { opers: ['阿米娅'] }, { opers: [{}] }, { opers: [{ name: 1 }] },
+    { groups: [null] }, { groups: ['术师'] },
+    { groups: [{ name: '术师', opers: [null] }] },
+    { groups: [{ opers: ['阿米娅'] }] }, { groups: [{ opers: {} }] },
+    { opers: {} }, { groups: {} }, { parsedContent: [] },
+    { parsedContent: { groups: [null] } },
+    { content: '{broken' }, { content: '{"opers":[null]}' }
+  ];
+  for (const operation of malformed) {
+    assert.throws(() => context.getParsedOperationContent(operation), /作业/);
+    assert.throws(() => checkOperationAvailability(operation, new Set(['阿米娅']), 'PERFECT'), /作业/);
+  }
+});
+
+test('operation filtering preserves empty, disabled, support and fallback pass-through rules', () => {
+  const owned = new Set(['阿米娅']);
+  for (const operation of [null, {}, { opers: [], groups: [] }, { content: '' }]) {
+    assert.strictEqual(checkOperationAvailability(operation, owned, 'PERFECT').isAvailable, true);
+  }
+  assert.strictEqual(checkOperationAvailability({ opers: [null] }, new Set(), 'PERFECT').isAvailable, true);
+  assert.strictEqual(checkOperationAvailability({ opers: [null] }, owned, 'NONE').isAvailable, true);
+  assert.strictEqual(checkOperationAvailability({ opers: [{ name: 'W' }] }, owned, 'SUPPORT').isAvailable, true);
+  assert.strictEqual(checkOperationAvailability({ opers: [{ name: 'W' }, { name: '能天使' }] },
+    owned, 'SUPPORT').isAvailable, false);
+  assert.strictEqual(checkOperationAvailability({ groups: [{ name: '未知候选' }], _isFallback: true },
+    owned, 'PERFECT').isAvailable, true);
+  assert.strictEqual(checkOperationAvailability({ groups: [{ name: '未知候选' }] },
+    owned, 'PERFECT').isAvailable, false);
+  assert.strictEqual(checkOperationAvailability({ opers: [{ name: '作者' }], _isFallback: true },
+    owned, 'PERFECT').isAvailable, true);
+});
+
 test('matchOperatorGroups reassigns wider candidates for narrow groups', () => {
   const used = new Set();
   const missing = matchOperatorGroups([
@@ -1734,6 +1788,136 @@ function createOperatorImportPage(sharedStorage) {
   vm.runInContext(fs.readFileSync(path.join(repoRoot, 'src/ui/import-controls.js'), 'utf8'), page);
   return { page, readers, toasts };
 }
+
+test('file and paste imports preserve BOM JSON names and training through storage', async () => {
+  for (const raw of [
+    '\uFEFF["阿米娅","W"]',
+    '\uFEFF' + JSON.stringify([{ name: '阿米娅', own: true, elite: 2, level: 80, skill2: 3 }])
+  ]) {
+    for (const method of ['file', 'paste']) {
+      const sharedStorage = new Map();
+      const { page, readers, toasts } = createOperatorImportPage(sharedStorage);
+      page.openOperatorImportDialog();
+      const dialog = page.document.getElementById('prts-import-dialog');
+      if (method === 'file') {
+        const pending = dialog.querySelector('input').onchange({
+          target: { files: [{ name: 'operators.json', size: raw.length }] }
+        });
+        readers[0].onload({ target: { result: raw } });
+        await pending;
+      } else {
+        dialog.querySelector('.prts-import-textarea').value = raw;
+        dialog.querySelector('.prts-import-actions').children
+          .find(button => button.textContent === '导入粘贴内容').onclick();
+      }
+      const saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
+      const isMaa = raw.includes('own');
+      assert.deepStrictEqual(saved.accountsData[1], isMaa ? ['阿米娅'] : ['阿米娅', 'W']);
+      assert.deepStrictEqual(saved.accountsTraining[1], isMaa ? { 阿米娅: { elite: 2, level: 80, skill2: 3 } } : {});
+      assert.strictEqual(toasts.at(-1)[1], 'success');
+    }
+  }
+});
+
+function createFilterPage(displayMode) {
+  const sharedStorage = new Map([
+    ['prts_plus_accounts_data', serializeAccountState({ accountsData: { 1: ['阿米娅'] } })]
+  ]);
+  const page = createAccountPage(sharedStorage, 'prts.plus');
+  const cards = [];
+  const errors = [];
+  Object.assign(page.__testExports.CONFIG, {
+    filterMode: 'PERFECT', displayMode, trainingCheck: false, compatDebug: false,
+    hidePrtsBadge: false, hideVideo: false, showExactTime: false,
+    stageBadge: false, operatorAvatars: false, cleanLink: false, collapseDescription: false
+  });
+  page.console = { log() {}, warn: (...args) => errors.push(args) };
+  page.document = {
+    createElement: createTestElement,
+    createTextNode: text => createTestElement('span', text),
+    querySelectorAll: () => cards,
+    getElementById: () => null
+  };
+  page.isFilterDisabledPage = () => false;
+  page.createPrtsIcon = () => createTestElement('svg');
+  page.getCardSignature = () => 'unchanged card text';
+  const addCard = operation => {
+    const card = createTestElement('li');
+    const inner = createTestElement('div');
+    const query = inner.querySelector.bind(inner);
+    inner.querySelector = selector => selector === '.prts-status-label'
+      ? inner.children.find(child => child.classList.contains('prts-status-label')) || null : query(selector);
+    inner.__reactFiber$test = { memoizedProps: { operation } };
+    card.appendChild(inner);
+    card.querySelector = () => inner;
+    cards.push(card);
+    return { card, inner };
+  };
+  return { page, addCard, errors };
+}
+
+test('malformed cards stay pending while later cards filter and repaired cards recover', () => {
+  for (const displayMode of ['GRAY', 'HIDE']) {
+    const { page, addCard, errors } = createFilterPage(displayMode);
+    const malformed = [
+      { opers: [null] }, { groups: [null] },
+      { opers: [{ name: '阿米娅' }, null] },
+      { groups: [{ name: '术师', opers: [null] }] },
+      { groups: [{ name: '术师', opers: {} }] },
+      { content: '{broken' },
+      { get parsedContent() { throw new Error('unexpected card error'); } }
+    ].map(addCard);
+    malformed.forEach(({ card }) => {
+      card.style.display = 'none';
+      card.classList.add('prts-card-gray');
+    });
+    const available = addCard({ opers: [{ name: '阿米娅' }] });
+    const missing = addCard({ opers: [{ name: 'W' }] });
+    assert.doesNotThrow(() => page.applyFilterLogic());
+    for (const { card, inner } of malformed) {
+      assert.strictEqual(card.style.display, '');
+      assert.strictEqual(card.classList.contains('prts-card-gray'), false);
+      assert.strictEqual(inner.querySelector('.prts-status-label')?.attributes.get('aria-label'), '作业数据待核验');
+    }
+    assert.notStrictEqual(available.card.style.display, 'none');
+    assert.strictEqual(available.inner.querySelector('.prts-status-label'), null);
+    assert.strictEqual(missing.card.style.display === 'none', displayMode === 'HIDE');
+    assert.strictEqual(missing.card.classList.contains('prts-card-gray'), displayMode === 'GRAY');
+    assert.strictEqual(errors.length, malformed.length);
+    const diagnostics = page.getCompatibilityDiagnostics();
+    assert.strictEqual(diagnostics.noDataCards, malformed.length);
+    assert.strictEqual(diagnostics.fiberCards, 2);
+
+    for (const { inner } of malformed) inner.__reactFiber$test.memoizedProps.operation = { opers: [{ name: '阿米娅' }] };
+    assert.doesNotThrow(() => page.applyFilterLogic());
+    for (const { inner } of malformed) assert.strictEqual(inner.querySelector('.prts-status-label'), null);
+    assert.strictEqual(page.getCompatibilityDiagnostics().noDataCards, 0);
+  }
+});
+
+test('diagnostic aggregation isolates uncached malformed cards', () => {
+  const { page, addCard } = createFilterPage('HIDE');
+  const malformed = addCard({ parsedContent: { groups: [null] } });
+  const available = addCard({ opers: [{ name: '阿米娅' }] });
+  const diagnostics = page.aggregateCardDiagnostics([malformed.card, available.card]);
+  assert.strictEqual(diagnostics.noDataCards, 1);
+  assert.strictEqual(diagnostics.fiberCards, 1);
+  assert.strictEqual(malformed.inner.querySelector('.prts-status-label')?.attributes.get('aria-label'), '作业数据待核验');
+  assert.notStrictEqual(available.card.style.display, 'none');
+});
+
+test('pending cards preserve video hiding and support-mode filtering', () => {
+  const { page, addCard } = createFilterPage('HIDE');
+  Object.assign(page.__testExports.CONFIG, { hideVideo: true, filterMode: 'SUPPORT' });
+  const video = addCard({ type: 'VIDEO', opers: [null] });
+  const support = addCard({ opers: [{ name: 'W' }] });
+  const missing = addCard({ opers: [{ name: 'W' }, { name: '能天使' }] });
+  assert.doesNotThrow(() => page.applyFilterLogic());
+  assert.strictEqual(video.card.style.display, 'none');
+  assert.notStrictEqual(support.card.style.display, 'none');
+  assert.strictEqual(support.inner.querySelector('.prts-status-label')?.attributes.get('aria-label'), '需助战: W');
+  assert.strictEqual(missing.card.style.display, 'none');
+});
 
 test('file and text imports keep the dialog target across remote account switches', async () => {
   for (const scenario of ['paste', 'file-before-read', 'file-during-read']) {

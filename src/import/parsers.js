@@ -176,7 +176,7 @@
 
     function safeJsonParse(rawValue, fallback) {
         try {
-            return JSON.parse(rawValue);
+            return JSON.parse(typeof rawValue === 'string' ? rawValue.replace(/^\uFEFF/, '') : rawValue);
         } catch (e) {
             return fallback;
         }
