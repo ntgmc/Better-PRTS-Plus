@@ -76,6 +76,7 @@ try {
     $update = Join-Path $testRepo "tool/update-operator-data.ps1"
     $audit = Join-Path $testRepo "tool/operator-data-update-summary.json"
     $resourcePath = Join-Path $testRepo "resources/data.json"
+    $initialResourceVersion = (Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json).resourceVersion
     $headerHash = (Get-FileHash -LiteralPath (Join-Path $testRepo "src/meta/userscript-header.js")).Hash
     $auditHash = (Get-FileHash -LiteralPath $audit).Hash
 
@@ -101,22 +102,26 @@ try {
     Assert ($summary.addedCount -eq 1) "Changed data did not record the added operator"
     $resource = Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert ($resource.schemaVersion -eq 1) "Resource schema version is missing"
+    Assert ($resource.resourceVersion -eq ($initialResourceVersion + 1)) "Operator changes did not advance the resource version"
     Assert (@($resource.operators | Where-Object id -eq "char_999999_release").Count -eq 1) "New operator is missing from hot-update resources"
     Assert ($resource.moduleTypes.char_4217_makoto -eq "Y") "Module types are missing from hot-update resources"
     Assert ((Get-FileHash -LiteralPath (Join-Path $testRepo "src/meta/userscript-header.js")).Hash -eq $headerHash) "Resource update changed userscript version"
     $auditHash = (Get-FileHash -LiteralPath $audit).Hash
     & $update -SourcePath $fixturePath
     Assert ((Get-FileHash -LiteralPath $audit).Hash -eq $auditHash) "Retry lost the previous audit changes"
+    Assert ((Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json).resourceVersion -eq ($initialResourceVersion + 1)) "Unchanged retry advanced the resource version"
     $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "X"
     & $update -SourcePath $fixturePath
     $resource = Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
     Assert ($resource.moduleTypes.char_4217_makoto -eq "X") "Module-only update did not reach hot-update resources"
+    Assert ($resource.resourceVersion -eq ($initialResourceVersion + 2)) "Module-only changes did not advance the resource version"
     Assert ((Get-FileHash -LiteralPath $audit).Hash -eq $auditHash) "Module-only update changed the operator audit"
     $resourceHash = (Get-FileHash -LiteralPath $resourcePath).Hash
     & $update -SourcePath $fixturePath
     Assert ((Get-FileHash -LiteralPath $resourcePath).Hash -eq $resourceHash) "Module-only retry changed resources"
     $moduleFixture.equipDict.uniequip_002_makoto.typeName2 = "Y"
     & $update -SourcePath $fixturePath
+    Assert ((Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json).resourceVersion -eq ($initialResourceVersion + 3)) "Restoring previous content did not produce a newer resource version"
     $releaseUpdateCalls = $operatorUpdateCalls
 
     Invoke-TestGit init -b main | Out-Null

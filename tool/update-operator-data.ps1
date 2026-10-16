@@ -154,7 +154,7 @@ function ConvertTo-GeneratedModules {
 }
 
 function ConvertTo-GeneratedModuleSource {
-    param([System.Collections.IDictionary]$modules)
+    param([System.Collections.IDictionary]$modules, [long]$ResourceVersion)
 
     $groups = [ordered]@{}
     foreach ($id in $modules.Keys) {
@@ -165,6 +165,8 @@ function ConvertTo-GeneratedModuleSource {
     $lines = @(
         "// Generated from the Arknights game uniequip_table.json by tool/update-operator-data.ps1."
         "// Branch order follows uniequip_002/003/004 IDs, not the displayed module order."
+        "// Resource version covers both operator and module snapshots."
+        "const BUILTIN_RESOURCE_VERSION = $ResourceVersion;"
         "const OP_MODULE_TYPES = Object.create(null);"
         "Object.entries({"
     )
@@ -358,8 +360,24 @@ if ([string]::IsNullOrWhiteSpace($ModuleSourcePath)) {
     $moduleData = Get-Content -LiteralPath $ModuleSourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
 }
 $modules = ConvertTo-GeneratedModules -sourceData $moduleData
-$moduleSource = ConvertTo-GeneratedModuleSource -modules $modules
 $resource = [ordered]@{ schemaVersion = 1; operators = @($operators); moduleTypes = $modules }
+$resourceVersion = 1L
+if (Test-Path -LiteralPath $resourcePath) {
+    $previousResource = Get-Content -LiteralPath $resourcePath -Raw -Encoding UTF8 | ConvertFrom-Json
+    $previousVersion = $previousResource.resourceVersion
+    if ($null -eq $previousVersion) {
+        $previousVersion = 0L
+    } elseif (($previousVersion -isnot [long] -and $previousVersion -isnot [int]) -or
+        $previousVersion -lt 1 -or $previousVersion -gt 9007199254740991) {
+        throw "Invalid resource version in resources/data.json"
+    }
+    $previousResource.PSObject.Properties.Remove("resourceVersion")
+    $contentChanged = ($previousResource | ConvertTo-Json -Depth 6 -Compress) -cne ($resource | ConvertTo-Json -Depth 6 -Compress)
+    $resourceVersion = if ($contentChanged) { $previousVersion + 1L } else { [Math]::Max(1L, $previousVersion) }
+    if ($resourceVersion -gt 9007199254740991) { throw "Resource version exceeds the safe integer range" }
+}
+$resource.resourceVersion = $resourceVersion
+$moduleSource = ConvertTo-GeneratedModuleSource -modules $modules -ResourceVersion $resourceVersion
 $resourceJson = ($resource | ConvertTo-Json -Depth 6 -Compress) + "`n"
 $auditSummary = New-OperatorAuditSummary -PreviousOperators $previousOperators -CurrentOperators $operators
 

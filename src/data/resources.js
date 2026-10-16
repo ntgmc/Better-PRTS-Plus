@@ -8,9 +8,11 @@
     const RESOURCE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
     let resourceUpdatePending = null;
     let resourceCheckedAt = 0;
+    let resourceVersion = BUILTIN_RESOURCE_VERSION;
 
     function validateResourceData(data) {
         if (!isPlainRecord(data) || data.schemaVersion !== 1 ||
+            !Number.isSafeInteger(data.resourceVersion) || data.resourceVersion < 1 ||
             !Array.isArray(data.operators) || !data.operators.length || !isPlainRecord(data.moduleTypes)) {
             throw new Error('资源格式无效');
         }
@@ -30,6 +32,9 @@
             !/^char_\d+_[a-z0-9_]+$/.test(id) || typeof types !== 'string' || !/^[XYDAB]{1,3}$/.test(types))) {
             throw new Error('模组资源无效');
         }
+        if (data.resourceVersion < resourceVersion) {
+            throw new Error('资源版本早于当前数据');
+        }
         return data;
     }
 
@@ -39,6 +44,7 @@
         data.operators.forEach(op => { OP_ID_MAP[op.name] = op.id; });
         Object.keys(OP_MODULE_TYPES).forEach(id => delete OP_MODULE_TYPES[id]);
         Object.assign(OP_MODULE_TYPES, data.moduleTypes);
+        resourceVersion = data.resourceVersion;
     }
 
     function loadCachedResources() {

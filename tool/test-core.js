@@ -23,6 +23,7 @@ const source = sourceFiles
   .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8'))
   .join('\n') + `
 globalThis.__testExports = {
+  BUILTIN_RESOURCE_VERSION,
   CONFIG_KEY,
   CONFIG_DEFINITIONS,
   normalizeConfig,
@@ -116,6 +117,7 @@ vm.createContext(context);
 vm.runInContext(source, context, { filename: 'better-prts-plus-core.js' });
 
 const {
+  BUILTIN_RESOURCE_VERSION,
   CONFIG_KEY,
   CONFIG_DEFINITIONS,
   normalizeConfig,
@@ -182,11 +184,12 @@ function test(name, fn) {
 const resourceSnapshot = JSON.parse(fs.readFileSync(path.join(repoRoot, 'resources/data.json'), 'utf8'));
 const updatedResource = {
   schemaVersion: 1,
+  resourceVersion: resourceSnapshot.resourceVersion + 1,
   operators: [{ id: 'char_999999_hotupdate', name: '测试干员' }],
   moduleTypes: { char_999999_hotupdate: 'YX' }
 };
 
-function createResourceHarness(cache = null) {
+function createResourceHarness(cache = null, builtinVersion = resourceSnapshot.resourceVersion) {
   let now = 1700000000000;
   let refreshes = 0;
   let aborts = 0;
@@ -196,6 +199,7 @@ function createResourceHarness(cache = null) {
   const toasts = [];
   const saved = new Map();
   const sandbox = {
+    BUILTIN_RESOURCE_VERSION: builtinVersion,
     OP_ID_MAP: { 旧干员: 'char_999998_old' },
     OP_MODULE_TYPES: { char_999998_old: 'X' },
     isPlainRecord: value => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
@@ -235,6 +239,7 @@ function createResourceHarness(cache = null) {
 
 test('published resources match embedded operator and module snapshots', () => {
   validateResourceData(resourceSnapshot);
+  assert.strictEqual(resourceSnapshot.resourceVersion, BUILTIN_RESOURCE_VERSION);
   assert.deepStrictEqual(resourceSnapshot.operators,
     JSON.parse(fs.readFileSync(path.join(repoRoot, 'tool/operator-data.generated.json'), 'utf8')));
   assert.deepStrictEqual(resourceSnapshot.moduleTypes, hostObject(OP_MODULE_TYPES));
@@ -274,7 +279,7 @@ test('resource hot update replaces live tables, persists cache and throttles dup
   assert.strictEqual(h.requests.length, h.api.RESOURCE_URLS.length);
   h.advance();
   const next = h.api.updateResources();
-  h.respond({ ...updatedResource, moduleTypes: { char_999999_hotupdate: 'YXA' } });
+  h.respond({ ...updatedResource, resourceVersion: updatedResource.resourceVersion + 1, moduleTypes: { char_999999_hotupdate: 'YXA' } });
   assert.strictEqual(await next, true);
   assert.strictEqual(h.sandbox.OP_MODULE_TYPES.char_999999_hotupdate, 'YXA');
 });
@@ -357,6 +362,7 @@ test('invalid resources never replace working tables or cache', async () => {
   const badData = [
     '{broken',
     { ...updatedResource, schemaVersion: 2 },
+    ...[undefined, null, 0, -1, 1.5, '2', Number.MAX_SAFE_INTEGER + 1].map(resourceVersion => ({ ...updatedResource, resourceVersion })),
     { ...updatedResource, operators: [] },
     { ...updatedResource, operators: [...updatedResource.operators, ...updatedResource.operators] },
     { ...updatedResource, operators: [{ id: '../secret', name: '无效' }] },
@@ -390,6 +396,59 @@ test('resource update remains usable when cache persistence fails', async () => 
   assert.strictEqual(h.refreshes, 1);
   assert.strictEqual(h.toasts[0].at(-1)[1], 'warning');
   assert(h.toasts[0].at(-1)[0].includes('缓存保存失败'));
+});
+
+test('older and unversioned caches cannot replace newer embedded resources or delay refresh', async () => {
+  for (const resourceVersion of [undefined, 1, 2]) {
+    const cache = JSON.stringify({ data: { ...updatedResource, resourceVersion }, checkedAt: 1700000000000 });
+    const h = createResourceHarness(cache, 3);
+    h.api.loadCachedResources();
+    assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), { 旧干员: 'char_999998_old' });
+    assert.deepStrictEqual(hostObject(h.sandbox.OP_MODULE_TYPES), { char_999998_old: 'X' });
+    const pending = h.api.updateResources();
+    assert.strictEqual(h.requests.length, h.api.RESOURCE_URLS.length);
+    h.respond({ ...updatedResource, resourceVersion: 4 });
+    assert.strictEqual(await pending, true);
+  }
+});
+
+test('a stale mirror response cannot win before a newer source or overwrite a newer cache', async () => {
+  for (const cached of [false, true]) {
+    const cache = cached ? JSON.stringify({ data: { ...updatedResource, resourceVersion: 3 }, checkedAt: 0 }) : null;
+    const h = createResourceHarness(cache, cached ? 1 : 3);
+    h.api.loadCachedResources();
+    const beforeOperators = hostObject(h.sandbox.OP_ID_MAP);
+    const beforeModules = hostObject(h.sandbox.OP_MODULE_TYPES);
+    const pending = h.api.updateResources();
+    h.respond({ ...updatedResource, resourceVersion: 2 }, 200, h.requests[1]);
+    await new Promise(setImmediate);
+    assert.deepStrictEqual(hostObject(h.sandbox.OP_ID_MAP), beforeOperators);
+    assert.deepStrictEqual(hostObject(h.sandbox.OP_MODULE_TYPES), beforeModules);
+    assert.strictEqual(h.saved.get(RESOURCE_CACHE_KEY), cache ?? undefined);
+    assert.strictEqual(h.aborts, 0);
+    const newer = { ...updatedResource, resourceVersion: 4, moduleTypes: { char_999999_hotupdate: 'YXA' } };
+    h.respond(newer, 200, h.requests[0]);
+    assert.strictEqual(await pending, true);
+    assert.strictEqual(h.sandbox.OP_MODULE_TYPES.char_999999_hotupdate, 'YXA');
+    assert.deepStrictEqual(JSON.parse(h.saved.get(RESOURCE_CACHE_KEY)).data, newer);
+    assert.throws(() => h.api.applyResourceData({ ...updatedResource, resourceVersion: 3 }));
+    assert.strictEqual(h.sandbox.OP_MODULE_TYPES.char_999999_hotupdate, 'YXA');
+    assert.strictEqual(h.timers.size, 0);
+  }
+});
+
+test('all stale or unversioned download sources preserve current resources and cache', async () => {
+  const cache = JSON.stringify({ data: { ...updatedResource, resourceVersion: 3 }, checkedAt: 0 });
+  const h = createResourceHarness(cache, 1);
+  h.api.loadCachedResources();
+  const pending = h.api.updateResources();
+  h.requests.forEach((request, index) => h.respond({ ...updatedResource, resourceVersion: index || undefined }, 200, request));
+  assert.strictEqual(await pending, false);
+  assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
+  assert.strictEqual(h.sandbox.OP_MODULE_TYPES.char_999999_hotupdate, 'YX');
+  assert.strictEqual(h.saved.get(RESOURCE_CACHE_KEY), cache);
+  assert.strictEqual(h.refreshes, 0);
+  assert.strictEqual(h.timers.size, 0);
 });
 
 test('unified settings migrate legacy values, validate types and prefer saved independent choices', () => {

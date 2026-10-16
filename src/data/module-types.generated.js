@@ -1,5 +1,7 @@
 // Generated from the Arknights game uniequip_table.json by tool/update-operator-data.ps1.
 // Branch order follows uniequip_002/003/004 IDs, not the displayed module order.
+// Resource version covers both operator and module snapshots.
+const BUILTIN_RESOURCE_VERSION = 1;
 const OP_MODULE_TYPES = Object.create(null);
 Object.entries({
     Y: `002_amiya 1022_flwr2 102_texas 1046_sbell2 1047_halo2 108_silent 110_deepcl 118_yuki 127_estell 129_bluep 130_doberm 131_flameb 135_halo 137_brownb 144_red 155_tiger 157_dagda 158_milu 164_nightm 166_skfire 181_flower 183_skgoat 187_ccheal 194_leto 195_glassb 199_yak 201_moeshd 2023_ling 214_kafka 219_meteo 226_hmau 235_jesica 241_panda 253_greyy 261_sddrag 271_spikes 274_astesi 277_sqrrel 289_gyuki 290_vigna 301_cutter 304_zebra 328_cammou 333_sidero 341_sntlla 345_folnic 349_chiave 365_aprl 367_swllow 369_bena 385_finlpp 393_toledo 4004_pudd 4006_melnte 4013_kjera 4014_lunacu 4023_rfalcn 4031_liesel 4037_demetr 4054_malist 4067_lolxh 4078_bdhkgt 4087_ines 4107_vrdant 4109_baslin 4110_delphn 411_tomimi 4125_rdoc 4126_fuze 4141_marcil 4142_laios 4143_sensi 4147_mitm 415_flint 4164_tecno 4166_varkis 4171_wulfen 4173_nowell 4182_oblvns 4183_mortis 4186_tmoris 4193_lemuen 4202_haruka 4217_makoto 4226_veen 4229_aphris 451_robin 452_bstalk 458_rfrost 466_qanik 497_ctable`,
