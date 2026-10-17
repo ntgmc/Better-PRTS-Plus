@@ -11,12 +11,18 @@
 // @icon         https://prts.plus/favicon.ico
 // @homepage     https://github.com/ntgmc/Better-PRTS-Plus
 // @supportURL   https://github.com/ntgmc/Better-PRTS-Plus/issues
+// @updateURL    https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
+// @downloadURL  https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
+// @grant        GM_info
+// @grant        GM_openInTab
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_addStyle
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addValueChangeListener
 // @connect      zonai.skland.com
+// @connect      github.com
+// @connect      release-assets.githubusercontent.com
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      gcore.jsdelivr.net
@@ -66,6 +72,7 @@
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'layout', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
         hideOperatorMatchingSettings: { group: '页面增强', label: '隐藏原站干员匹配设置', icon: 'filter', default: true },
         announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'filter', default: true, reloadOnDisable: true },
+        importantUpdatesOnly: { group: '脚本更新', label: '仅重要更新提示（含紧急更新）', icon: 'download', default: false },
         compatDebug: { group: '诊断', label: '兼容诊断', icon: 'filter', default: false, legacyKey: 'prts_cfg_compat_debug' },
         filterMode: { default: 'NONE', options: ['NONE', 'PERFECT', 'SUPPORT'], legacyKey: 'prts_plus_filter_mode' },
         displayMode: { default: 'GRAY', options: ['GRAY', 'HIDE'], legacyKey: 'prts_plus_display_mode' },
@@ -2983,7 +2990,16 @@ function createSklandImportCancelledError() {
     }
 `;
 
-    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles));
+    const scriptUpdateStyles = `
+    /* Hallmark · component: update modal · theme: existing PRTS tokens
+     * pre-emit critique: P4 H4 E4 S5 R5 V3 · states: default, hover, focus, active */
+    .prts-update-notes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; color: var(--prts-color-text-muted); }
+    .prts-modal-actions-extra { flex-direction: column; }
+    .prts-modal-actions-extra .prts-import-action { width: 100%; min-height: 44px; white-space: nowrap; }
+    .prts-modal-actions-extra .prts-import-action:active { transform: translateY(1px); }
+`;
+
+    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + scriptUpdateStyles);
     // =========================================================================
     //                            MODULE 3.5: DOM UI HELPERS
     // =========================================================================
@@ -3239,6 +3255,8 @@ function createSklandImportCancelledError() {
         message,
         confirmText = '确定',
         cancelText = '取消',
+        cancelValue = null,
+        extraAction = null,
         tone = '',
         input = null
     } = {}) {
@@ -3314,6 +3332,15 @@ function createSklandImportCancelledError() {
             confirmBtn.className = `prts-import-action primary${tone ? ` ${tone}` : ''}`;
             confirmBtn.textContent = confirmText;
 
+            if (extraAction) {
+                const extraBtn = document.createElement('button');
+                extraBtn.type = 'button';
+                extraBtn.className = 'prts-import-action';
+                extraBtn.textContent = extraAction.text;
+                extraBtn.onclick = () => closePrtsModal(extraAction.value);
+                actions.appendChild(extraBtn);
+                actions.classList.add('prts-modal-actions-extra');
+            }
             actions.appendChild(cancelBtn);
             actions.appendChild(confirmBtn);
 
@@ -3345,7 +3372,7 @@ function createSklandImportCancelledError() {
             };
 
             closeBtn.onclick = () => finish(null);
-            cancelBtn.onclick = () => finish(null);
+            cancelBtn.onclick = () => finish(cancelValue);
             confirmBtn.onclick = () => finish(inputEl ? inputEl.value : true);
             backdrop.addEventListener('click', event => {
                 if (event.target === backdrop) finish(null);
@@ -3377,6 +3404,181 @@ function createSklandImportCancelledError() {
                 maxLength: options.maxLength
             }
         }).then(value => (typeof value === 'string' ? value : null));
+    }
+    const RELEASE_LEVELS = { normal: '普通更新', important: '重要更新', urgent: '紧急更新' };
+
+    function parseScriptVersion(version) {
+        const match = typeof version === 'string' && version.match(/^(\d+(?:\.\d+){1,3})(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/);
+        if (!match || version.length > 100) throw new Error('脚本版本号无效');
+        const numbers = match[1].split('.').map(Number);
+        if (!numbers.every(Number.isSafeInteger)) throw new Error('脚本版本号超出范围');
+        return { numbers, prerelease: match[2]?.split('.') || [] };
+    }
+
+    function compareScriptVersions(left, right) {
+        const a = parseScriptVersion(left);
+        const b = parseScriptVersion(right);
+        for (let i = 0; i < 4; i++) {
+            const difference = (a.numbers[i] || 0) - (b.numbers[i] || 0);
+            if (difference) return Math.sign(difference);
+        }
+        if (!a.prerelease.length || !b.prerelease.length) {
+            return Number(!a.prerelease.length) - Number(!b.prerelease.length);
+        }
+        for (let i = 0; i < Math.max(a.prerelease.length, b.prerelease.length); i++) {
+            const x = a.prerelease[i];
+            const y = b.prerelease[i];
+            if (x === undefined || y === undefined) return x === undefined ? -1 : 1;
+            if (x === y) continue;
+            const numericX = /^\d+$/.test(x);
+            const numericY = /^\d+$/.test(y);
+            if (numericX && numericY) {
+                const difference = BigInt(x) - BigInt(y);
+                if (difference) return difference > 0n ? 1 : -1;
+                continue;
+            }
+            if (numericX !== numericY) return numericX ? -1 : 1;
+            return x > y ? 1 : -1;
+        }
+        return 0;
+    }
+
+    function validateReleaseManifest(data) {
+        if (!data || data.schemaVersion !== 1 || !Array.isArray(data.releases)) {
+            throw new Error('更新说明格式无效');
+        }
+        const releases = [...data.releases];
+        releases.forEach(release => {
+            if (!release || typeof release !== 'object' || !Object.hasOwn(RELEASE_LEVELS, release.level) ||
+                typeof release.notes !== 'string' || !release.notes.trim() || release.notes.length > 12000 ||
+                release.humanWritten !== true) {
+                throw new Error('每个版本必须填写更新级别和人工撰写的更新说明，并确认 humanWritten');
+            }
+            parseScriptVersion(release.version);
+        });
+        releases.sort((a, b) => compareScriptVersions(b.version, a.version));
+        if (releases.some((release, index) => index && compareScriptVersions(release.version, releases[index - 1].version) === 0)) {
+            throw new Error('更新说明包含重复版本');
+        }
+        return { schemaVersion: 1, releases };
+    }
+    const SCRIPT_RELEASE_URL = 'https://github.com/ntgmc/Better-PRTS-Plus/releases';
+    const SCRIPT_UPDATE_URL = `${SCRIPT_RELEASE_URL}/latest/download/update.json`;
+    const SCRIPT_IGNORED_VERSION_KEY = 'prts_plus_ignored_script_version';
+    const SCRIPT_UPDATE_INTERVAL_MS = 60 * 60 * 1000;
+    let scriptUpdatePending = null;
+    let scriptUpdateManifest = null;
+    let scriptUpdateCheckedAt = 0;
+    let scriptUpdateAttemptedAt = 0;
+    let scriptUpdatePromptedVersion = '';
+
+    function getAvailableScriptUpdate(manifest, currentVersion) {
+        const releases = validateReleaseManifest(manifest).releases.filter(release =>
+            !parseScriptVersion(release.version).prerelease.length && compareScriptVersions(release.version, currentVersion) > 0);
+        if (!releases.length) return null;
+        const level = releases.some(release => release.level === 'urgent') ? 'urgent'
+            : releases.some(release => release.level === 'important') ? 'important' : 'normal';
+        return { version: releases[0].version, level, releases };
+    }
+
+    function downloadScriptUpdateManifest() {
+        return new Promise((resolve, reject) => {
+            let request;
+            const timeoutId = setTimeout(() => {
+                reject(new Error('检查更新超时'));
+                request?.abort();
+            }, 15000);
+            const finish = callback => value => {
+                clearTimeout(timeoutId);
+                callback(value);
+            };
+            try {
+                request = GM_xmlhttpRequest({
+                    method: 'GET', url: SCRIPT_UPDATE_URL, anonymous: true, timeout: 15000,
+                    onload: finish(response => {
+                        try {
+                            if (response.status !== 200) throw new Error(`检查更新失败：HTTP ${response.status}`);
+                            if (typeof response.responseText !== 'string' || response.responseText.length > 1024 * 1024) {
+                                throw new Error('更新说明文件无效或过大');
+                            }
+                            resolve(validateReleaseManifest(JSON.parse(response.responseText)));
+                        } catch (error) { reject(error); }
+                    }),
+                    onerror: finish(() => reject(new Error('无法连接更新服务器'))),
+                    ontimeout: finish(() => reject(new Error('检查更新超时'))),
+                    onabort: finish(() => reject(new Error('检查更新已取消')))
+                });
+            } catch (error) {
+                clearTimeout(timeoutId);
+                reject(error);
+            }
+        });
+    }
+
+    async function promptScriptUpdate(manifest, manual) {
+        const currentVersion = GM_info.script.version;
+        const update = getAvailableScriptUpdate(manifest, currentVersion);
+        if (!update) {
+            if (manual) showPrtsToast('当前已是最新正式版', 'success', `当前版本：${currentVersion}`);
+            return false;
+        }
+        if (!manual && (scriptUpdatePromptedVersion === update.version ||
+            GM_getValue(SCRIPT_IGNORED_VERSION_KEY, '') === update.version ||
+            (CONFIG.importantUpdatesOnly && update.level === 'normal'))) return false;
+        // 避免自动检查关闭正在进行的导入或确认窗口；下一轮检查继续提示。
+        if (document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) {
+            if (manual) showPrtsToast('发现新版本', 'info', '请先关闭当前窗口，再点击“检查脚本更新”。');
+            return false;
+        }
+        scriptUpdatePromptedVersion = update.version;
+        const message = document.createElement('div');
+        message.className = 'prts-update-notes';
+        message.textContent = `当前版本：${currentVersion}\n新版本：${update.version} · ${RELEASE_LEVELS[update.level]}\n\n` +
+            update.releases.map(release => `${release.version} · ${RELEASE_LEVELS[release.level]}\n${release.notes}`).join('\n\n') +
+            '\n\n点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。';
+        const choice = await showPrtsModal({
+            title: `Better-PRTS-Plus 发现新版本`, message,
+            extraAction: { text: '仅重要更新提示', value: 'important' },
+            cancelText: '当前版本不再提示', cancelValue: 'skip', confirmText: '立即更新'
+        });
+        try {
+            if (choice === 'important') {
+                const previous = CONFIG.importantUpdatesOnly;
+                CONFIG.importantUpdatesOnly = true;
+                try { saveConfig(); } catch (error) { CONFIG.importantUpdatesOnly = previous; throw error; }
+                document.querySelectorAll('[data-prts-config-key="importantUpdatesOnly"]').forEach(input => { input.checked = true; });
+                showPrtsToast('已改为仅提示重要和紧急更新', 'success');
+            } else if (choice === 'skip') {
+                GM_setValue(SCRIPT_IGNORED_VERSION_KEY, update.version);
+            } else if (choice === true) {
+                // 安装链接固定到已检测的版本，避免检查与安装之间切换版本。
+                GM_openInTab(`${SCRIPT_RELEASE_URL}/download/v${encodeURIComponent(update.version)}/Better-PRTS-Plus.user.js`, { active: true, insert: true });
+            }
+        } catch (error) {
+            scriptUpdatePromptedVersion = '';
+            showPrtsToast('更新操作未完成', 'error', error.message || '请重试。');
+        }
+        return true;
+    }
+
+    function checkScriptUpdates(manual = false) {
+        if (scriptUpdatePending) return scriptUpdatePending;
+        if (!manual && !scriptUpdateManifest && Date.now() - scriptUpdateAttemptedAt < 5 * 60 * 1000) return Promise.resolve(false);
+        scriptUpdatePending = (async () => {
+            try {
+                if (manual || !scriptUpdateManifest || Date.now() - scriptUpdateCheckedAt >= SCRIPT_UPDATE_INTERVAL_MS) {
+                    scriptUpdateAttemptedAt = Date.now();
+                    scriptUpdateManifest = await downloadScriptUpdateManifest();
+                    scriptUpdateCheckedAt = Date.now();
+                }
+                return await promptScriptUpdate(scriptUpdateManifest, manual);
+            } catch (error) {
+                console.warn('[Better PRTS] 检查脚本更新失败', error);
+                if (manual) showPrtsToast('检查脚本更新失败', 'error', error.message || '请稍后重试。');
+                return false;
+            }
+        })().finally(() => { scriptUpdatePending = null; });
+        return scriptUpdatePending;
     }
     // =========================================================================
     //                            MODULE 3: 工具函数与核心算法
@@ -6023,6 +6225,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }
         });
         content.appendChild(debugOptions);
+        content.appendChild(createPrtsButton({
+            className: 'prts-btn', icon: 'download', text: '检查脚本更新',
+            onClick: () => checkScriptUpdates(true)
+        }));
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
         const accRow = document.createElement('div');
@@ -6219,6 +6425,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         loadCachedResources();
         updateResources();
         setInterval(updateResources, RESOURCE_CHECK_INTERVAL_MS);
+        checkScriptUpdates();
+        setInterval(checkScriptUpdates, 60 * 1000);
         if (isSklandHost()) {
             initSklandImportPage();
             return;
