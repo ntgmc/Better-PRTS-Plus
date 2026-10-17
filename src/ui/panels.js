@@ -505,6 +505,18 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 }));
             }
         });
+        const updatePreviewLabel = document.createElement('div');
+        updatePreviewLabel.className = 'prts-panel-item-label';
+        updatePreviewLabel.textContent = '更新弹窗预览';
+        debugOptions.appendChild(updatePreviewLabel);
+        const updatePreviewActions = document.createElement('div');
+        updatePreviewActions.className = 'prts-panel-actions';
+        Object.entries(RELEASE_LEVELS).forEach(([level, text]) => {
+            updatePreviewActions.appendChild(createPrtsButton({
+                text, onClick: () => previewScriptUpdate(level)
+            }));
+        });
+        debugOptions.appendChild(updatePreviewActions);
         content.appendChild(debugOptions);
         content.appendChild(createPrtsButton({
             className: 'prts-btn', icon: 'download', text: '检查脚本更新',

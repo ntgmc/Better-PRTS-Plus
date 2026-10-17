@@ -3531,16 +3531,7 @@ function createSklandImportCancelledError() {
             return false;
         }
         scriptUpdatePromptedVersion = update.version;
-        const message = document.createElement('div');
-        message.className = 'prts-update-notes';
-        message.textContent = `当前版本：${currentVersion}\n新版本：${update.version} · ${RELEASE_LEVELS[update.level]}\n\n` +
-            update.releases.map(release => `${release.version} · ${RELEASE_LEVELS[release.level]}\n${release.notes}`).join('\n\n') +
-            '\n\n点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。';
-        const choice = await showPrtsModal({
-            title: `Better-PRTS-Plus 发现新版本`, message,
-            extraAction: { text: '仅重要更新提示', value: 'important' },
-            cancelText: '当前版本不再提示', cancelValue: 'skip', confirmText: '立即更新'
-        });
+        const choice = await showScriptUpdateModal(update);
         try {
             if (choice === 'important') {
                 const previous = CONFIG.importantUpdatesOnly;
@@ -3560,6 +3551,40 @@ function createSklandImportCancelledError() {
         }
         return true;
     }
+
+    function showScriptUpdateModal(update, preview = false) {
+        const message = document.createElement('div');
+        message.className = 'prts-update-notes';
+        message.textContent = `当前版本：${GM_info.script.version}\n新版本：${update.version} · ${RELEASE_LEVELS[update.level]}\n\n` +
+            update.releases.map(release => `${release.version} · ${RELEASE_LEVELS[release.level]}\n${release.notes}`).join('\n\n') +
+            (preview ? '\n\n这是样式预览，点击下方按钮仅显示操作反馈。'
+                : '\n\n点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。');
+        return showPrtsModal({
+            title: preview ? 'Better-PRTS-Plus 更新弹窗预览' : 'Better-PRTS-Plus 发现新版本', message,
+            extraAction: { text: '仅重要更新提示', value: 'important' },
+            cancelText: '当前版本不再提示', cancelValue: 'skip', confirmText: '立即更新'
+        });
+    }
+
+    async function previewScriptUpdate(level = 'important') {
+        if (!Object.hasOwn(RELEASE_LEVELS, level)) throw new Error('更新级别无效');
+        if (document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) {
+            showPrtsToast('请先关闭当前窗口', 'info', '关闭后可继续预览更新弹窗。');
+            return false;
+        }
+        const release = {
+            version: '99.0.0', level,
+            notes: '以下内容为样式测试示例。\n\n示例新增：展示新版本、更新级别和多行更新说明。\n示例修复：检查长文本在较窄屏幕上的自动换行，确认内容完整显示，底部操作按钮清晰可用。\n示例说明：可切换网站的浅色、深色或高对比主题，重复预览。'
+        };
+        const choice = await showScriptUpdateModal({ ...release, releases: [release] }, true);
+        if (choice !== null) {
+            const action = choice === 'important' ? '仅重要更新提示' : choice === 'skip' ? '当前版本不再提示' : '立即更新';
+            showPrtsToast('预览操作', 'info', `已点击“${action}”。`);
+        }
+        return choice;
+    }
+
+    betterPrtsDebug.previewScriptUpdate = previewScriptUpdate;
 
     function checkScriptUpdates(manual = false) {
         if (scriptUpdatePending) return scriptUpdatePending;
@@ -6224,6 +6249,18 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 }));
             }
         });
+        const updatePreviewLabel = document.createElement('div');
+        updatePreviewLabel.className = 'prts-panel-item-label';
+        updatePreviewLabel.textContent = '更新弹窗预览';
+        debugOptions.appendChild(updatePreviewLabel);
+        const updatePreviewActions = document.createElement('div');
+        updatePreviewActions.className = 'prts-panel-actions';
+        Object.entries(RELEASE_LEVELS).forEach(([level, text]) => {
+            updatePreviewActions.appendChild(createPrtsButton({
+                text, onClick: () => previewScriptUpdate(level)
+            }));
+        });
+        debugOptions.appendChild(updatePreviewActions);
         content.appendChild(debugOptions);
         content.appendChild(createPrtsButton({
             className: 'prts-btn', icon: 'download', text: '检查脚本更新',

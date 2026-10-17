@@ -103,6 +103,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/update-operator-data.ps
 
 脚本头的 `@updateURL`、`@downloadURL` 指向最新正式 Release 的脚本附件，油猴自身的检查和自动安装由扩展设置控制。脚本中的提醒偏好只影响弹窗。干员与模组资源继续独立热更新。
 
+### 调试预览更新弹窗
+
+打开 PRTS Plus 页面的悬浮球设置，按住 **Shift** 点击面板顶部的“设置”，显示隐藏的调试区。在“更新弹窗预览”下点击“普通更新”“重要更新”或“紧急更新”，即可反复查看对应级别的弹窗。已开启“兼容诊断”时，调试区默认显示。
+
+预览使用真实弹窗和示例说明，三个按钮仅显示点击反馈，便于检查不同主题、窄屏换行和按钮布局；不会联网检查、修改提醒偏好、跳过真实版本或打开安装页。
+
+PRTS Plus 和森空岛页面也可在开发者控制台执行 `window.BetterPRTSPlusDebug.previewScriptUpdate('important')`；参数可选 `normal`、`important`、`urgent`，默认 `important`。预览前需先关闭已有的导入或确认窗口。
+
 ## Commit 规范
 
 新提交应使用 Conventional Commits 格式：

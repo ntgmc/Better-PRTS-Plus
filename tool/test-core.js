@@ -465,7 +465,7 @@ function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
   const sandbox = {
     console: { warn() {} },
     Date: { now: () => now },
-    GM_info: { script: { version } }, CONFIG: { importantUpdatesOnly: false },
+    GM_info: { script: { version } }, CONFIG: { importantUpdatesOnly: false }, betterPrtsDebug: {},
     GM_getValue: (key, fallback) => saved.has(key) ? saved.get(key) : fallback,
     GM_setValue: (key, value) => saved.set(key, value),
     GM_openInTab: (...args) => opened.push(args),
@@ -616,6 +616,43 @@ test('automatic checks defer until an active import or confirmation closes', asy
   await h.api.checkScriptUpdates();
   assert.strictEqual(h.dialogs.length, 1);
   assert.strictEqual(h.requests.length, 1);
+});
+
+test('update style previews cover all levels and buttons without changing real update behavior', async () => {
+  for (const level of ['normal', 'important', 'urgent']) {
+    for (const choice of ['important', 'skip', true, null]) {
+      const saved = new Map([['existing', 'preserved']]);
+      const h = createScriptUpdateHarness(saved);
+      h.choice = choice;
+      h.sandbox.CONFIG.importantUpdatesOnly = true;
+      const preview = h.sandbox.betterPrtsDebug.previewScriptUpdate;
+      assert.strictEqual(await preview(level), choice);
+      assert(h.dialogs[0].title.includes('预览'));
+      assert(h.dialogs[0].message.textContent.includes(`99.0.0 · ${{ normal: '普通更新', important: '重要更新', urgent: '紧急更新' }[level]}`));
+      assert(h.dialogs[0].message.textContent.includes('样式测试示例'));
+      assert.deepStrictEqual([...saved], [['existing', 'preserved']]);
+      assert.strictEqual(h.sandbox.CONFIG.importantUpdatesOnly, true);
+      assert.strictEqual(h.requests.length, 0);
+      assert.strictEqual(h.opened.length, 0);
+      assert.strictEqual(h.timers.size, 0);
+      assert.strictEqual(h.toasts.length, choice === null ? 0 : 1);
+      await preview(level);
+      assert.strictEqual(h.dialogs.length, 2);
+      h.choice = null;
+      const real = h.api.checkScriptUpdates();
+      h.respond(releaseManifest(updateRelease('99.0.0', 'important')));
+      assert.strictEqual(await real, true);
+      assert.strictEqual(h.dialogs.length, 3);
+      assert(!h.dialogs[2].title.includes('预览'));
+    }
+  }
+  const h = createScriptUpdateHarness();
+  await h.sandbox.betterPrtsDebug.previewScriptUpdate();
+  assert(h.dialogs[0].message.textContent.includes('重要更新'));
+  await assert.rejects(h.sandbox.betterPrtsDebug.previewScriptUpdate('__proto__'), /更新级别无效/);
+  h.busy = true;
+  assert.strictEqual(await h.sandbox.betterPrtsDebug.previewScriptUpdate('urgent'), false);
+  assert.strictEqual(h.dialogs.length, 1);
 });
 
 test('failed script checks and timeouts stay silent automatically and can be retried manually', async () => {
