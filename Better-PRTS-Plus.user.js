@@ -2626,6 +2626,7 @@ function createSklandImportCancelledError() {
         font-family: var(--prts-font-sans) !important;
     }
     .prts-settings-panel * { box-sizing: border-box; }
+    .prts-settings-panel [hidden] { display: none !important; }
     .prts-settings-panel > .prts-panel-title { flex-shrink: 0; gap: var(--prts-space-2); }
     .prts-settings-heading {
         margin-right: auto;
@@ -2638,8 +2639,20 @@ function createSklandImportCancelledError() {
         white-space: nowrap;
     }
     .prts-settings-heading:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
-    .prts-settings-close { flex: 0 0 44px; width: 44px; min-height: 44px !important; margin: 0 !important; padding: 0 !important; }
+    .prts-settings-close, .prts-settings-back { flex: 0 0 44px; width: 44px; min-height: 44px !important; margin: 0 !important; padding: 0 !important; }
+    .prts-settings-back .bp4-icon { margin-right: 0 !important; }
     .prts-settings-content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+    /* Hallmark · component: about submenu · theme: existing PRTS tokens
+     * pre-emit critique: P4 H4 E4 S5 R5 V3 · states: default, hover, focus, active */
+    .prts-settings-about-button { width: 100%; min-height: 44px !important; justify-content: flex-start !important; margin: var(--prts-space-3) 0 0 !important; }
+    .prts-submenu-arrow { margin-left: auto; font-size: 20px; }
+    .prts-about-name { margin: var(--prts-space-2) 0; color: var(--prts-color-text); font-size: 17px; overflow-wrap: anywhere; }
+    .prts-about-version { margin: 0 0 var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
+    .prts-about-description, .prts-about-credits { margin: var(--prts-space-3) 0; color: var(--prts-color-text-muted); font-size: 13px; line-height: 1.65; white-space: pre-line; }
+    .prts-about-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--prts-space-2); margin: var(--prts-space-3) 0; }
+    .prts-about-links .prts-btn { min-width: 0; min-height: 44px !important; margin: 0 !important; text-decoration: none; }
+    #prts-settings-about .prts-btn, #prts-settings-about-button { color: var(--prts-color-text-muted) !important; }
+    .prts-about-update { width: 100%; min-height: 44px !important; margin: var(--prts-space-2) 0 !important; }
     .prts-settings-content .prts-panel-actions { flex-wrap: wrap; }
     .prts-settings-content .prts-panel-actions .prts-btn { flex: 1 1 118px !important; min-width: 0; }
     .prts-settings-panel.prts-settings-compact { padding: var(--prts-space-2) !important; }
@@ -3009,6 +3022,7 @@ function createSklandImportCancelledError() {
 
     const PRTS_ICON_PATHS = {
         account: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
+        back: 'M7.7 1.3 1 8l6.7 6.7 1.4-1.4L4.8 9H15V7H4.8l4.3-4.3-1.4-1.4z',
         archive: 'M2 2h12v3H2V2zm1 4h10v8H3V6zm3 2v1.5h4V8H6z',
         check: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
         close: 'M3.72 2.28 8 6.56l4.28-4.28 1.44 1.44L9.44 8l4.28 4.28-1.44 1.44L8 9.44l-4.28 4.28-1.44-1.44L6.56 8 2.28 3.72z',
@@ -3017,6 +3031,7 @@ function createSklandImportCancelledError() {
         eyeOn: 'M8 3C3 3 0 8 0 8s3 5 8 5 8-5 8-5-3-5-8-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z M8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
         filter: 'M1 2h14L9.5 8v5.5L6.5 15V8L1 2z',
         import: 'M11 6h3l-6 6-6-6h3V1h6v5zm-9 8v2h12v-2h-2v1H4v-1H2z',
+        info: 'M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14a6 6 0 1 1 0-12 6 6 0 0 1 0 12zM7.2 7h1.6v5H7.2V7zm0-3h1.6v1.6H7.2V4z',
         layout: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
         link: 'M6.2 10.6 5.1 9.5l4.4-4.4 1.1 1.1-4.4 4.4zm-1.6 2.2c-1 0-1.9-.4-2.6-1.1-1.4-1.4-1.4-3.8 0-5.2l2.2-2.2 1.1 1.1-2.2 2.2c-.8.8-.8 2.2 0 3 .8.8 2.2.8 3 0l1.1 1.1c-.7.7-1.6 1.1-2.6 1.1zm7.2-1.1-1.1-1.1 2.2-2.2c.8-.8.8-2.2 0-3-.8-.8-2.2-.8-3 0L8.8 4.3c1.4-1.4 3.8-1.4 5.2 0 1.4 1.4 1.4 3.8 0 5.2l-2.2 2.2z',
         missing: 'M8 1.4 15.2 14H.8L8 1.4zm0 3.1L3.5 12.4h9L8 4.5zm-.8 2.4h1.6v2.9H7.2V6.9zm0 3.8h1.6v1.5H7.2v-1.5z',
@@ -6158,6 +6173,12 @@ ${formatSklandImportSummary(summary)}`, 'success');
         titleText.type = 'button';
         titleText.className = 'prts-settings-heading';
         titleText.textContent = '设置';
+        const backButton = createPrtsButton({
+            id: 'prts-settings-back', className: 'prts-btn prts-settings-back', icon: 'back',
+            ariaLabel: '返回设置', onClick: () => setAboutOpen(false)
+        });
+        backButton.hidden = true;
+        title.appendChild(backButton);
         title.appendChild(titleText);
         title.appendChild(createPrtsButton({
             className: 'prts-btn prts-settings-close', icon: 'close', ariaLabel: '关闭脚本设置面板',
@@ -6169,8 +6190,48 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.appendChild(title);
 
         const content = document.createElement('div');
+        content.id = 'prts-settings-main';
         content.className = 'prts-settings-content';
         panel.appendChild(content);
+
+        const aboutContent = document.createElement('div');
+        aboutContent.id = 'prts-settings-about';
+        aboutContent.className = 'prts-settings-content';
+        aboutContent.hidden = true;
+        const aboutName = document.createElement('h3');
+        aboutName.className = 'prts-about-name';
+        aboutName.textContent = 'Better-PRTS-Plus';
+        const aboutVersion = document.createElement('p');
+        aboutVersion.className = 'prts-about-version';
+        aboutVersion.textContent = `当前版本 ${GM_info.script.version}`;
+        const aboutDescription = document.createElement('p');
+        aboutDescription.className = 'prts-about-description';
+        aboutDescription.textContent = 'PRTS Plus 增强脚本，支持持有干员与练度筛选、多账号管理和页面显示优化。';
+        const aboutCredits = document.createElement('p');
+        aboutCredits.className = 'prts-about-credits';
+        aboutCredits.textContent = '作者：一只摆烂的42（ntgmc）\n开源协议：GPL-3.0\n感谢 PRTS Plus 提供作业平台。';
+        aboutContent.appendChild(aboutName);
+        aboutContent.appendChild(aboutVersion);
+        aboutContent.appendChild(aboutDescription);
+        aboutContent.appendChild(aboutCredits);
+        const aboutLinks = document.createElement('div');
+        aboutLinks.className = 'prts-about-links';
+        [
+            ['项目主页', 'https://github.com/ntgmc/Better-PRTS-Plus'],
+            ['使用说明', 'https://github.com/ntgmc/Better-PRTS-Plus/blob/main/README.md'],
+            ['问题反馈', 'https://github.com/ntgmc/Better-PRTS-Plus/issues'],
+            ['更新记录', SCRIPT_RELEASE_URL]
+        ].forEach(([text, url]) => {
+            const link = document.createElement('a');
+            link.className = 'prts-btn';
+            link.textContent = text;
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            aboutLinks.appendChild(link);
+        });
+        aboutContent.appendChild(aboutLinks);
+        panel.appendChild(aboutContent);
 
         const reloadNotice = document.createElement('div');
         reloadNotice.id = 'prts-settings-reload';
@@ -6191,7 +6252,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         if (debugOptionsRevealed) debugOptions.classList.add('is-visible');
 
         const revealDebugOptions = event => {
-            if (!event.shiftKey) return;
+            if (!event.shiftKey || !aboutContent.hidden) return;
             event.preventDefault();
             event.stopPropagation();
             debugOptionsRevealed = !debugOptionsRevealed;
@@ -6203,7 +6264,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         let currentGroup = '';
         Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
             if (!definition.group) return;
-            const target = definition.group === '诊断' ? debugOptions : content;
+            const target = definition.group === '诊断' ? debugOptions
+                : definition.group === '脚本更新' ? aboutContent : content;
             if (definition.group !== currentGroup) {
                 const groupTitle = document.createElement('div');
                 groupTitle.className = 'prts-panel-title';
@@ -6262,8 +6324,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         });
         debugOptions.appendChild(updatePreviewActions);
         content.appendChild(debugOptions);
-        content.appendChild(createPrtsButton({
-            className: 'prts-btn', icon: 'download', text: '检查脚本更新',
+        aboutContent.appendChild(createPrtsButton({
+            className: 'prts-btn prts-about-update', icon: 'download', text: '检查脚本更新',
             onClick: () => checkScriptUpdates(true)
         }));
 
@@ -6349,6 +6411,29 @@ ${formatSklandImportSummary(summary)}`, 'success');
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
         content.appendChild(backupActions);
+
+        const aboutButton = createPrtsButton({
+            id: 'prts-settings-about-button', className: 'prts-btn prts-settings-about-button',
+            icon: 'info', text: '关于', ariaControls: aboutContent.id, expanded: false,
+            onClick: () => setAboutOpen(true)
+        });
+        const submenuArrow = document.createElement('span');
+        submenuArrow.className = 'prts-submenu-arrow';
+        submenuArrow.setAttribute('aria-hidden', 'true');
+        submenuArrow.textContent = '›';
+        aboutButton.appendChild(submenuArrow);
+        content.appendChild(aboutButton);
+
+        const setAboutOpen = isOpen => {
+            content.hidden = isOpen;
+            aboutContent.hidden = !isOpen;
+            backButton.hidden = !isOpen;
+            titleText.textContent = isOpen ? '关于' : '设置';
+            panel.setAttribute('aria-label', `Better-PRTS-Plus ${isOpen ? '关于' : '设置'}`);
+            aboutButton.setAttribute('aria-expanded', String(isOpen));
+            updateFloatingLayout();
+            (isOpen ? backButton : aboutButton).focus({ preventScroll: true });
+        };
 
         container.appendChild(panel);
         container.appendChild(btn);
@@ -6446,11 +6531,17 @@ ${formatSklandImportSummary(summary)}`, 'success');
             hasMoved = false;
         };
         panel.onclick = (e) => e.stopPropagation();
-        document.addEventListener('click', () => {
-            if (!isDragging) setFloatOpen(false);
+        document.addEventListener('click', event => {
+            if (!isDragging && !event.target.closest?.('#prts-modal-backdrop, #prts-import-dialog-backdrop')) setFloatOpen(false);
         });
         document.addEventListener('keydown', event => {
-            if (event.key === 'Escape') setFloatOpen(false);
+            if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
+                event.target.closest?.('#prts-modal-backdrop, #prts-import-dialog-backdrop')) return;
+            if (!aboutContent.hidden) setAboutOpen(false);
+            else {
+                setFloatOpen(false);
+                btn.focus({ preventScroll: true });
+            }
         });
     }
     // =========================================================================

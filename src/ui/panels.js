@@ -414,6 +414,12 @@ ${formatSklandImportSummary(summary)}`, 'success');
         titleText.type = 'button';
         titleText.className = 'prts-settings-heading';
         titleText.textContent = '设置';
+        const backButton = createPrtsButton({
+            id: 'prts-settings-back', className: 'prts-btn prts-settings-back', icon: 'back',
+            ariaLabel: '返回设置', onClick: () => setAboutOpen(false)
+        });
+        backButton.hidden = true;
+        title.appendChild(backButton);
         title.appendChild(titleText);
         title.appendChild(createPrtsButton({
             className: 'prts-btn prts-settings-close', icon: 'close', ariaLabel: '关闭脚本设置面板',
@@ -425,8 +431,48 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.appendChild(title);
 
         const content = document.createElement('div');
+        content.id = 'prts-settings-main';
         content.className = 'prts-settings-content';
         panel.appendChild(content);
+
+        const aboutContent = document.createElement('div');
+        aboutContent.id = 'prts-settings-about';
+        aboutContent.className = 'prts-settings-content';
+        aboutContent.hidden = true;
+        const aboutName = document.createElement('h3');
+        aboutName.className = 'prts-about-name';
+        aboutName.textContent = 'Better-PRTS-Plus';
+        const aboutVersion = document.createElement('p');
+        aboutVersion.className = 'prts-about-version';
+        aboutVersion.textContent = `当前版本 ${GM_info.script.version}`;
+        const aboutDescription = document.createElement('p');
+        aboutDescription.className = 'prts-about-description';
+        aboutDescription.textContent = 'PRTS Plus 增强脚本，支持持有干员与练度筛选、多账号管理和页面显示优化。';
+        const aboutCredits = document.createElement('p');
+        aboutCredits.className = 'prts-about-credits';
+        aboutCredits.textContent = '作者：一只摆烂的42（ntgmc）\n开源协议：GPL-3.0\n感谢 PRTS Plus 提供作业平台。';
+        aboutContent.appendChild(aboutName);
+        aboutContent.appendChild(aboutVersion);
+        aboutContent.appendChild(aboutDescription);
+        aboutContent.appendChild(aboutCredits);
+        const aboutLinks = document.createElement('div');
+        aboutLinks.className = 'prts-about-links';
+        [
+            ['项目主页', 'https://github.com/ntgmc/Better-PRTS-Plus'],
+            ['使用说明', 'https://github.com/ntgmc/Better-PRTS-Plus/blob/main/README.md'],
+            ['问题反馈', 'https://github.com/ntgmc/Better-PRTS-Plus/issues'],
+            ['更新记录', SCRIPT_RELEASE_URL]
+        ].forEach(([text, url]) => {
+            const link = document.createElement('a');
+            link.className = 'prts-btn';
+            link.textContent = text;
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            aboutLinks.appendChild(link);
+        });
+        aboutContent.appendChild(aboutLinks);
+        panel.appendChild(aboutContent);
 
         const reloadNotice = document.createElement('div');
         reloadNotice.id = 'prts-settings-reload';
@@ -447,7 +493,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         if (debugOptionsRevealed) debugOptions.classList.add('is-visible');
 
         const revealDebugOptions = event => {
-            if (!event.shiftKey) return;
+            if (!event.shiftKey || !aboutContent.hidden) return;
             event.preventDefault();
             event.stopPropagation();
             debugOptionsRevealed = !debugOptionsRevealed;
@@ -459,7 +505,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         let currentGroup = '';
         Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
             if (!definition.group) return;
-            const target = definition.group === '诊断' ? debugOptions : content;
+            const target = definition.group === '诊断' ? debugOptions
+                : definition.group === '脚本更新' ? aboutContent : content;
             if (definition.group !== currentGroup) {
                 const groupTitle = document.createElement('div');
                 groupTitle.className = 'prts-panel-title';
@@ -518,8 +565,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         });
         debugOptions.appendChild(updatePreviewActions);
         content.appendChild(debugOptions);
-        content.appendChild(createPrtsButton({
-            className: 'prts-btn', icon: 'download', text: '检查脚本更新',
+        aboutContent.appendChild(createPrtsButton({
+            className: 'prts-btn prts-about-update', icon: 'download', text: '检查脚本更新',
             onClick: () => checkScriptUpdates(true)
         }));
 
@@ -605,6 +652,29 @@ ${formatSklandImportSummary(summary)}`, 'success');
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
         content.appendChild(backupActions);
+
+        const aboutButton = createPrtsButton({
+            id: 'prts-settings-about-button', className: 'prts-btn prts-settings-about-button',
+            icon: 'info', text: '关于', ariaControls: aboutContent.id, expanded: false,
+            onClick: () => setAboutOpen(true)
+        });
+        const submenuArrow = document.createElement('span');
+        submenuArrow.className = 'prts-submenu-arrow';
+        submenuArrow.setAttribute('aria-hidden', 'true');
+        submenuArrow.textContent = '›';
+        aboutButton.appendChild(submenuArrow);
+        content.appendChild(aboutButton);
+
+        const setAboutOpen = isOpen => {
+            content.hidden = isOpen;
+            aboutContent.hidden = !isOpen;
+            backButton.hidden = !isOpen;
+            titleText.textContent = isOpen ? '关于' : '设置';
+            panel.setAttribute('aria-label', `Better-PRTS-Plus ${isOpen ? '关于' : '设置'}`);
+            aboutButton.setAttribute('aria-expanded', String(isOpen));
+            updateFloatingLayout();
+            (isOpen ? backButton : aboutButton).focus({ preventScroll: true });
+        };
 
         container.appendChild(panel);
         container.appendChild(btn);
@@ -702,10 +772,16 @@ ${formatSklandImportSummary(summary)}`, 'success');
             hasMoved = false;
         };
         panel.onclick = (e) => e.stopPropagation();
-        document.addEventListener('click', () => {
-            if (!isDragging) setFloatOpen(false);
+        document.addEventListener('click', event => {
+            if (!isDragging && !event.target.closest?.('#prts-modal-backdrop, #prts-import-dialog-backdrop')) setFloatOpen(false);
         });
         document.addEventListener('keydown', event => {
-            if (event.key === 'Escape') setFloatOpen(false);
+            if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
+                event.target.closest?.('#prts-modal-backdrop, #prts-import-dialog-backdrop')) return;
+            if (!aboutContent.hidden) setAboutOpen(false);
+            else {
+                setFloatOpen(false);
+                btn.focus({ preventScroll: true });
+            }
         });
     }

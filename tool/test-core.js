@@ -873,6 +873,83 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
+test('About submenu contains updates and project information, saves preferences and returns keyboard focus', () => {
+  const body = createTestElement('body');
+  const listeners = new Map();
+  const all = node => [node, ...node.children.flatMap(all)];
+  const document = {
+    body, activeElement: null,
+    getElementById: id => all(body).find(node => node.id === id),
+    querySelectorAll: () => [],
+    addEventListener: (event, listener) => listeners.set(event, listener)
+  };
+  document.createElement = tag => {
+    const element = createTestElement(tag);
+    element.addEventListener = () => {};
+    element.focus = () => { document.activeElement = element; };
+    return element;
+  };
+  document.createElementNS = (_namespace, tag) => document.createElement(tag);
+  let saves = 0, checks = 0;
+  const sandbox = {
+    document, window: { addEventListener() {} },
+    GM_info: { script: { version: '7.8.9-beta.1' } },
+    SCRIPT_RELEASE_URL: 'https://github.com/ntgmc/Better-PRTS-Plus/releases',
+    CONFIG: { importantUpdatesOnly: false, compatDebug: false },
+    CONFIG_DEFINITIONS: Object.fromEntries(['collapseDescription', 'importantUpdatesOnly', 'compatDebug'].map(key => [key, CONFIG_DEFINITIONS[key]])),
+    RELEASE_LEVELS: { normal: '普通更新', important: '重要更新', urgent: '紧急更新' }, BP_SELECTORS: {},
+    saveConfig: () => { saves++; }, checkScriptUpdates: manual => { assert.strictEqual(manual, true); checks++; },
+    refreshAccountControls() {}, syncPageScaffold() {}, enhancePopover() {}, requestFilterUpdate() {},
+    handleImport() {}, handleOpenSklandImport() {}, handleExportAccountsBackup() {}, handleImportAccountsBackup() {},
+    ResizeObserver: class { observe() {} }
+  };
+  vm.runInNewContext(['src/ui/dom-helpers.js', 'src/ui/panels.js'].map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), sandbox);
+  sandbox.updateFloatingLayout = () => {};
+  sandbox.createFloatingBall();
+  const main = document.getElementById('prts-settings-main');
+  const about = document.getElementById('prts-settings-about');
+  const entry = document.getElementById('prts-settings-about-button');
+  const back = document.getElementById('prts-settings-back');
+  const ball = body.firstChild.lastChild;
+  assert.strictEqual(about.hidden, true);
+  assert.strictEqual(back.hidden, true);
+  assert(!main.textContent.includes('脚本更新'));
+  assert(!main.textContent.includes('检查脚本更新'));
+  assert(about.textContent.includes('7.8.9-beta.1'));
+  assert(about.textContent.includes('一只摆烂的42（ntgmc）'));
+  assert(about.textContent.includes('GPL-3.0'));
+  const links = all(about).filter(node => node.tagName === 'A');
+  assert.deepStrictEqual(links.map(link => link.textContent), ['项目主页', '使用说明', '问题反馈', '更新记录']);
+  assert(links.every(link => link.href.startsWith('https://github.com/') && link.target === '_blank' && link.rel === 'noopener noreferrer'));
+  ball.onclick({ stopPropagation() {}, detail: 0 });
+  entry._prtsClickHandler();
+  assert.strictEqual(main.hidden, true);
+  assert.strictEqual(about.hidden, false);
+  assert.strictEqual(entry.attributes.get('aria-expanded'), 'true');
+  assert.strictEqual(document.activeElement, back);
+  const preference = all(about).find(node => node.dataset.prtsConfigKey === 'importantUpdatesOnly');
+  preference.onchange({ target: { checked: true } });
+  assert.strictEqual(sandbox.CONFIG.importantUpdatesOnly, true);
+  assert.strictEqual(saves, 1);
+  all(about).find(node => node.tagName === 'BUTTON' && node.textContent === '检查脚本更新')._prtsClickHandler();
+  assert.strictEqual(checks, 1);
+  const modalTarget = { closest: () => ({}) };
+  listeners.get('click')({ target: modalTarget });
+  listeners.get('keydown')({ key: 'Escape', target: modalTarget });
+  assert.strictEqual(about.hidden, false);
+  back._prtsClickHandler();
+  assert.strictEqual(main.hidden, false);
+  assert.strictEqual(about.hidden, true);
+  assert.strictEqual(document.activeElement, entry);
+  entry._prtsClickHandler();
+  listeners.get('keydown')({ key: 'Escape', target: back });
+  assert.strictEqual(about.hidden, true);
+  assert.strictEqual(document.activeElement, entry);
+  listeners.get('keydown')({ key: 'Escape', target: entry });
+  assert(!body.firstChild.classList.contains('prts-float-open'));
+  assert.strictEqual(document.activeElement, ball);
+});
+
 test('real modal buttons return distinct update choices and preserve existing confirmation behavior', async () => {
   const body = createTestElement('body');
   const listeners = new Map();
