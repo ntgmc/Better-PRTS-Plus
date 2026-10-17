@@ -24,6 +24,8 @@ $sourceFiles = @(
     "src/dom/card-resolution.js",
     "src/styles/styles.js",
     "src/ui/dom-helpers.js",
+    "src/core/release-manifest.js",
+    "src/core/script-updates.js",
     "src/filter/operation-matching.js",
     "src/import/accounts.js",
     "src/ui/import-controls.js",

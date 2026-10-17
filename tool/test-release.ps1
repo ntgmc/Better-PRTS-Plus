@@ -70,6 +70,11 @@ Push-Location $testRoot
 try {
     Copy-Item -Path (Join-Path $repoRoot "src"), (Join-Path $repoRoot "tool"), (Join-Path $repoRoot "resources") -Destination $testRepo -Recurse
     Copy-Item -Path (Join-Path $repoRoot "README.md"), (Join-Path $repoRoot "Better-PRTS-Plus.user.js") -Destination $testRepo
+    $releaseNotes = @("99.0.1", "99.0.2", "99.0.3", "99.0.4-beta.1", "99.0.4-beta.2", "99.0.4") | ForEach-Object {
+        @{ version = $_; level = "normal"; notes = "Offline release test fixture for $_"; humanWritten = $true }
+    }
+    [System.IO.File]::WriteAllText((Join-Path $testRepo "releases.json"),
+        (@{ schemaVersion = 1; releases = @($releaseNotes) } | ConvertTo-Json -Depth 4), $utf8NoBom)
     Copy-Item -LiteralPath (Join-Path $testRepo "tool/operator-data.generated.json") -Destination $fixturePath
     $upload = Join-Path $testRepo "tool/upload-release.ps1"
     $publish = Join-Path $testRepo "tool/publish-release.ps1"
@@ -147,6 +152,10 @@ try {
     Remove-Item -LiteralPath $receiveHook
     & $upload -Version "99.0.0"
     Assert ((Invoke-TestGit status --porcelain) -eq "") "Upload retry left changes behind"
+
+    Assert-Failure { & $publish -Version "99.0.0" -DryRun } "Release notes validation failed"
+    Assert ((Invoke-TestGit rev-parse HEAD) -eq $uploadHead) "Missing notes created a commit"
+    Assert ((Invoke-TestGit tag --list v99.0.0) -eq "") "Missing notes created a tag"
 
     Write-Hook $receiveHook "#!/bin/sh`nexit 1"
     Assert-Failure { & $publish -Version "99.0.1" } "failed"

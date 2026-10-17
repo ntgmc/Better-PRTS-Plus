@@ -33,4 +33,9 @@ if ($tagVersion -ne $scriptVersion) {
     throw "Release tag version '$tagVersion' does not match userscript @version '$scriptVersion'"
 }
 
+node (Join-Path $PSScriptRoot "prepare-release.js") $scriptVersion
+if ($LASTEXITCODE -ne 0) {
+    throw "Release notes validation failed"
+}
+
 Write-Host "Release tag $Tag matches Better-PRTS-Plus.user.js @version $scriptVersion"

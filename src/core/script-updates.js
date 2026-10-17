@@ -1,0 +1,118 @@
+    const SCRIPT_RELEASE_URL = 'https://github.com/ntgmc/Better-PRTS-Plus/releases';
+    const SCRIPT_UPDATE_URL = `${SCRIPT_RELEASE_URL}/latest/download/update.json`;
+    const SCRIPT_IGNORED_VERSION_KEY = 'prts_plus_ignored_script_version';
+    const SCRIPT_UPDATE_INTERVAL_MS = 60 * 60 * 1000;
+    let scriptUpdatePending = null;
+    let scriptUpdateManifest = null;
+    let scriptUpdateCheckedAt = 0;
+    let scriptUpdateAttemptedAt = 0;
+    let scriptUpdatePromptedVersion = '';
+
+    function getAvailableScriptUpdate(manifest, currentVersion) {
+        const releases = validateReleaseManifest(manifest).releases.filter(release =>
+            !parseScriptVersion(release.version).prerelease.length && compareScriptVersions(release.version, currentVersion) > 0);
+        if (!releases.length) return null;
+        const level = releases.some(release => release.level === 'urgent') ? 'urgent'
+            : releases.some(release => release.level === 'important') ? 'important' : 'normal';
+        return { version: releases[0].version, level, releases };
+    }
+
+    function downloadScriptUpdateManifest() {
+        return new Promise((resolve, reject) => {
+            let request;
+            const timeoutId = setTimeout(() => {
+                reject(new Error('检查更新超时'));
+                request?.abort();
+            }, 15000);
+            const finish = callback => value => {
+                clearTimeout(timeoutId);
+                callback(value);
+            };
+            try {
+                request = GM_xmlhttpRequest({
+                    method: 'GET', url: SCRIPT_UPDATE_URL, anonymous: true, timeout: 15000,
+                    onload: finish(response => {
+                        try {
+                            if (response.status !== 200) throw new Error(`检查更新失败：HTTP ${response.status}`);
+                            if (typeof response.responseText !== 'string' || response.responseText.length > 1024 * 1024) {
+                                throw new Error('更新说明文件无效或过大');
+                            }
+                            resolve(validateReleaseManifest(JSON.parse(response.responseText)));
+                        } catch (error) { reject(error); }
+                    }),
+                    onerror: finish(() => reject(new Error('无法连接更新服务器'))),
+                    ontimeout: finish(() => reject(new Error('检查更新超时'))),
+                    onabort: finish(() => reject(new Error('检查更新已取消')))
+                });
+            } catch (error) {
+                clearTimeout(timeoutId);
+                reject(error);
+            }
+        });
+    }
+
+    async function promptScriptUpdate(manifest, manual) {
+        const currentVersion = GM_info.script.version;
+        const update = getAvailableScriptUpdate(manifest, currentVersion);
+        if (!update) {
+            if (manual) showPrtsToast('当前已是最新正式版', 'success', `当前版本：${currentVersion}`);
+            return false;
+        }
+        if (!manual && (scriptUpdatePromptedVersion === update.version ||
+            GM_getValue(SCRIPT_IGNORED_VERSION_KEY, '') === update.version ||
+            (CONFIG.importantUpdatesOnly && update.level === 'normal'))) return false;
+        // 避免自动检查关闭正在进行的导入或确认窗口；下一轮检查继续提示。
+        if (document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) {
+            if (manual) showPrtsToast('发现新版本', 'info', '请先关闭当前窗口，再点击“检查脚本更新”。');
+            return false;
+        }
+        scriptUpdatePromptedVersion = update.version;
+        const message = document.createElement('div');
+        message.className = 'prts-update-notes';
+        message.textContent = `当前版本：${currentVersion}\n新版本：${update.version} · ${RELEASE_LEVELS[update.level]}\n\n` +
+            update.releases.map(release => `${release.version} · ${RELEASE_LEVELS[release.level]}\n${release.notes}`).join('\n\n') +
+            '\n\n点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。';
+        const choice = await showPrtsModal({
+            title: `Better-PRTS-Plus 发现新版本`, message,
+            extraAction: { text: '仅重要更新提示', value: 'important' },
+            cancelText: '当前版本不再提示', cancelValue: 'skip', confirmText: '立即更新'
+        });
+        try {
+            if (choice === 'important') {
+                const previous = CONFIG.importantUpdatesOnly;
+                CONFIG.importantUpdatesOnly = true;
+                try { saveConfig(); } catch (error) { CONFIG.importantUpdatesOnly = previous; throw error; }
+                document.querySelectorAll('[data-prts-config-key="importantUpdatesOnly"]').forEach(input => { input.checked = true; });
+                showPrtsToast('已改为仅提示重要和紧急更新', 'success');
+            } else if (choice === 'skip') {
+                GM_setValue(SCRIPT_IGNORED_VERSION_KEY, update.version);
+            } else if (choice === true) {
+                // 安装链接固定到已检测的版本，避免检查与安装之间切换版本。
+                GM_openInTab(`${SCRIPT_RELEASE_URL}/download/v${encodeURIComponent(update.version)}/Better-PRTS-Plus.user.js`, { active: true, insert: true });
+            }
+        } catch (error) {
+            scriptUpdatePromptedVersion = '';
+            showPrtsToast('更新操作未完成', 'error', error.message || '请重试。');
+        }
+        return true;
+    }
+
+    function checkScriptUpdates(manual = false) {
+        if (scriptUpdatePending) return scriptUpdatePending;
+        if (!manual && !scriptUpdateManifest && Date.now() - scriptUpdateAttemptedAt < 5 * 60 * 1000) return Promise.resolve(false);
+        scriptUpdatePending = (async () => {
+            try {
+                if (manual || !scriptUpdateManifest || Date.now() - scriptUpdateCheckedAt >= SCRIPT_UPDATE_INTERVAL_MS) {
+                    scriptUpdateAttemptedAt = Date.now();
+                    scriptUpdateManifest = await downloadScriptUpdateManifest();
+                    scriptUpdateCheckedAt = Date.now();
+                }
+                return await promptScriptUpdate(scriptUpdateManifest, manual);
+            } catch (error) {
+                console.warn('[Better PRTS] 检查脚本更新失败', error);
+                if (manual) showPrtsToast('检查脚本更新失败', 'error', error.message || '请稍后重试。');
+                return false;
+            }
+        })().finally(() => { scriptUpdatePending = null; });
+        return scriptUpdatePending;
+    }

@@ -32,6 +32,7 @@
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'layout', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
         hideOperatorMatchingSettings: { group: '页面增强', label: '隐藏原站干员匹配设置', icon: 'filter', default: true },
         announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'filter', default: true, reloadOnDisable: true },
+        importantUpdatesOnly: { group: '脚本更新', label: '仅重要更新提示（含紧急更新）', icon: 'download', default: false },
         compatDebug: { group: '诊断', label: '兼容诊断', icon: 'filter', default: false, legacyKey: 'prts_cfg_compat_debug' },
         filterMode: { default: 'NONE', options: ['NONE', 'PERFECT', 'SUPPORT'], legacyKey: 'prts_plus_filter_mode' },
         displayMode: { default: 'GRAY', options: ['GRAY', 'HIDE'], legacyKey: 'prts_plus_display_mode' },

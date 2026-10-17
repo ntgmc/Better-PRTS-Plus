@@ -253,6 +253,8 @@
         message,
         confirmText = '确定',
         cancelText = '取消',
+        cancelValue = null,
+        extraAction = null,
         tone = '',
         input = null
     } = {}) {
@@ -328,6 +330,15 @@
             confirmBtn.className = `prts-import-action primary${tone ? ` ${tone}` : ''}`;
             confirmBtn.textContent = confirmText;
 
+            if (extraAction) {
+                const extraBtn = document.createElement('button');
+                extraBtn.type = 'button';
+                extraBtn.className = 'prts-import-action';
+                extraBtn.textContent = extraAction.text;
+                extraBtn.onclick = () => closePrtsModal(extraAction.value);
+                actions.appendChild(extraBtn);
+                actions.classList.add('prts-modal-actions-extra');
+            }
             actions.appendChild(cancelBtn);
             actions.appendChild(confirmBtn);
 
@@ -359,7 +370,7 @@
             };
 
             closeBtn.onclick = () => finish(null);
-            cancelBtn.onclick = () => finish(null);
+            cancelBtn.onclick = () => finish(cancelValue);
             confirmBtn.onclick = () => finish(inputEl ? inputEl.value : true);
             backdrop.addEventListener('click', event => {
                 if (event.target === backdrop) finish(null);

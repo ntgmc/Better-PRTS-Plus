@@ -506,6 +506,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }
         });
         content.appendChild(debugOptions);
+        content.appendChild(createPrtsButton({
+            className: 'prts-btn', icon: 'download', text: '检查脚本更新',
+            onClick: () => checkScriptUpdates(true)
+        }));
 
         //[V12.0/V3.1.0 优美的多账号悬浮面板]
         const accRow = document.createElement('div');

@@ -1,0 +1,62 @@
+name: Summarize PR for Maintainer
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request_number:
+        description: "需要 AI 总结的 PR 编号（目标分支 main）"
+        required: true
+        type: string
+      api_type:
+        description: "AI 接口；default 使用仓库变量 CHANGELOG_API_TYPE（默认 message）"
+        required: false
+        type: choice
+        default: default
+        options:
+          - default
+          - message
+          - response
+          - chatcompletion
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ai-summary-pr-${{ inputs.pull_request_number }}
+  cancel-in-progress: true
+
+jobs:
+  summarize:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout trusted main code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Generate AI reference summary
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ inputs.pull_request_number }}
+          CHANGELOG_API_TYPE: ${{ inputs.api_type != 'default' && inputs.api_type || vars.CHANGELOG_API_TYPE || 'message' }}
+          CHANGELOG_API_KEY: ${{ secrets.CHANGELOG_API_KEY || secrets.ANTHROPIC_API_KEY }}
+          CHANGELOG_BASE_URL: ${{ secrets.CHANGELOG_BASE_URL || vars.CHANGELOG_BASE_URL || vars.ANTHROPIC_BASE_URL }}
+          CHANGELOG_MODEL: ${{ vars.CHANGELOG_MODEL || vars.ANTHROPIC_MODEL }}
+        run: node tool/summarize-pr-changelog.js
+
+      - name: Upload reference for maintainer
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-pr-${{ inputs.pull_request_number }}-reference
+          path: AI_CHANGE_SUMMARY.md
+          retention-days: 14
+          if-no-files-found: error

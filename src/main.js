@@ -7,6 +7,8 @@
         loadCachedResources();
         updateResources();
         setInterval(updateResources, RESOURCE_CHECK_INTERVAL_MS);
+        checkScriptUpdates();
+        setInterval(checkScriptUpdates, 60 * 1000);
         if (isSklandHost()) {
             initSklandImportPage();
             return;

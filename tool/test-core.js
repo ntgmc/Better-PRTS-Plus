@@ -454,6 +454,278 @@ test('all stale or unversioned download sources preserve current resources and c
   assert.strictEqual(h.timers.size, 0);
 });
 
+const releaseManifestSource = fs.readFileSync(path.join(repoRoot, 'src/core/release-manifest.js'), 'utf8');
+const updateRelease = (version = '3.11.0', level = 'normal', notes = '更新测试说明') => ({ version, level, notes, humanWritten: true });
+const releaseManifest = (...releases) => ({ schemaVersion: 1, releases });
+
+function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
+  const requests = [], dialogs = [], toasts = [], opened = [], timers = new Map();
+  let now = 1700000000000;
+  const h = { saved, requests, dialogs, toasts, opened, timers, choice: null, busy: false };
+  const sandbox = {
+    console: { warn() {} },
+    Date: { now: () => now },
+    GM_info: { script: { version } }, CONFIG: { importantUpdatesOnly: false },
+    GM_getValue: (key, fallback) => saved.has(key) ? saved.get(key) : fallback,
+    GM_setValue: (key, value) => saved.set(key, value),
+    GM_openInTab: (...args) => opened.push(args),
+    GM_xmlhttpRequest: options => { requests.push(options); return { abort() {} }; },
+    saveConfig: () => sandbox.GM_setValue('config', JSON.stringify(sandbox.CONFIG)),
+    showPrtsToast: (...args) => toasts.push(args),
+    showPrtsModal: options => { dialogs.push(options); return Promise.resolve(h.choice); },
+    document: { createElement: createTestElement, getElementById: () => h.busy ? {} : null, querySelectorAll: () => [] },
+    setTimeout: callback => { const id = Symbol(); timers.set(id, () => { timers.delete(id); callback(); }); return id; },
+    clearTimeout: id => timers.delete(id)
+  };
+  vm.runInNewContext(releaseManifestSource + '\n' + fs.readFileSync(path.join(repoRoot, 'src/core/script-updates.js'), 'utf8') + `
+    globalThis.api = { checkScriptUpdates, compareScriptVersions, getAvailableScriptUpdate, validateReleaseManifest, SCRIPT_IGNORED_VERSION_KEY };
+  `, sandbox);
+  return Object.assign(h, {
+    sandbox, api: sandbox.api,
+    advance: (ms = 60 * 60 * 1000) => { now += ms; },
+    respond: (data = releaseManifest(updateRelease()), status = 200) => requests.at(-1).onload({ status, responseText: typeof data === 'string' ? data : JSON.stringify(data) })
+  });
+}
+
+test('script versions compare numerically, order prereleases, and ignore build metadata', () => {
+  const { compareScriptVersions: compare } = createScriptUpdateHarness().api;
+  const ordered = ['3.9.9', '3.10.1', '3.10.10-alpha', '3.10.10-alpha.2', '3.10.10-alpha.10', '3.10.10-beta', '3.10.10', '3.10.10.1'];
+  ordered.slice(1).forEach((version, index) => {
+    assert.strictEqual(compare(ordered[index], version), -1);
+    assert.strictEqual(compare(version, ordered[index]), 1);
+  });
+  assert.strictEqual(compare('3.10.1+build.9', '3.10.1'), 0);
+  assert.strictEqual(compare('3.10', '3.10.0'), 0);
+  for (const invalid of ['', null, 'v3.10.1', '3.10.1\n', '3.10.1-beta..2', '3.9007199254740992']) assert.throws(() => compare(invalid, '3.10'));
+});
+
+test('release manifests reject missing human confirmation, empty notes, invalid levels and duplicate versions', () => {
+  const { validateReleaseManifest: validate } = createScriptUpdateHarness().api;
+  for (const invalid of [null, { schemaVersion: 2, releases: [] }, releaseManifest(null),
+    ...[{ notes: ' ' }, { notes: 12 }, { humanWritten: false }, { humanWritten: 'true' }, { level: 'critical' }, { level: '__proto__' }, { version: 'invalid' }]
+      .map(change => releaseManifest({ ...updateRelease(), ...change })),
+    releaseManifest(updateRelease('3.11'), updateRelease('3.11.0'))]) assert.throws(() => validate(invalid));
+});
+
+test('skipping multiple releases preserves important and urgent changes and excludes prereleases', () => {
+  const { getAvailableScriptUpdate: available } = createScriptUpdateHarness().api;
+  const manifest = releaseManifest(updateRelease('3.12.0', 'normal'), updateRelease('3.11.0', 'important'), updateRelease('4.0.0-beta.1', 'urgent'));
+  const update = available(manifest, '3.10.1');
+  assert.strictEqual(update.version, '3.12.0');
+  assert.strictEqual(update.level, 'important');
+  assert.strictEqual(update.releases.length, 2);
+  assert.strictEqual(available(manifest, '3.11.0').level, 'normal');
+  assert.strictEqual(available(manifest, '3.12.0'), null);
+  manifest.releases.push(updateRelease('3.10.2', 'urgent'));
+  assert.strictEqual(available(manifest, '3.10.1').level, 'urgent');
+});
+
+test('script checks deduplicate requests, throttle downloads and prompt once per page version', async () => {
+  const h = createScriptUpdateHarness();
+  const pending = h.api.checkScriptUpdates();
+  assert.strictEqual(h.api.checkScriptUpdates(), pending);
+  assert.strictEqual(h.requests.length, 1);
+  h.respond(releaseManifest(updateRelease('3.11.0', 'important', '<img src=x onerror=alert(1)>\n保留换行')));
+  assert.strictEqual(await pending, true);
+  assert.strictEqual(h.timers.size, 0);
+  assert(h.dialogs[0].message.textContent.includes('<img src=x onerror=alert(1)>\n保留换行'));
+  assert.strictEqual(h.dialogs[0].message.children.length, 0);
+  assert.strictEqual(h.dialogs[0].extraAction.text, '仅重要更新提示');
+  assert.strictEqual(h.dialogs[0].cancelText, '当前版本不再提示');
+  assert.strictEqual(h.dialogs[0].confirmText, '立即更新');
+  await h.api.checkScriptUpdates();
+  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.dialogs.length, 1);
+  h.advance();
+  const next = h.api.checkScriptUpdates();
+  h.respond(releaseManifest(updateRelease('3.12.0')));
+  await next;
+  assert.strictEqual(h.dialogs.length, 2);
+});
+
+test('important-only preference hides ordinary updates and keeps important and urgent notifications', async () => {
+  for (const level of ['normal', 'important', 'urgent']) {
+    const h = createScriptUpdateHarness();
+    h.sandbox.CONFIG.importantUpdatesOnly = true;
+    const pending = h.api.checkScriptUpdates();
+    h.respond(releaseManifest(updateRelease('3.11.0', level)));
+    await pending;
+    assert.strictEqual(h.dialogs.length, level === 'normal' ? 0 : 1);
+  }
+  const h = createScriptUpdateHarness();
+  h.choice = 'important';
+  const pending = h.api.checkScriptUpdates();
+  h.respond();
+  await pending;
+  assert.strictEqual(h.sandbox.CONFIG.importantUpdatesOnly, true);
+  assert.strictEqual(JSON.parse(h.saved.get('config')).importantUpdatesOnly, true);
+});
+
+test('ignored target version persists across pages, later versions and manual checks remain available', async () => {
+  const saved = new Map();
+  const h = createScriptUpdateHarness(saved);
+  h.choice = 'skip';
+  const pending = h.api.checkScriptUpdates();
+  h.respond();
+  await pending;
+  assert.strictEqual(saved.get(h.api.SCRIPT_IGNORED_VERSION_KEY), '3.11.0');
+  const other = createScriptUpdateHarness(saved);
+  let next = other.api.checkScriptUpdates();
+  other.respond();
+  assert.strictEqual(await next, false);
+  other.sandbox.CONFIG.importantUpdatesOnly = true;
+  next = other.api.checkScriptUpdates(true);
+  other.respond();
+  await next;
+  assert.strictEqual(other.dialogs.length, 1);
+  other.sandbox.CONFIG.importantUpdatesOnly = false;
+  other.advance();
+  next = other.api.checkScriptUpdates();
+  other.respond(releaseManifest(updateRelease('3.12.0')));
+  await next;
+  assert.strictEqual(other.dialogs.length, 2);
+});
+
+test('update installation opens only the detected tagged userscript and storage errors remain visible', async () => {
+  const h = createScriptUpdateHarness();
+  h.choice = true;
+  const pending = h.api.checkScriptUpdates();
+  h.respond();
+  await pending;
+  assert.strictEqual(h.opened[0][0], 'https://github.com/ntgmc/Better-PRTS-Plus/releases/download/v3.11.0/Better-PRTS-Plus.user.js');
+  for (const choice of ['important', 'skip']) {
+    const broken = createScriptUpdateHarness();
+    broken.choice = choice;
+    broken.sandbox.GM_setValue = () => { throw new Error('storage failure'); };
+    const attempt = broken.api.checkScriptUpdates();
+    broken.respond();
+    await attempt;
+    assert.strictEqual(broken.sandbox.CONFIG.importantUpdatesOnly, false);
+    assert(broken.toasts.some(toast => toast[1] === 'error'));
+  }
+});
+
+test('automatic checks defer until an active import or confirmation closes', async () => {
+  const h = createScriptUpdateHarness();
+  h.busy = true;
+  const pending = h.api.checkScriptUpdates();
+  h.respond();
+  await pending;
+  assert.strictEqual(h.dialogs.length, 0);
+  h.busy = false;
+  await h.api.checkScriptUpdates();
+  assert.strictEqual(h.dialogs.length, 1);
+  assert.strictEqual(h.requests.length, 1);
+});
+
+test('failed script checks and timeouts stay silent automatically and can be retried manually', async () => {
+  for (const failure of ['invalid-json', 'http', 'timeout', 'error', 'oversized']) {
+    const h = createScriptUpdateHarness();
+    const pending = h.api.checkScriptUpdates();
+    if (failure === 'timeout') [...h.timers.values()].forEach(callback => callback());
+    else if (failure === 'error') h.requests[0].onerror();
+    else h.respond(failure === 'oversized' ? 'x'.repeat(1024 * 1024 + 1) : 'invalid', failure === 'http' ? 503 : 200);
+    assert.strictEqual(await pending, false);
+    assert.strictEqual(h.timers.size, 0);
+    assert.strictEqual(h.toasts.length, 0);
+    assert.strictEqual(h.dialogs.length, 0);
+    await h.api.checkScriptUpdates();
+    assert.strictEqual(h.requests.length, 1);
+    const retry = h.api.checkScriptUpdates(true);
+    h.respond();
+    await retry;
+    assert.strictEqual(h.dialogs.length, 1);
+  }
+  const h = createScriptUpdateHarness();
+  const pending = h.api.checkScriptUpdates(true);
+  h.requests[0].onerror();
+  await pending;
+  assert(h.toasts.some(toast => toast[1] === 'error'));
+});
+
+test('release preparation refuses unconfirmed notes and publishes only the selected version and history', () => {
+  const temporary = fs.mkdtempSync(path.join(require('os').tmpdir(), 'prts-release-notes-'));
+  try {
+    fs.mkdirSync(path.join(temporary, 'tool'));
+    fs.mkdirSync(path.join(temporary, 'src/core'), { recursive: true });
+    fs.copyFileSync(path.join(repoRoot, 'tool/prepare-release.js'), path.join(temporary, 'tool/prepare-release.js'));
+    fs.writeFileSync(path.join(temporary, 'src/core/release-manifest.js'), releaseManifestSource);
+    const prepare = () => require('child_process').spawnSync(process.execPath,
+      [path.join(temporary, 'tool/prepare-release.js'), '3.11.0', path.join(temporary, 'output')], { encoding: 'utf8' });
+    for (const manifest of [releaseManifest(), releaseManifest({ ...updateRelease(), humanWritten: false }), releaseManifest({ ...updateRelease(), notes: '' })]) {
+      fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(manifest));
+      assert.notStrictEqual(prepare().status, 0);
+      assert(!fs.existsSync(path.join(temporary, 'output')));
+    }
+    const notes = '维护者提供的正式说明\n第二行原文';
+    fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(releaseManifest(updateRelease('3.12.0'), updateRelease('3.11.0', 'important', notes), updateRelease('3.10.1'))));
+    const result = prepare();
+    assert.strictEqual(result.status, 0, result.stderr);
+    const manifest = JSON.parse(fs.readFileSync(path.join(temporary, 'output/update.json'), 'utf8'));
+    assert.deepStrictEqual(manifest.releases.map(release => release.version), ['3.11.0', '3.10.1']);
+    assert.strictEqual(fs.readFileSync(path.join(temporary, 'output/RELEASE_NOTES.md'), 'utf8'), `## 3.11.0 · 重要更新\n\n${notes}\n`);
+  } finally {
+    fs.rmSync(temporary, { recursive: true, force: true });
+  }
+});
+
+test('AI summaries support three APIs and leave final release notes to the maintainer', async () => {
+  const { summarizePullRequest } = require('./summarize-pr-changelog');
+  const before = fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8');
+  for (const apiType of ['message', 'response', 'chatcompletion']) {
+    const requests = [];
+    const env = { GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-github-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType, CHANGELOG_BASE_URL: 'https://model.invalid/v1' };
+    const pr = { title: 'Example', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 2 };
+    const files = [{ filename: 'src/main.js', status: 'modified', additions: 1, deletions: 0, patch: '+checkScriptUpdates();' },
+      { filename: 'Better-PRTS-Plus.user.js', patch: 'BUILD_OUTPUT_MUST_BE_SKIPPED' }];
+    const response = apiType === 'message' ? { content: [{ type: 'text', text: 'AI 测试摘要' }] }
+      : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text: 'AI 测试摘要' }] }] }
+        : { choices: [{ message: { content: 'AI 测试摘要' }, finish_reason: 'stop' }] };
+    const summary = await summarizePullRequest(env, async (url, options) => {
+      requests.push({ url, options });
+      return { ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : response };
+    });
+    assert(summary.includes('AI 测试摘要'));
+    assert(summary.includes('最终更新内容须由维护者本人提供'));
+    assert(summary.includes(pr.head.sha));
+    assert.strictEqual(requests.length, 4);
+    const ai = requests.at(-1);
+    assert(!ai.options.body.includes('BUILD_OUTPUT_MUST_BE_SKIPPED'));
+    assert(ai.options.body.includes('+checkScriptUpdates();'));
+    assert.strictEqual(ai.options.redirect, 'error');
+    assert(!ai.options.headers.Authorization?.includes('test-github-key'));
+    assert(requests.slice(0, 3).every(item => !item.options.headers['x-api-key']));
+    for (const invalid of [{ CHANGELOG_API_KEY: '' }, { CHANGELOG_API_TYPE: 'unknown' }, { CHANGELOG_BASE_URL: 'http://model.invalid' }, { PR_NUMBER: '../secret' }]) {
+      await assert.rejects(summarizePullRequest({ ...env, ...invalid }, () => { throw new Error('must not request'); }));
+    }
+    await assert.rejects(summarizePullRequest(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files.slice(0, 1) : pr })), /不完整/);
+    await assert.rejects(summarizePullRequest(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : { stop_reason: 'max_tokens' } })), /截断/);
+  }
+  assert.strictEqual(fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8'), before);
+});
+
+test('AI analysis paginates files, splits long diffs and rejects changed heads and HTTP failures', async () => {
+  const { summarizePullRequest } = require('./summarize-pr-changelog');
+  const env = { GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model' };
+  const pr = { title: 'Long PR', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 101 };
+  const files = Array.from({ length: 101 }, (_, index) => ({ filename: `file-${index}.js`, patch: '+' + 'x'.repeat(300), status: 'modified', additions: 1, deletions: 0 }));
+  let modelCalls = 0;
+  const summary = await summarizePullRequest(env, async (url, options) => ({ ok: true, json: async () => {
+    if (url.startsWith('https://api.github.com/')) return url.includes('/files?') ? files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101) : pr;
+    modelCalls++;
+    assert(JSON.parse(options.body).messages[0].content.length < 25000);
+    return { content: [{ type: 'text', text: `摘要 ${modelCalls}` }] };
+  } }));
+  assert.strictEqual(modelCalls, 2);
+  assert(summary.includes('摘要 1') && summary.includes('摘要 2'));
+  let metadataReads = 0;
+  await assert.rejects(summarizePullRequest(env, async url => ({ ok: true, json: async () => {
+    if (url.includes('/files?')) return files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101);
+    return metadataReads++ ? { ...pr, head: { sha: 'b'.repeat(40) } } : pr;
+  } })), /PR 已更新/);
+  await assert.rejects(summarizePullRequest(env, async () => ({ ok: false, status: 429 })), /HTTP 429/);
+});
+
 test('unified settings migrate legacy values, validate types and prefer saved independent choices', () => {
   const savedStorage = new Map(storage);
   try {
@@ -563,6 +835,40 @@ function createTestElement(tagName = 'div', text = '') {
   };
   return node;
 }
+
+test('real modal buttons return distinct update choices and preserve existing confirmation behavior', async () => {
+  const body = createTestElement('body');
+  const listeners = new Map();
+  const document = { body, activeElement: null, addEventListener: (event, listener) => listeners.set(event, listener), removeEventListener: event => listeners.delete(event) };
+  document.createElement = document.createElementNS = (...args) => {
+    const element = createTestElement(args.at(-1));
+    element.addEventListener = () => {};
+    element.focus = () => { document.activeElement = element; };
+    return element;
+  };
+  document.getElementById = id => {
+    const visit = node => node.id === id ? node : node.children.map(visit).find(Boolean);
+    return visit(body);
+  };
+  class ElementType { static [Symbol.hasInstance](value) { return value?.nodeType === 1; } }
+  const sandbox = { document, Node: ElementType, HTMLElement: ElementType, window: { setTimeout: callback => callback() } };
+  vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/ui/dom-helpers.js'), 'utf8'), sandbox);
+  for (const [index, expected] of [[0, 'important'], [1, 'skip'], [2, true]]) {
+    const pending = sandbox.showPrtsModal({ title: '更新', message: '说明', extraAction: { text: '仅重要更新提示', value: 'important' }, cancelValue: 'skip' });
+    const actions = document.getElementById('prts-modal').lastChild;
+    assert.strictEqual(actions.children.length, 3);
+    actions.children[index].onclick();
+    assert.strictEqual(await pending, expected);
+    assert.strictEqual(body.children.length, 0);
+    assert.strictEqual(listeners.size, 0);
+  }
+  const confirm = sandbox.showPrtsConfirm({ title: '原有确认' });
+  document.getElementById('prts-modal').lastChild.firstChild.onclick();
+  assert.strictEqual(await confirm, false);
+  const escaped = sandbox.showPrtsModal({ extraAction: { text: '偏好', value: 'important' } });
+  listeners.get('keydown')({ key: 'Escape' });
+  assert.strictEqual(await escaped, null);
+});
 
 test('both host branches inject toast layout, state and reduced-motion styles', () => {
   for (const skland of [false, true]) {

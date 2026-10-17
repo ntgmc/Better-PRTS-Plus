@@ -32,23 +32,11 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File tool/check-release.ps1 -Tag "${{ github.ref_name }}"
 
-      - name: Generate release notes
-        uses: orhun/git-cliff-action@v4
-        with:
-          config: cliff.toml
-          args: --latest --strip header
-        env:
-          OUTPUT: RELEASE_NOTES.md
-          GITHUB_REPO: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - name: Verify release notes
-        shell: bash
+      - name: Prepare handwritten release notes and update manifest
+        shell: pwsh
         run: |
-          if [ ! -s RELEASE_NOTES.md ] || ! grep -q '[^[:space:]]' RELEASE_NOTES.md; then
-            echo "RELEASE_NOTES.md is empty; refusing to create an empty release."
-            exit 1
-          fi
+          node tool/prepare-release.js ("${{ github.ref_name }}".Substring(1)) release-output
+          if ($LASTEXITCODE -ne 0) { throw "Cannot prepare release metadata" }
 
       - name: Read release metadata
         id: meta
@@ -66,8 +54,9 @@ jobs:
           args=(
             "${{ github.ref_name }}"
             "Better-PRTS-Plus.user.js"
+            "release-output/update.json"
             --title "Better-PRTS-Plus ${{ github.ref_name }}"
-            --notes-file RELEASE_NOTES.md
+            --notes-file release-output/RELEASE_NOTES.md
             --verify-tag
           )
 

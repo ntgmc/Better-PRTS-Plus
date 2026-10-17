@@ -1377,4 +1377,13 @@
     }
 `;
 
-    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles));
+    const scriptUpdateStyles = `
+    /* Hallmark · component: update modal · theme: existing PRTS tokens
+     * pre-emit critique: P4 H4 E4 S5 R5 V3 · states: default, hover, focus, active */
+    .prts-update-notes { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 13px; line-height: 1.65; color: var(--prts-color-text-muted); }
+    .prts-modal-actions-extra { flex-direction: column; }
+    .prts-modal-actions-extra .prts-import-action { width: 100%; min-height: 44px; white-space: nowrap; }
+    .prts-modal-actions-extra .prts-import-action:active { transform: translateY(1px); }
+`;
+
+    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + scriptUpdateStyles);

@@ -9,6 +9,10 @@ tool/*
 !tool/operator-data-update-summary.json
 !tool/upload-release.ps1
 !tool/publish-release.ps1
+!tool/prepare-release.js
+!tool/summarize-pr-changelog.js
 !tool/operator-data.generated.json
+/AI_CHANGE_SUMMARY.md
+/release-output/
 .idea
 graphify-out
