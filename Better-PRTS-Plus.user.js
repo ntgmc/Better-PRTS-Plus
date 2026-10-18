@@ -62,20 +62,20 @@
     const SKLAND_FAVICON_SVG = '<svg class="prts-btn-icon-svg" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M0,15h1v1H0z" fill="#CCE519" opacity="0.039"/><path d="M2,15h1v1H2z" fill="#C8EE21" opacity="0.424"/><path d="M15,0h1v1H15z" fill="#D0D017" opacity="0.043"/><path d="M14,15h1v1H14z" fill="#D3F825" opacity="0.486"/><path d="M4,15h2v1H4z" fill="#C7EB21" opacity="0.502"/><path d="M11,15h3v1H11z" fill="#C9ED21" opacity="0.502"/><path d="M6,15h1v1H6z" fill="#C9EF1F" opacity="0.502"/><path d="M10,15h1v1H10z" fill="#C9F11F" opacity="0.502"/><path d="M3,15h1v1H3zM7,15h1v1H7z" fill="#CBEF21" opacity="0.502"/><path d="M8,15h2v1H8z" fill="#CDF321" opacity="0.502"/><path d="M14,0h1v1H14z" fill="#D1F323" opacity="0.502"/><path d="M15,1h1v1H15z" fill="#D0F321" opacity="0.6"/><path d="M0,13h1v1H0z" fill="#CFEF23" opacity="0.651"/><path d="M0,11h1v1H0z" fill="#D3B809" opacity="0.71"/><path d="M2,0h1v1H2z" fill="#D6F822" opacity="0.745"/><path d="M0,10h1v1H0z" fill="#DFC01A" opacity="0.757"/><path d="M0,12h1v1H0z" fill="#C9F718" opacity="0.769"/><path d="M0,2h1v1H0z" fill="#CDF222" opacity="0.773"/><path d="M13,0h1v1H13z" fill="#D2F723" opacity="0.792"/><path d="M0,5h1v1H0z" fill="#C0E51A" opacity="0.816"/><path d="M0,4h1v1H0z" fill="#C6EB17" opacity="0.816"/><path d="M0,6h1v1H0z" fill="#C9E618" opacity="0.816"/><path d="M15,14h1v1H15z" fill="#C9F127" opacity="0.816"/><path d="M4,0h2v1H4zM9,0h3v1H9z" fill="#CDF222" opacity="0.816"/><path d="M6,0h1v1H6z" fill="#CFF322" opacity="0.816"/><path d="M8,0h1v1H8z" fill="#D0F61F" opacity="0.816"/><path d="M7,0h1v1H7z" fill="#D4FB1D" opacity="0.816"/><path d="M0,8h1v1H0z" fill="#D5F022" opacity="0.816"/><path d="M0,7h1v1H0z" fill="#E0B61D" opacity="0.816"/><path d="M12,0h1v1H12z" fill="#CEF221" opacity="0.824"/><path d="M9,6h1v1H9z" fill="#9BB075" opacity="0.827"/><path d="M3,0h1v1H3z" fill="#CEF221" opacity="0.827"/><path d="M0,9h1v1H0z" fill="#D2FD21" opacity="0.827"/><path d="M0,3h1v1H0z" fill="#D0F522" opacity="0.831"/><path d="M8,10h1v1H8z" fill="#4B4848" opacity="0.859"/><path d="M10,6h1v1H10z" fill="#EBE6D6" opacity="0.89"/><path d="M1,14h1v1H1z" fill="#D0F421" opacity="0.922"/><path d="M15,8h1v1H15z" fill="#95DC0B" opacity="0.933"/><path d="M15,7h1v1H15z" fill="#9EBD4D" opacity="0.933"/><path d="M15,10h1v1H15z" fill="#A7B177" opacity="0.933"/><path d="M15,9h1v1H15z" fill="#ABB952" opacity="0.933"/><path d="M15,6h1v1H15z" fill="#BBCA71" opacity="0.933"/><path d="M15,11h1v1H15z" fill="#BBD01D" opacity="0.933"/><path d="M15,5h1v1H15z" fill="#C1E516" opacity="0.933"/><path d="M15,12h1v1H15z" fill="#D0F320" opacity="0.933"/><path d="M15,4h1v1H15z" fill="#D3F721" opacity="0.933"/><path d="M15,2h1v1H15z" fill="#CCF021" opacity="0.937"/><path d="M9,7h1v1H9z" fill="#4D5441" opacity="0.937"/><path d="M15,3h1v1H15z" fill="#CDF022" opacity="0.941"/><path d="M5,10h1v1H5z" fill="#E1F0D0" opacity="0.945"/><path d="M12,8h1v1H12z" fill="#4B4749" opacity="0.945"/><path d="M8,9h1v1H8z" fill="#FAF9FB" opacity="0.953"/><path d="M15,13h1v1H15z" fill="#CFF121" opacity="0.961"/><path d="M10,7h1v1H10z" fill="#2F2D28" opacity="0.961"/><path d="M9,10h1v1H9z" fill="#323031" opacity="0.976"/><path d="M13,8h1v1H13z" fill="#9E9693" opacity="0.98"/><path d="M5,9h1v1H5z" fill="#ABB09A" opacity="0.98"/><path d="M12,9h1v1H12z" fill="#1C1B19" opacity="0.98"/><path d="M6,10h1v1H6z" fill="#525650" opacity="0.984"/><path d="M11,6h1v1H11z" fill="#FCFDF6" opacity="0.992"/><path d="M12,6h1v1H12z" fill="#FEFEFE" opacity="0.992"/><path d="M13,9h1v1H13z" fill="#272429" opacity="0.992"/><path d="M9,9h1v1H9z" fill="#3D3D3D" opacity="0.992"/><path d="M7,10h1v1H7z" fill="#1F1F20" opacity="0.996"/><path d="M6,9h1v1H6z" fill="#282A06" opacity="0.996"/><path d="M11,7h1v1H11z" fill="#555653" opacity="0.996"/><path d="M7,12h1v1H7z" fill="#656379"/><path d="M8,6h1v1H8z" fill="#667D4D"/><path d="M7,9h1v1H7z" fill="#69696F"/><path d="M7,4h1v1H7z" fill="#6B687A"/><path d="M4,7h1v1H4z" fill="#6F6C80"/><path d="M14,8h1v1H14z" fill="#719246"/><path d="M4,8h1v1H4z" fill="#767574"/><path d="M3,7h1v1H3z" fill="#7C7778"/><path d="M8,12h1v1H8z" fill="#7C7967"/><path d="M9,12h1v1H9z" fill="#828073"/><path d="M7,8h1v1H7z" fill="#82827E"/><path d="M2,9h1v1H2z" fill="#82C10A"/><path d="M12,11h1v1H12z" fill="#848194"/><path d="M7,3h1v1H7z" fill="#8984A5"/><path d="M6,12h1v1H6z" fill="#8A8EA8"/><path d="M7,5h1v1H7z" fill="#8C8C86"/><path d="M3,9h1v1H3z" fill="#8CA753"/><path d="M2,5h1v1H2z" fill="#908AA8"/><path d="M3,6h1v1H3z" fill="#93948D"/><path d="M10,12h1v1H10z" fill="#94978F"/><path d="M2,7h1v1H2z" fill="#959994"/><path d="M14,10h1v1H14z" fill="#9692A3"/><path d="M5,7h1v1H5z" fill="#989892"/><path d="M8,3h1v1H8z" fill="#9EA675"/><path d="M14,5h1v1H14z" fill="#A1AF5D"/><path d="M3,8h1v1H3z" fill="#A2B173"/><path d="M13,4h1v1H13z" fill="#A3B357"/><path d="M8,8h1v1H8z" fill="#A5A4A7"/><path d="M6,7h1v1H6z" fill="#A5A6AD"/><path d="M6,13h1v1H6z" fill="#A5B030"/><path d="M6,6h1v1H6z" fill="#A5BF2C"/><path d="M7,2h1v1H7z" fill="#A6A4B0"/><path d="M1,5h1v1H1z" fill="#A6AA95"/><path d="M11,3h1v1H11z" fill="#A6B658"/><path d="M9,3h1v1H9z" fill="#A7C711"/><path d="M8,2h1v1H8z" fill="#A8B959"/><path d="M12,4h1v1H12z" fill="#A9AF8C"/><path d="M10,3h1v1H10z" fill="#A9B862"/><path d="M1,10h1v1H1z" fill="#A9CB31"/><path d="M11,12h1v1H11z" fill="#ABB288"/><path d="M2,4h1v1H2z" fill="#ABB86E"/><path d="M12,12h1v1H12z" fill="#ABBE4F"/><path d="M4,6h1v1H4z" fill="#ACBA68"/><path d="M9,13h1v1H9z" fill="#ADB95F"/><path d="M6,3h1v1H6z" fill="#ADC054"/><path d="M8,4h1v1H8z" fill="#AEAEAD"/><path d="M13,11h1v1H13z" fill="#AEB789"/><path d="M2,8h1v1H2z" fill="#AED330"/><path d="M1,6h1v1H1z" fill="#AFB97C"/><path d="M6,4h1v1H6z" fill="#B0C061"/><path d="M1,11h1v1H1z" fill="#B0C765"/><path d="M1,4h1v1H1z" fill="#B1BD74"/><path d="M3,5h1v1H3z" fill="#B1C64C"/><path d="M7,6h1v1H7z" fill="#B2B0B8"/><path d="M2,10h1v1H2z" fill="#B2B19B"/><path d="M7,13h1v1H7z" fill="#B2BE62"/><path d="M6,2h1v1H6z" fill="#B2CF29"/><path d="M12,3h1v1H12z" fill="#B4D70F"/><path d="M8,13h1v1H8z" fill="#B7C36A"/><path d="M14,11h1v1H14z" fill="#B7CE3E"/><path d="M10,13h1v1H10z" fill="#B9B938"/><path d="M9,4h1v1H9z" fill="#B9BAB2"/><path d="M13,7h1v1H13z" fill="#B9BCA2"/><path d="M14,7h1v1H14z" fill="#BAC981"/><path d="M2,12h1v1H2z" fill="#BBC39A"/><path d="M7,1h1v1H7z" fill="#BBDB28"/><path d="M5,13h1v1H5z" fill="#BBDF11"/><path d="M3,13h1v1H3z" fill="#BCDF15"/><path d="M13,12h1v1H13z" fill="#BCDF18"/><path d="M6,5h1v1H6z" fill="#BDDA2E"/><path d="M1,12h1v1H1z" fill="#BDDB2F"/><path d="M2,13h1v1H2z" fill="#BDE114"/><path d="M5,6h1v1H5z" fill="#BEDA35"/><path d="M4,13h1v1H4zM11,13h1v1H11z" fill="#C0E215"/><path d="M14,4h1v1H14z" fill="#C2E710"/><path d="M2,3h1v1H2z" fill="#C3E617"/><path d="M3,4h1v1H3z" fill="#C3E714"/><path d="M6,11h1v1H6z" fill="#C4C3C3"/><path d="M10,2h1v1H10z" fill="#C6EB12"/><path d="M3,2h1v1H3z" fill="#C7EA21"/><path d="M11,2h1v1H11z" fill="#C7EC14"/><path d="M4,5h1v1H4z" fill="#C7EF0A"/><path d="M4,2h1v1H4zM13,2h1v1H13zM4,3h1v1H4z" fill="#C8EB21"/><path d="M2,2h1v1H2z" fill="#C8EC21"/><path d="M13,3h1v1H13z" fill="#C8EE14"/><path d="M5,4h1v1H5z" fill="#C8EF15"/><path d="M3,12h1v1H3z" fill="#C9CEB2"/><path d="M5,12h1v1H5z" fill="#CACFAA"/><path d="M8,1h1v1H8z" fill="#CAEE22"/><path d="M1,3h1v1H1z" fill="#CAEF1A"/><path d="M5,3h1v1H5z" fill="#CAF016"/><path d="M4,12h1v1H4z" fill="#CBD0B0"/><path d="M3,3h1v1H3z" fill="#CBEE21"/><path d="M1,7h1v1H1z" fill="#CBF12D"/><path d="M12,13h1v1H12z" fill="#CBF216"/><path d="M4,9h1v1H4z" fill="#CCCACC"/><path d="M12,2h1v1H12z" fill="#CCEF21"/><path d="M4,4h1v1H4z" fill="#CCEF22"/><path d="M1,13h1v1H1z" fill="#CCF01E"/><path d="M5,2h1v1H5z" fill="#CCF11D"/><path d="M9,2h1v1H9z" fill="#CDF513"/><path d="M13,13h1v1H13z" fill="#CFF320"/><path d="M1,8h1v1H1z" fill="#CFF419"/><path d="M14,2h1v1H14z" fill="#CFF422"/><path d="M5,5h1v1H5z" fill="#CFF617"/><path d="M14,3h1v1H14z" fill="#D0F322"/><path d="M12,7h1v1H12z" fill="#D1D1D5"/><path d="M6,1h1v1H6z" fill="#D1F820"/><path d="M11,8h1v1H11z" fill="#151616"/><path d="M3,1h2v1H3zM12,1h1v1H12z" fill="#D2F723"/><path d="M5,1h1v1H5zM10,1h2v1H10z" fill="#D3F823"/><path d="M14,12h1v1H14z" fill="#D3F918"/><path d="M13,1h1v1H13z" fill="#D4F823"/><path d="M9,1h1v1H9z" fill="#D4F923"/><path d="M14,13h1v1H14z" fill="#D5FA22"/><path d="M1,9h1v1H1z" fill="#D6F621"/><path d="M9,14h1v1H9z" fill="#D6FA16"/><path d="M9,5h1v1H9z" fill="#D7D4E0"/><path d="M8,14h1v1H8z" fill="#D7F613"/><path d="M2,1h1v1H2z" fill="#D7FC24"/><path d="M1,2h1v1H1z" fill="#D9FF23"/><path d="M14,14h1v1H14z" fill="#D9FF24"/><path d="M1,1h1v1H1z" fill="#DAFF24"/><path d="M7,14h1v1H7z" fill="#DCFF17"/><path d="M4,14h2v1H4z" fill="#DDFF22"/><path d="M3,14h1v1H3z" fill="#DEFF22"/><path d="M2,14h1v1H2z" fill="#DEFF23"/><path d="M12,14h1v1H12z" fill="#E0FF23"/><path d="M13,5h1v1H13z" fill="#E1DEEF"/><path d="M11,14h1v1H11z" fill="#E1FF22"/><path d="M13,14h1v1H13z" fill="#E1FF23"/><path d="M14,1h1v1H14z" fill="#E1FF25"/><path d="M10,14h1v1H10z" fill="#E2FF1F"/><path d="M6,14h1v1H6z" fill="#E3FF21"/><path d="M11,4h1v1H11z" fill="#EAE7F7"/><path d="M3,10h1v1H3z" fill="#EEEAF3"/><path d="M14,6h1v1H14z" fill="#F2EDFF"/><path d="M10,4h1v1H10z" fill="#F5F2FF"/><path d="M2,11h1v1H2z" fill="#FFFEFF"/><path d="M10,5h3v1H10zM13,6h1v1H13zM4,10h1v1H4zM3,11h3v1H3z" fill="#FFFFFF"/><path d="M8,11h1v1H8z" fill="#1E1F1E"/><path d="M10,10h1v1H10z" fill="#1F1F23"/><path d="M10,9h1v1H10z" fill="#212121"/><path d="M9,11h1v1H9z" fill="#22221B"/><path d="M10,8h1v1H10z" fill="#272829"/><path d="M11,9h1v1H11z" fill="#292929"/><path d="M11,10h1v1H11z" fill="#292A2B"/><path d="M7,11h1v1H7z" fill="#2F2F2E"/><path d="M9,8h1v1H9z" fill="#302F32"/><path d="M12,10h1v1H12z" fill="#3A3B3A"/><path d="M2,6h1v1H2z" fill="#46435C"/><path d="M10,11h1v1H10z" fill="#48472B"/><path d="M13,10h1v1H13z" fill="#4B4A54"/><path d="M8,5h1v1H8z" fill="#4C4755"/><path d="M8,7h1v1H8z" fill="#4D553F"/><path d="M11,11h1v1H11z" fill="#4F4D4E"/><path d="M6,8h1v1H6z" fill="#5C5B54"/><path d="M14,9h1v1H14z" fill="#605D93"/><path d="M5,8h1v1H5z" fill="#615F60"/><path d="M7,7h1v1H7z" fill="#626084"/><path d="M0,14h1v1H0z" fill="#CEEC1E" opacity="0.165"/><path d="M1,15h1v1H1z" fill="#CCEF1E" opacity="0.259"/><path d="M15,15h1v1H15z" fill="#C9F225" opacity="0.318"/><path d="M0,1h1v1H0z" fill="#CEF122" opacity="0.373"/><path d="M1,0h1v1H1z" fill="#CAEF21" opacity="0.384"/></svg>';
 
     const CONFIG_DEFINITIONS = {
-        collapseDescription: { group: '作业卡片', label: '折叠描述文本', icon: 'layout', default: true, legacyKey: 'prts_cfg_link', alias: 'cleanLink', reloadOnDisable: true },
-        operatorAvatars: { group: '作业卡片', label: '干员头像', icon: 'operators', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
-        stageBadge: { group: '作业卡片', label: '关卡代号徽章', icon: 'filter', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
-        showExactTime: { group: '作业卡片', label: '显示作业具体时间', icon: 'time', default: false, legacyKey: 'prts_cfg_exact_time' },
-        cleanLink: { group: '作业卡片', label: '视频链接优化', icon: 'link', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
-        hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'filter', default: false, legacyKey: 'prts_cfg_hide_video' },
-        hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'filter', default: true, reloadOnDisable: true },
-        trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'check', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
-        popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'operators', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
-        hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'layout', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
-        hideOperatorMatchingSettings: { group: '页面增强', label: '隐藏原站干员匹配设置', icon: 'filter', default: true },
-        announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'filter', default: true, reloadOnDisable: true },
-        importantUpdatesOnly: { group: '脚本更新', label: '仅重要更新提示（含紧急更新）', icon: 'download', default: false },
-        compatDebug: { group: '诊断', label: '兼容诊断', icon: 'filter', default: false, legacyKey: 'prts_cfg_compat_debug' },
+        collapseDescription: { group: '作业卡片', label: '折叠描述文本', icon: 'collapseDescription', default: true, legacyKey: 'prts_cfg_link', alias: 'cleanLink', reloadOnDisable: true },
+        operatorAvatars: { group: '作业卡片', label: '干员头像', icon: 'operatorAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        stageBadge: { group: '作业卡片', label: '关卡代号徽章', icon: 'stageBadge', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        showExactTime: { group: '作业卡片', label: '显示作业具体时间', icon: 'exactTime', default: false, legacyKey: 'prts_cfg_exact_time' },
+        cleanLink: { group: '作业卡片', label: '视频链接优化', icon: 'videoLink', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
+        hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
+        hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'hidePrtsBadge', default: true, reloadOnDisable: true },
+        trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'trainingPromptStyle', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
+        popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'popoverAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'hideSidebar', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
+        hideOperatorMatchingSettings: { group: '页面增强', label: '隐藏原站干员匹配设置', icon: 'hideOperatorMatchingSettings', default: true },
+        announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'announcementTags', default: true, reloadOnDisable: true },
+        importantUpdatesOnly: { group: '脚本更新', label: '仅重要更新提示（含紧急更新）', icon: 'importantUpdatesOnly', default: false },
+        compatDebug: { group: '诊断', label: '兼容诊断', icon: 'compatDebug', default: false, legacyKey: 'prts_cfg_compat_debug' },
         filterMode: { default: 'NONE', options: ['NONE', 'PERFECT', 'SUPPORT'], legacyKey: 'prts_plus_filter_mode' },
         displayMode: { default: 'GRAY', options: ['GRAY', 'HIDE'], legacyKey: 'prts_plus_display_mode' },
         trainingCheck: { default: false, legacyKey: 'prts_plus_training_check' },
@@ -1664,6 +1664,11 @@ function createSklandImportCancelledError() {
         label.dataset.prtsStatusState = state;
     }
     // [样式] CSS 样式定义
+    const iconStyles = `
+    .prts-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 auto; line-height: 0; color: inherit; }
+    .prts-icon svg { display: block; width: 100%; height: 100%; }
+`;
+
     const toastStyles = `
     #prts-toast-container { position: fixed; right: 16px; bottom: 24px; z-index: 2147483647; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
     .prts-toast { pointer-events: auto; padding: 10px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #1f2937; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18); transform: translateY(0); opacity: 1; transition: opacity 0.18s ease, transform 0.18s ease; }
@@ -1997,6 +2002,7 @@ function createSklandImportCancelledError() {
     #prts-float-container.snap-left:not(:hover):not(:focus-within):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 16px)); }
 
     .prts-float-btn { width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none; border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2; }
+    .prts-float-btn > .prts-icon { width: 24px; height: 24px; }
     .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; opacity: 0; }
     #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
     body.dark .prts-float-btn { background-color: #30404d; border-color: #415262; color: #f5f8fa; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
@@ -2722,8 +2728,8 @@ function createSklandImportCancelledError() {
     .prts-account-import { width: 100%; margin-top: var(--prts-space-2); }
     .prts-submenu-button { flex-shrink: 0; width: 100%; min-height: 44px !important; justify-content: flex-start !important; margin: 0 !important; }
     .prts-submenu-button[hidden] { display: none !important; }
-    .prts-submenu-arrow { margin-left: auto; font-size: 20px; }
-    .prts-submenu-left .prts-submenu-arrow { transform: rotate(180deg); }
+    .prts-submenu-arrow { margin-left: auto; }
+    .prts-submenu-left .prts-submenu-arrow, .prts-submenu-left .prts-submenu-close .prts-icon { transform: rotate(180deg); }
     #prts-float-container .prts-submenu-button[aria-expanded='true'] { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary-hover) !important; }
     .prts-about-name { margin: var(--prts-space-2) 0; color: var(--prts-color-text); font-size: 17px; overflow-wrap: anywhere; }
     .prts-about-version { margin: 0 0 var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
@@ -3128,7 +3134,7 @@ function createSklandImportCancelledError() {
     .prts-modal-actions-extra .prts-import-action:active { transform: translateY(1px); }
 `;
 
-    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + accountSelectStyles + scriptUpdateStyles);
+    GM_addStyle(iconStyles + toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + accountSelectStyles + scriptUpdateStyles);
     // =========================================================================
     //                            MODULE 3.5: DOM UI HELPERS
     // =========================================================================
@@ -3136,27 +3142,49 @@ function createSklandImportCancelledError() {
     const SVG_NS = 'http://www.w3.org/2000/svg';
     let prtsModalCleanup = null;
 
+    // 16px 实心图标：名称对应用途；不同含义使用不同轮廓。
     const PRTS_ICON_PATHS = {
-        account: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
-        archive: 'M2 2h12v3H2V2zm1 4h10v8H3V6zm3 2v1.5h4V8H6z',
-        check: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
-        close: 'M3.72 2.28 8 6.56l4.28-4.28 1.44 1.44L9.44 8l4.28 4.28-1.44 1.44L8 9.44l-4.28 4.28-1.44-1.44L6.56 8 2.28 3.72z',
-        download: 'M8 11.5 3.75 7.25l1.1-1.1L7.2 8.5V1h1.6v7.5l2.35-2.35 1.1 1.1L8 11.5zM2 13h12v1.6H2V13z',
-        eyeOff: 'M6.41 7.83c-.03.39.07.79.31 1.12.24.34.59.58.98.68.39.1.81.02 1.15-.21.34-.23.59-.57.7-.96.1-.39.02-.8-.21-1.15-.16-.23-.38-.42-.64-.53L6.41 7.83z M2.05 2.64 1.03 3.66l12.9 12.07 1.02-1.02-2.08-2.09C14.05 11.84 15 10.72 16 8c0 0-3-5-8-5-1.23 0-2.36.3-3.37.8L2.05 2.64zM8 12c-2.21 0-4-1.79-4-4 0-.2.02-.39.05-.58l5.04 5.04C8.74 12.56 8.37 12 8 12z',
-        eyeOn: 'M8 3C3 3 0 8 0 8s3 5 8 5 8-5 8-5-3-5-8-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z M8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
-        filter: 'M1 2h14L9.5 8v5.5L6.5 15V8L1 2z',
-        import: 'M11 6h3l-6 6-6-6h3V1h6v5zm-9 8v2h12v-2h-2v1H4v-1H2z',
-        info: 'M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14a6 6 0 1 1 0-12 6 6 0 0 1 0 12zM7.2 7h1.6v5H7.2V7zm0-3h1.6v1.6H7.2V4z',
-        layout: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
-        link: 'M6.2 10.6 5.1 9.5l4.4-4.4 1.1 1.1-4.4 4.4zm-1.6 2.2c-1 0-1.9-.4-2.6-1.1-1.4-1.4-1.4-3.8 0-5.2l2.2-2.2 1.1 1.1-2.2 2.2c-.8.8-.8 2.2 0 3 .8.8 2.2.8 3 0l1.1 1.1c-.7.7-1.6 1.1-2.6 1.1zm7.2-1.1-1.1-1.1 2.2-2.2c.8-.8.8-2.2 0-3-.8-.8-2.2-.8-3 0L8.8 4.3c1.4-1.4 3.8-1.4 5.2 0 1.4 1.4 1.4 3.8 0 5.2l-2.2 2.2z',
-        missing: 'M8 1.4 15.2 14H.8L8 1.4zm0 3.1L3.5 12.4h9L8 4.5zm-.8 2.4h1.6v2.9H7.2V6.9zm0 3.8h1.6v1.5H7.2v-1.5z',
-        operators: 'M5.5 7.2A2.6 2.6 0 1 1 5.5 2a2.6 2.6 0 0 1 0 5.2zM1 13.5c.3-2.7 2.1-4.4 4.5-4.4s4.2 1.7 4.5 4.4H1zm10.6-4.3a2.2 2.2 0 1 1 0-4.4 2.2 2.2 0 0 1 0 4.4zm-.8 4.3c-.1-1.2-.5-2.2-1.1-3 .5-.2 1.1-.3 1.9-.3 1.9 0 3.3 1.2 3.5 3.3h-4.3z',
-        save: 'M2 1h10l2 2v12H2V1zm2 2v4h7V3H4zm1 8v2h6v-2H5z',
-        settings: 'M9.5 1 10 3l1.8.8 1.8-.9 1.5 2.6-1.7 1.2c.1.4.1.8.1 1.3s0 .9-.1 1.3l1.7 1.2-1.5 2.6-1.8-.9-1.8.8-.5 2h-3l-.5-2-1.8-.8-1.8.9L.9 10.5l1.7-1.2C2.5 8.9 2.5 8.5 2.5 8s0-.9.1-1.3L.9 5.5l1.5-2.6 1.8.9L6 3l.5-2h3zM8 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2z',
-        support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm6.4 6.4H.8V12c0-.88.72-1.6 1.6-1.6h9.6c.88 0 1.6.72 1.6 1.6v2.4z',
-        upload: 'M8 4.5 3.75 8.75l1.1 1.1L7.2 7.5V15h1.6V7.5l2.35 2.35 1.1-1.1L8 4.5zM2 1h12v1.6H2V1z',
-        time: 'M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0zm0 14a6 6 0 1 1 0-12 6 6 0 0 1 0 12zm1-6.41V4a1 1 0 0 0-2 0v4c0 .28.11.53.29.71l2 2a1 1 0 0 0 1.42-1.42z',
-        video: 'M2 3h8c.55 0 1 .45 1 1v2l3-2v8l-3-2v2c0 .55-.45 1-1 1H2c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1z'
+        account: 'M11 4.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM2 14c0-3 2.4-5 6-5s6 2 6 5v1H2Z',
+        accounts: 'M1 3h14v11H1Zm1.5 1.5v8h11v-8ZM7.5 7a2 2 0 1 1-4 0 2 2 0 0 1 4 0ZM3 12c0-1.6 1-2.5 2.5-2.5S8 10.4 8 12Zm6-6h3v1.5H9Zm0 3h3v1.5H9Z',
+        selected: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM4 8l1.1-1.1L7 8.8l3.9-3.9L12 6l-5 5Z',
+        perfectSquad: 'M5.5 4a2.5 2.5 0 1 1 5 0 2.5 2.5 0 0 1-5 0ZM1 5a2 2 0 1 1 4 0 2 2 0 0 1-4 0Zm10 0a2 2 0 1 1 4 0 2 2 0 0 1-4 0ZM4 13v-2c0-2 1.7-3 4-3 1.2 0 2.2.3 2.9.8L8 11.7 6.9 10.6 5 12.5l.5.5ZM0 12v-1c0-2 1.2-3 3-3h.8A4.6 4.6 0 0 0 2.5 11v1Zm8.2 1.1 1.1-1.1 1.6 1.6 3.5-3.5 1.1 1.1-4.6 4.6Z',
+        support: 'M9 4.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM1 14v-1c0-2.5 2-4 5-4 .8 0 1.6.1 2.3.4A5 5 0 0 0 7 13v1ZM11 8h1.5v2.75h2.75v1.5H12.5V15H11v-2.75H8.25v-1.5H11Z',
+        trainingCheck: 'M5 1h6v2h3v12H2V3h3Zm1.5 1.5v2h3v-2ZM3.5 4.5v9h9v-9H11V6H5V4.5ZM5 9l1.1-1.1L8 9.8l2.9-2.9L12 8l-4 4Z',
+        grayMode: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5v11a5.5 5.5 0 0 0 0-11Z',
+        hideMode: 'M1.6.5 15.5 14.4l-1.1 1.1L.5 1.6ZM8 3c3.3 0 5.7 2.5 7.5 5a15 15 0 0 1-2.7 3l-1.1-1.1a12 12 0 0 0 2-1.9C12.2 6.1 10.3 4.5 8 4.5h-.6L6 3.1ZM3.2 4.9 4.3 6a13 13 0 0 0-2 2c1.5 1.9 3.4 3.5 5.7 3.5h.6l1.4 1.4L8 13C4.7 13 2.3 10.5.5 8a15 15 0 0 1 2.7-3.1Z',
+        showAll: 'M8 3c3.3 0 5.7 2.5 7.5 5-1.8 2.5-4.2 5-7.5 5S2.3 10.5.5 8C2.3 5.5 4.7 3 8 3Zm0 1.5C5.7 4.5 3.8 6.1 2.3 8c1.5 1.9 3.4 3.5 5.7 3.5s4.2-1.6 5.7-3.5C12.2 6.1 10.3 4.5 8 4.5ZM10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z',
+        importOperators: 'M12 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM8 9h1c3.6 0 6 2 6 5v1H8v-2h5c-.5-1.4-1.9-2-4-2H8ZM1 9h3V7l4 4-4 4v-2H1Z',
+        importBackup: 'M7 1h4l4 4v10H7v-1.5h6.5V6H10V2.5H7Zm4.5 2.1V4.5h1.4ZM1 7h4V4.5L9.5 9 5 13.5V11H1Z',
+        exportBackup: 'M2 1h7l4 4v3h-1.5V6H8V2.5H3.5v11H8V15H2Zm7.5 2.1v1.4h1.4ZM7 10h4V7.5l4 3.5-4 3.5V12H7Z',
+        checkUpdates: 'M4 11h-.5C1.6 11 .5 9.5.5 7.7c0-1.7 1.1-3 2.7-3.3C4 .8 11.8.8 12.6 4.4c1.7.2 2.9 1.6 2.9 3.3 0 1.8-1.1 3.3-3 3.3H12V9.5h.5c.9 0 1.5-.7 1.5-1.8 0-1-.8-1.8-1.8-1.8h-.8l-.2-.8c-.6-2.8-5.8-2.8-6.4 0l-.2.8h-.8C2.8 5.9 2 6.7 2 7.7c0 1.1.6 1.8 1.5 1.8H4ZM7 7h2v5h2l-3 3-3-3h2Z',
+        reload: 'M13.5 1v5.5H8L10 4.5a4.5 4.5 0 1 0 2.4 5H14A6 6 0 1 1 11.1 3.4Z',
+        cards: 'M4 1h11v11h-1.5V2.5H4ZM1 4h11v11H1Zm1.5 1.5v8h8v-8ZM4 8h5v1.5H4Zm0 3h4v1.5H4Z',
+        pageEnhancements: 'M1 2h14v12H1Zm1.5 4v6.5h11V6Zm0-2.5v1h11v-1ZM8 6.5l.9 2.1L11 9.5l-2.1.9L8 12.5l-.9-2.1L5 9.5l2.1-.9Z',
+        collapseDescription: 'M2 1h12v1.5H2Zm0 3h12v1.5H2Zm0 3h8v1.5H2Zm2 6 4-4 4 4-1.1 1.1L8 11.2l-2.9 2.9Z',
+        operatorAvatars: 'M1 1h14v14H1Zm1.5 1.5v11h11v-11ZM10.5 6a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM4 12c0-2 1.5-3 4-3s4 1 4 3Z',
+        stageBadge: 'M8 1a5 5 0 0 1 5 5c0 3.5-5 9-5 9S3 9.5 3 6a5 5 0 0 1 5-5Zm0 1.5A3.5 3.5 0 0 0 4.5 6c0 2.1 2.2 5.2 3.5 6.7 1.3-1.5 3.5-4.6 3.5-6.7A3.5 3.5 0 0 0 8 2.5ZM10 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
+        exactTime: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM7 4h1.5v3.6l2.8 1.6-.8 1.3L7 8.4Z',
+        videoLink: 'M1 2h8v6H7.5V3.5h-5v7H6V12H1ZM4 5l3 2-3 2Zm5 4h4v1.5H9Zm-1-2h2v1.5H8a2 2 0 0 0 0 4h2V14H8a3.5 3.5 0 0 1 0-7Zm4 0h.5a3.5 3.5 0 0 1 0 7H12v-1.5h.5a2 2 0 0 0 0-4H12Z',
+        hideVideo: 'M1 1.5 14.5 15l1-1L2 0ZM1 5h1.5v6.5h6V10L10 11.5V13H1ZM6 3h4v2.5L15 3v9l-3-1.5v-2L13.5 10V5.5L10 7.3V4.5H7.5Z',
+        hidePrtsBadge: 'M1 1.5 14.5 15l1-1L2 0ZM5 2h5l5 5v3l-1.5 1.5-1.1-1.1L13.5 9.4V7.6L9.4 3.5H6.5ZM1 4h1.5v5.4l4.1 4.1h1.8l1.7-1.7 1.1 1.1L9 15H6L1 10Z',
+        trainingPromptStyle: 'M1 2h3v3H1Zm5 .5h9V4H6ZM1 6.5h3v3H1ZM6 7h9v1.5H6ZM1 11h3v3H1Zm5 .5h7V13H6Z',
+        popoverAvatars: 'M1 1h14v11h-4l-4 3v-3H1Zm1.5 1.5v8h6v1.5l2-1.5h3v-8ZM7 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm5 0a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM3.5 9V8c0-1.3 4-1.3 4 0v1Zm5 0V8c0-1.3 4-1.3 4 0v1Z',
+        hideSidebar: 'M1 2h14v12H1Zm1.5 1.5v9h3v-9Zm4.5 0v9h6.5v-9Zm3 1 1 1-2 2h3v1.5H9l2 2-1 1L6.8 8Z',
+        hideOperatorMatchingSettings: 'M2 1h1.5v4H2Zm0 7h1.5v7H2ZM.5 5h4.5v3H.5ZM7 1h1.5v8H7ZM5.5 9H10v3H5.5ZM7 12h1.5v3H7Zm5-11h1.5v3H12Zm-1.5 3H15v3h-4.5Zm.7 5.2 1.8 1.8 1.8-1.8 1 1-1.8 1.8 1.8 1.8-1 1-1.8-1.8-1.8 1.8-1-1 1.8-1.8-1.8-1.8Z',
+        announcementTags: 'M1 5h4l7-4v12l-7-4H1Zm1.5 1.5v1h3l5 2.9V3.6l-5 2.9ZM3 10h2l1 5H4Zm10.5-5h2v1.5h-2Zm0 3h2v1.5h-2Z',
+        importantUpdatesOnly: 'M8 1a4 4 0 0 1 4 4v4l2 2v1H2v-1l2-2V5a4 4 0 0 1 4-4Zm0 1.5A2.5 2.5 0 0 0 5.5 5v4.6l-.9.9h6.8l-.9-.9V5A2.5 2.5 0 0 0 8 2.5ZM6 13h4a2 2 0 0 1-4 0ZM7.2 4h1.6v3.5H7.2Zm0 4.5h1.6V10H7.2Z',
+        compatDebug: 'M4 1 6 3h4l2-2 1 1-2 2 .7 1H15v1.5h-3V8h3v1.5h-3V11h3v1.5h-3.5A4 4 0 0 1 8 15a4 4 0 0 1-3.5-2.5H1V11h3V9.5H1V8h3V6.5H1V5h3.3L5 4 3 2Zm1.5 5v5a2.5 2.5 0 0 0 5 0V6ZM7.2 7h1.6v6H7.2Z',
+        missingOperators: 'M9 4.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM1 14v-1c0-2.5 2-4 5-4 .8 0 1.6.1 2.3.4A5 5 0 0 0 7 13v1ZM9 11h6v2H9Z',
+        lowTraining: 'M8 1a7 7 0 0 1 7 7v3h-1.5V8a5.5 5.5 0 0 0-11 0v3H1V8a7 7 0 0 1 7-7ZM7.2 3h1.6v2H7.2ZM3.5 5l1.4 1.4-1 1L2.5 6Zm9 0 1 1-1.4 1.4-1-1ZM7 7h2v5h2l-3 3-3-3h2Z',
+        pending: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM5.5 6a2.5 2.5 0 1 1 4 2l-.8.6V10H7.2V7.9l1.4-1.1A1 1 0 1 0 7 6ZM7.2 11h1.6v1.5H7.2Z',
+        unmarkedTraining: 'M2 1h7l4 4v10H2Zm1.5 1.5v11h8V6H8V2.5Zm6 .6v1.4h1.4ZM5 8a2 2 0 1 1 3.2 1.6l-.5.4v.5H6.3v-1l1-1A.6.6 0 1 0 6.4 8Zm1.3 3.5h1.4V13H6.3Z',
+        about: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM7.2 4h1.6v1.6H7.2Zm0 3h1.6v5H7.2Z',
+        close: 'M3 1.9 8 6.9l5-5L14.1 3l-5 5 5 5-1.1 1.1-5-5-5 5L1.9 13l5-5-5-5Z',
+        collapsePanel: 'M10.5 2 4.5 8l6 6 1.1-1.1L6.7 8l4.9-4.9Z',
+        expandSubmenu: 'M5.5 2 4.4 3.1 9.3 8l-4.9 4.9L5.5 14l6-6Z',
+        playVideo: 'M1 2h14v12H1Zm1.5 1.5v9h11v-9ZM6 5l5 3-5 3Z',
+        externalSource: 'M8 1h7v7h-1.5V3.6L7.1 10 6 8.9l6.4-6.4H8ZM1 4h5v1.5H2.5v8h8V10H12v5H1Z',
+        settings: 'M6.5 1h3l.5 2 1.8.8 1.8-.9 1.5 2.6-1.7 1.2v2.6l1.7 1.2-1.5 2.6-1.8-.9-1.8.8-.5 2h-3L6 13l-1.8-.8-1.8.9L.9 10.5l1.7-1.2V6.7L.9 5.5l1.5-2.6 1.8.9L6 3ZM8 5a3 3 0 1 0 0 6 3 3 0 0 0 0-6Z'
     };
 
     function getFocusableDialogElements(root) {
@@ -3210,7 +3238,7 @@ function createSklandImportCancelledError() {
 
     function createSvgIconFromPath(pathData, viewBox = '0 0 16 16') {
         const span = document.createElement('span');
-        span.className = 'bp4-icon';
+        span.className = 'bp4-icon prts-icon';
         span.setAttribute('aria-hidden', 'true');
 
         const svg = document.createElementNS(SVG_NS, 'svg');
@@ -3218,6 +3246,7 @@ function createSklandImportCancelledError() {
         svg.setAttribute('height', '16');
         svg.setAttribute('viewBox', viewBox);
         svg.setAttribute('fill', 'currentColor');
+        svg.setAttribute('fill-rule', 'evenodd');
         svg.setAttribute('focusable', 'false');
 
         const path = document.createElementNS(SVG_NS, 'path');
@@ -3236,22 +3265,23 @@ function createSklandImportCancelledError() {
                 imported.classList.add('prts-btn-icon-svg');
                 imported.setAttribute('aria-hidden', 'true');
                 imported.setAttribute('focusable', 'false');
+                imported.dataset.prtsIcon = 'skland';
                 return imported;
             }
         } catch (error) {
             console.warn('[Better PRTS] Failed to render Skland icon', error);
         }
 
-        return createSvgIconFromPath('M2 2h12v12H2z');
+        return createPrtsIcon('externalSource');
     }
 
     function createPrtsIcon(icon) {
         if (!icon) return null;
-        if (icon === 'skland' || icon.type === 'skland') return createSklandIconImage();
-        if (typeof icon === 'string') return createSvgIconFromPath(PRTS_ICON_PATHS[icon] || icon);
-        if (icon.path) return createSvgIconFromPath(icon.path, icon.viewBox || '0 0 16 16');
-        if (icon instanceof Node) return icon.cloneNode(true);
-        return null;
+        if (icon === 'skland') return createSklandIconImage();
+        if (!Object.hasOwn(PRTS_ICON_PATHS, icon)) return null;
+        const element = createSvgIconFromPath(PRTS_ICON_PATHS[icon]);
+        element.dataset.prtsIcon = icon;
+        return element;
     }
 
     function createPrtsButton({
@@ -4980,7 +5010,7 @@ function createSklandImportCancelledError() {
             message.className = 'prts-filter-empty-message';
             empty.appendChild(message);
             empty.appendChild(createPrtsButton({
-                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'eyeOn',
+                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'showAll',
                 onClick: () => {
                     toggleDisplayMode();
                     const activeRoot = getOperationListRoot();
@@ -5111,20 +5141,20 @@ function createSklandImportCancelledError() {
 
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
-        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'import', ariaLabel: importText, onClick: handleImport });
+        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'importOperators', ariaLabel: importText, onClick: handleImport });
 
         const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: 'skland', onClick: handleOpenSklandImport });
 
         // (3) 模式切换
         const displayModeText = CONFIG.displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
-        const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
+        const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'grayMode' : 'hideMode';
         const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: CONFIG.displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
 
         // (4) 完美阵容
         const btnPerfect = createPrtsButton({
             id: 'btn-perfect',
             text: '完美阵容',
-            icon: 'check',
+            icon: 'perfectSquad',
             onClick: () => toggleFilter('PERFECT'),
             active: CONFIG.filterMode === 'PERFECT',
             pressed: CONFIG.filterMode === 'PERFECT'
@@ -5140,7 +5170,7 @@ function createSklandImportCancelledError() {
             pressed: CONFIG.filterMode === 'SUPPORT'
         });
         const btnTraining = createPrtsButton({
-            id: 'btn-training', text: '校验练度', icon: 'check',
+            id: 'btn-training', text: '校验练度', icon: 'trainingCheck',
             onClick: toggleTrainingCheck, active: CONFIG.trainingCheck, pressed: CONFIG.trainingCheck
         });
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
@@ -5240,7 +5270,7 @@ function createSklandImportCancelledError() {
             linkBtn.rel = "noopener noreferrer";
             linkBtn.className = 'prts-bili-link';
             linkBtn.setAttribute('aria-label', '打开参考视频');
-            linkBtn.appendChild(createPrtsIcon('video'));
+            linkBtn.appendChild(createPrtsIcon('playVideo'));
             linkBtn.appendChild(document.createTextNode('参考视频'));
             linkBtn.onclick = (e) => e.stopPropagation();
 
@@ -5829,7 +5859,7 @@ function createSklandImportCancelledError() {
                 const label = cardInner.querySelector('.prts-status-label') || document.createElement('div');
                 label.onclick = null;
                 label.onkeydown = null;
-                updateStatusLabel(label, 'prts-status-label prts-label-support', 'support', '作业数据待核验');
+                updateStatusLabel(label, 'prts-status-label prts-label-support', 'pending', '作业数据待核验');
                 if (!label.parentElement) cardInner.appendChild(label);
             }
             return diagnostics;
@@ -5916,7 +5946,7 @@ function createSklandImportCancelledError() {
         } else if (missingCount > 0 && CONFIG.filterMode !== 'NONE') {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
-            iconText = 'missing';
+            iconText = lowTraining.length ? 'lowTraining' : 'missingOperators';
             labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
         if (CONFIG.trainingCheck) {
@@ -5925,7 +5955,7 @@ function createSklandImportCancelledError() {
             if (!hasRequirements) labelText += `${labelText ? ' · ' : ''}未标注练度`;
         }
         if (!iconText) {
-            iconText = lowTraining.length ? 'missing' : unknownTraining.length ? 'support' : 'check';
+            iconText = lowTraining.length ? 'lowTraining' : unknownTraining.length ? 'pending' : 'unmarkedTraining';
             if (lowTraining.length) newClass += ' prts-label-missing';
             else if (unknownTraining.length) newClass += ' prts-label-support';
         }
@@ -6408,7 +6438,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const name = document.createElement('span');
             name.className = 'prts-account-name';
             heading.appendChild(name);
-            heading.appendChild(createPrtsIcon('check'));
+            heading.appendChild(createPrtsIcon('selected'));
             button.appendChild(heading);
             const count = document.createElement('span');
             count.className = 'prts-account-count';
@@ -6443,14 +6473,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         btn.setAttribute('aria-expanded', 'false');
         btn.setAttribute('aria-controls', 'prts-settings-panel');
         btn.style.touchAction = 'none';
-        const floatSvg = document.createElementNS(SVG_NS, 'svg');
-        floatSvg.setAttribute('viewBox', '0 0 32 32');
-        floatSvg.setAttribute('aria-hidden', 'true');
-        floatSvg.setAttribute('focusable', 'false');
-        const floatPath = document.createElementNS(SVG_NS, 'path');
-        floatPath.setAttribute('d', 'M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z');
-        floatSvg.appendChild(floatPath);
-        btn.appendChild(floatSvg);
+        btn.appendChild(createPrtsIcon('settings'));
 
         const panel = document.createElement('div');
         panel.id = 'prts-settings-panel';
@@ -6515,7 +6538,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             heading.textContent = label;
             head.appendChild(heading);
             const close = createPrtsButton({
-                className: 'prts-btn prts-submenu-close', icon: 'close', ariaLabel: `收起${label}`,
+                className: 'prts-btn prts-submenu-close', icon: 'collapsePanel', ariaLabel: `收起${label}`,
                 onClick: () => setSubmenuOpen(null)
             });
             head.appendChild(close);
@@ -6528,10 +6551,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 icon, text: label, ariaControls: submenuPanel.id, expanded: false,
                 onClick: () => setSubmenuOpen(activeSubmenu === submenu ? null : submenu)
             });
-            const arrow = document.createElement('span');
-            arrow.className = 'prts-submenu-arrow';
-            arrow.setAttribute('aria-hidden', 'true');
-            arrow.textContent = '›';
+            const arrow = createPrtsIcon('expandSubmenu');
+            arrow.classList.add('prts-submenu-arrow');
             button.appendChild(arrow);
             content.appendChild(button);
             submenuPanel.dataset.triggerId = button.id;
@@ -6540,11 +6561,11 @@ ${formatSklandImportSummary(summary)}`, 'success');
             submenus.push(submenu);
             return submenu;
         };
-        const cards = createSubmenu('cards', '作业卡片', 'layout');
-        const pageEnhancements = createSubmenu('page', '页面增强', 'settings');
-        const accounts = createSubmenu('accounts', '账号与数据', 'account');
-        const about = createSubmenu('about', '关于', 'info');
-        const diagnostics = createSubmenu('diagnostics', '诊断', 'filter');
+        const cards = createSubmenu('cards', '作业卡片', 'cards');
+        const pageEnhancements = createSubmenu('page', '页面增强', 'pageEnhancements');
+        const accounts = createSubmenu('accounts', '账号与数据', 'accounts');
+        const about = createSubmenu('about', '关于', 'about');
+        const diagnostics = createSubmenu('diagnostics', '诊断', 'compatDebug');
         const aboutContent = about.body;
         const aboutName = document.createElement('h3');
         aboutName.className = 'prts-about-name';
@@ -6589,7 +6610,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         reloadStatus.textContent = '已保存，刷新后生效';
         reloadNotice.appendChild(reloadStatus);
         reloadNotice.appendChild(createPrtsButton({
-            text: '立即刷新', icon: 'check', onClick: () => location.reload()
+            text: '立即刷新', icon: 'reload', onClick: () => location.reload()
         }));
         panel.appendChild(reloadNotice);
 
@@ -6672,7 +6693,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         });
         diagnostics.body.appendChild(updatePreviewActions);
         aboutContent.appendChild(createPrtsButton({
-            className: 'prts-btn prts-about-update', icon: 'download', text: '检查脚本更新',
+            className: 'prts-btn prts-about-update', icon: 'checkUpdates', text: '检查脚本更新',
             onClick: () => checkScriptUpdates(true)
         }));
 
@@ -6682,7 +6703,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         const accTitle = document.createElement('span');
         accTitle.className = 'prts-panel-item-label';
-        accTitle.appendChild(createPrtsIcon('account'));
+        accTitle.appendChild(createPrtsIcon('accounts'));
         const accTitleText = document.createElement('span');
         accTitleText.textContent = '账号管理';
         accTitle.appendChild(accTitleText);
@@ -6699,7 +6720,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         accounts.body.appendChild(accRow);
 
-        const importBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'import', text: '导入干员数据', onClick: handleImport });
+        const importBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'importOperators', text: '导入干员数据', onClick: handleImport });
         accounts.body.appendChild(importBtn);
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
@@ -6708,9 +6729,9 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
 
-        const exportBtn = createPrtsButton({ className: 'prts-btn', icon: 'download', text: '导出全部配置', onClick: handleExportAccountsBackup });
+        const exportBtn = createPrtsButton({ className: 'prts-btn', icon: 'exportBackup', text: '导出全部配置', onClick: handleExportAccountsBackup });
 
-        const importBackupBtn = createPrtsButton({ className: 'prts-btn', icon: 'upload', text: '导入全部配置', onClick: handleImportAccountsBackup });
+        const importBackupBtn = createPrtsButton({ className: 'prts-btn', icon: 'importBackup', text: '导入全部配置', onClick: handleImportAccountsBackup });
 
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);

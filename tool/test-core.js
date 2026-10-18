@@ -1163,6 +1163,39 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
+test('script icons cover semantic uses with distinct paths and accessible 16px SVGs', () => {
+  const sandbox = {
+    document: { createElement: createTestElement, createElementNS: (_namespace, tag) => createTestElement(tag) },
+    console: { warn() {} }
+  };
+  const helperSource = fs.readFileSync(path.join(repoRoot, 'src/ui/dom-helpers.js'), 'utf8');
+  vm.runInNewContext(`${helperSource}\nglobalThis.iconPaths = PRTS_ICON_PATHS;`, sandbox);
+  const entries = Object.entries(sandbox.iconPaths);
+  assert.strictEqual(new Set(entries.map(([, path]) => path)).size, entries.length);
+  const settingIcons = Object.values(CONFIG_DEFINITIONS).filter(definition => definition.icon).map(definition => definition.icon);
+  assert.strictEqual(new Set(settingIcons).size, settingIcons.length, 'different settings need different symbols');
+  for (const file of ['src/ui/panels.js', 'src/ui/import-controls.js', 'src/dom/page-enhancements.js']) {
+    const source = fs.readFileSync(path.join(repoRoot, file), 'utf8');
+    for (const [, , name] of source.matchAll(/(?:icon:\s*|createPrtsIcon\(\s*)(['"])(\w+)\1/g)) {
+      assert(name === 'skland' || sandbox.iconPaths[name], `${file}: unregistered icon ${name}`);
+    }
+  }
+  for (const name of [...settingIcons, ...entries.map(([name]) => name)]) {
+    const element = sandbox.createPrtsIcon(name);
+    assert.strictEqual(element.dataset.prtsIcon, name);
+    assert.strictEqual(element.attributes.get('aria-hidden'), 'true');
+    const svg = element.firstChild;
+    assert.strictEqual(svg.attributes.get('viewBox'), '0 0 16 16');
+    assert.strictEqual(svg.attributes.get('focusable'), 'false');
+    assert.strictEqual(svg.attributes.get('fill'), 'currentColor');
+    assert.strictEqual(svg.attributes.get('fill-rule'), 'evenodd');
+    assert(svg.firstChild.attributes.get('d').startsWith('M'));
+  }
+  assert.strictEqual(sandbox.createPrtsIcon('typo'), null);
+  assert.strictEqual(sandbox.createPrtsIcon('toString'), null);
+  assert.strictEqual(sandbox.createSklandIconImage().dataset.prtsIcon, 'externalSource');
+});
+
 test('settings categories preserve controls and state while switching and collapsing submenus', () => {
   const body = createTestElement('body');
   const listeners = new Map();
@@ -1348,13 +1381,14 @@ test('real modal buttons return distinct update choices and keep Escape local', 
   assert.strictEqual(document.getElementById('prts-toast-container').parentElement, body);
 });
 
-test('both host branches inject toast layout, state and reduced-motion styles', () => {
+test('both host branches inject icon, toast layout, state and reduced-motion styles', () => {
   for (const skland of [false, true]) {
     let css = '';
     vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/styles/styles.js'), 'utf8'), {
       isSklandHost: () => skland,
       GM_addStyle: styles => { css += styles; }
     });
+    assert.match(css, /\.prts-icon\s*\{[^}]*display:\s*inline-flex/, skland ? 'Skland' : 'PRTS Plus');
     assert.match(css, /#prts-toast-container\s*\{[^}]*position:\s*fixed/, skland ? 'Skland' : 'PRTS Plus');
     for (const state of ['loading', 'success', 'error']) {
       assert(css.includes(`.prts-toast.${state}`), `${skland ? 'Skland' : 'PRTS Plus'}: ${state}`);
@@ -2261,7 +2295,7 @@ test('training panels retain all comparisons, render literal text and preserve e
       ] }
     ];
     const render = () => updateTrainingStatusLabel(label, 'prts-status-label prts-label-missing',
-      'missing', '练度不足', issues);
+      'lowTraining', '练度不足', issues);
     render();
     assert.strictEqual(label.attributes.has('aria-label'), false);
     assert.strictEqual(label.children[2].children[0].textContent, '<img onerror=alert(1)>干员组：术师');
@@ -2299,7 +2333,7 @@ test('compact training prompts expand full comparisons and update when the style
       { label: '等级', current: '1级', required: '精二60级', status: 'low' }
     ] }));
     const render = () => updateTrainingStatusLabel(label, 'prts-status-label prts-label-missing',
-      'missing', '练度不足', issues);
+      'lowTraining', '练度不足', issues);
     render();
     let stopped = 0;
     const event = { stopPropagation() { stopped++; }, preventDefault() { assert.fail('native disclosure should remain enabled'); } };
@@ -3335,6 +3369,33 @@ function createFilterPage(displayMode) {
   };
   return { page, addCard, errors, cards, frames, body };
 }
+
+test('card status icons distinguish missing operators, support, low training and pending data', () => {
+  for (const [mode, checkTraining, operator, training, icon] of [
+    ['PERFECT', false, { name: 'W' }, {}, 'missingOperators'],
+    ['SUPPORT', false, { name: 'W' }, {}, 'support'],
+    ['PERFECT', true, { name: '阿米娅', requirements: { elite: 2 } }, { elite: 1 }, 'lowTraining'],
+    ['NONE', true, { name: '阿米娅', requirements: { elite: 2 } }, {}, 'pending'],
+    ['NONE', true, { name: '阿米娅' }, {}, 'unmarkedTraining']
+  ]) {
+    const { page, addCard } = createFilterPage('GRAY');
+    page.createPrtsIcon = name => {
+      const element = createTestElement('svg');
+      element.dataset.prtsIcon = name;
+      return element;
+    };
+    Object.assign(page.__testExports.CONFIG, { filterMode: mode, trainingCheck: checkTraining });
+    const state = page.getCurrentAccountState();
+    state.accountsTraining[1] = { '阿米娅': training };
+    page.publishAccountState(state);
+    const { inner } = addCard({ opers: [operator] });
+    page.applyFilterLogic();
+    const label = inner.querySelector('.prts-status-label');
+    const findIcon = node => node.dataset.prtsIcon || node.children.map(findIcon).find(Boolean);
+    assert(label, `${icon}: status should be visible`);
+    assert.strictEqual(findIcon(label), icon);
+  }
+});
 
 test('filter statistics partition cards using the same availability results as rendering', () => {
   for (const displayMode of ['GRAY', 'HIDE']) {

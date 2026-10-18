@@ -71,7 +71,7 @@
             linkBtn.rel = "noopener noreferrer";
             linkBtn.className = 'prts-bili-link';
             linkBtn.setAttribute('aria-label', '打开参考视频');
-            linkBtn.appendChild(createPrtsIcon('video'));
+            linkBtn.appendChild(createPrtsIcon('playVideo'));
             linkBtn.appendChild(document.createTextNode('参考视频'));
             linkBtn.onclick = (e) => e.stopPropagation();
 
@@ -660,7 +660,7 @@
                 const label = cardInner.querySelector('.prts-status-label') || document.createElement('div');
                 label.onclick = null;
                 label.onkeydown = null;
-                updateStatusLabel(label, 'prts-status-label prts-label-support', 'support', '作业数据待核验');
+                updateStatusLabel(label, 'prts-status-label prts-label-support', 'pending', '作业数据待核验');
                 if (!label.parentElement) cardInner.appendChild(label);
             }
             return diagnostics;
@@ -747,7 +747,7 @@
         } else if (missingCount > 0 && CONFIG.filterMode !== 'NONE') {
             newClass += ' prts-label-missing';
             const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
-            iconText = 'missing';
+            iconText = lowTraining.length ? 'lowTraining' : 'missingOperators';
             labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
         }
         if (CONFIG.trainingCheck) {
@@ -756,7 +756,7 @@
             if (!hasRequirements) labelText += `${labelText ? ' · ' : ''}未标注练度`;
         }
         if (!iconText) {
-            iconText = lowTraining.length ? 'missing' : unknownTraining.length ? 'support' : 'check';
+            iconText = lowTraining.length ? 'lowTraining' : unknownTraining.length ? 'pending' : 'unmarkedTraining';
             if (lowTraining.length) newClass += ' prts-label-missing';
             else if (unknownTraining.length) newClass += ' prts-label-support';
         }

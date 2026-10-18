@@ -402,7 +402,7 @@
             message.className = 'prts-filter-empty-message';
             empty.appendChild(message);
             empty.appendChild(createPrtsButton({
-                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'eyeOn',
+                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'showAll',
                 onClick: () => {
                     toggleDisplayMode();
                     const activeRoot = getOperationListRoot();
@@ -533,20 +533,20 @@
 
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
-        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'import', ariaLabel: importText, onClick: handleImport });
+        const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'importOperators', ariaLabel: importText, onClick: handleImport });
 
         const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: 'skland', onClick: handleOpenSklandImport });
 
         // (3) 模式切换
         const displayModeText = CONFIG.displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
-        const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
+        const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'grayMode' : 'hideMode';
         const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: CONFIG.displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
 
         // (4) 完美阵容
         const btnPerfect = createPrtsButton({
             id: 'btn-perfect',
             text: '完美阵容',
-            icon: 'check',
+            icon: 'perfectSquad',
             onClick: () => toggleFilter('PERFECT'),
             active: CONFIG.filterMode === 'PERFECT',
             pressed: CONFIG.filterMode === 'PERFECT'
@@ -562,7 +562,7 @@
             pressed: CONFIG.filterMode === 'SUPPORT'
         });
         const btnTraining = createPrtsButton({
-            id: 'btn-training', text: '校验练度', icon: 'check',
+            id: 'btn-training', text: '校验练度', icon: 'trainingCheck',
             onClick: toggleTrainingCheck, active: CONFIG.trainingCheck, pressed: CONFIG.trainingCheck
         });
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';

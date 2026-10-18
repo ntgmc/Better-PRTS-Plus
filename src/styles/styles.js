@@ -1,4 +1,9 @@
     // [样式] CSS 样式定义
+    const iconStyles = `
+    .prts-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 auto; line-height: 0; color: inherit; }
+    .prts-icon svg { display: block; width: 100%; height: 100%; }
+`;
+
     const toastStyles = `
     #prts-toast-container { position: fixed; right: 16px; bottom: 24px; z-index: 2147483647; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
     .prts-toast { pointer-events: auto; padding: 10px 12px; border-radius: 6px; border: 1px solid #e5e7eb; background: #ffffff; color: #1f2937; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.18); transform: translateY(0); opacity: 1; transition: opacity 0.18s ease, transform 0.18s ease; }
@@ -332,6 +337,7 @@
     #prts-float-container.snap-left:not(:hover):not(:focus-within):not(.prts-float-open):not(.is-dragging) { transform: translateX(calc(-100% + 16px)); }
 
     .prts-float-btn { width: 48px; height: 48px; background-color: #fff; border: 1px solid #e5e7eb; border-right: none; border-radius: 8px 0 0 8px; box-shadow: -2px 2px 8px rgba(0,0,0,0.1); cursor: pointer; display: flex; align-items: center; justify-content: center; color: #374151; transition: all 0.3s; position: relative; z-index: 2; }
+    .prts-float-btn > .prts-icon { width: 24px; height: 24px; }
     .prts-float-btn svg { width: 24px; height: 24px; fill: currentColor; opacity: 0; }
     #prts-float-container.snap-left .prts-float-btn { border-radius: 0 8px 8px 0; border-right: 1px solid #e5e7eb; border-left: none; box-shadow: 2px 2px 8px rgba(0,0,0,0.1); }
     body.dark .prts-float-btn { background-color: #30404d; border-color: #415262; color: #f5f8fa; box-shadow: -2px 2px 12px rgba(0,0,0,0.5); }
@@ -1057,8 +1063,8 @@
     .prts-account-import { width: 100%; margin-top: var(--prts-space-2); }
     .prts-submenu-button { flex-shrink: 0; width: 100%; min-height: 44px !important; justify-content: flex-start !important; margin: 0 !important; }
     .prts-submenu-button[hidden] { display: none !important; }
-    .prts-submenu-arrow { margin-left: auto; font-size: 20px; }
-    .prts-submenu-left .prts-submenu-arrow { transform: rotate(180deg); }
+    .prts-submenu-arrow { margin-left: auto; }
+    .prts-submenu-left .prts-submenu-arrow, .prts-submenu-left .prts-submenu-close .prts-icon { transform: rotate(180deg); }
     #prts-float-container .prts-submenu-button[aria-expanded='true'] { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary-hover) !important; }
     .prts-about-name { margin: var(--prts-space-2) 0; color: var(--prts-color-text); font-size: 17px; overflow-wrap: anywhere; }
     .prts-about-version { margin: 0 0 var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
@@ -1463,4 +1469,4 @@
     .prts-modal-actions-extra .prts-import-action:active { transform: translateY(1px); }
 `;
 
-    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + accountSelectStyles + scriptUpdateStyles);
+    GM_addStyle(iconStyles + toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + accountSelectStyles + scriptUpdateStyles);

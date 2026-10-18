@@ -402,7 +402,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const name = document.createElement('span');
             name.className = 'prts-account-name';
             heading.appendChild(name);
-            heading.appendChild(createPrtsIcon('check'));
+            heading.appendChild(createPrtsIcon('selected'));
             button.appendChild(heading);
             const count = document.createElement('span');
             count.className = 'prts-account-count';
@@ -437,14 +437,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         btn.setAttribute('aria-expanded', 'false');
         btn.setAttribute('aria-controls', 'prts-settings-panel');
         btn.style.touchAction = 'none';
-        const floatSvg = document.createElementNS(SVG_NS, 'svg');
-        floatSvg.setAttribute('viewBox', '0 0 32 32');
-        floatSvg.setAttribute('aria-hidden', 'true');
-        floatSvg.setAttribute('focusable', 'false');
-        const floatPath = document.createElementNS(SVG_NS, 'path');
-        floatPath.setAttribute('d', 'M27,7.35l-9-5.2a4,4,0,0,0-4,0L5,7.35a4,4,0,0,0-2,3.46V21.19a4,4,0,0,0,2,3.46l9,5.2a4,4,0,0,0,4,0l9-5.2a4,4,0,0,0,2-3.46V10.81A4,4,0,0,0,27,7.35Zm-11.74-3a1.51,1.51,0,0,1,1.5,0l8.49,4.9L16,14.56,6.76,9.22Zm-9,18.17a1.51,1.51,0,0,1-.75-1.3v-9.8l9.24,5.33V27.39Zm19.48,0-8.49,4.9V16.72l9.24-5.33v9.8A1.51,1.51,0,0,1,25.74,22.49Z');
-        floatSvg.appendChild(floatPath);
-        btn.appendChild(floatSvg);
+        btn.appendChild(createPrtsIcon('settings'));
 
         const panel = document.createElement('div');
         panel.id = 'prts-settings-panel';
@@ -509,7 +502,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             heading.textContent = label;
             head.appendChild(heading);
             const close = createPrtsButton({
-                className: 'prts-btn prts-submenu-close', icon: 'close', ariaLabel: `收起${label}`,
+                className: 'prts-btn prts-submenu-close', icon: 'collapsePanel', ariaLabel: `收起${label}`,
                 onClick: () => setSubmenuOpen(null)
             });
             head.appendChild(close);
@@ -522,10 +515,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 icon, text: label, ariaControls: submenuPanel.id, expanded: false,
                 onClick: () => setSubmenuOpen(activeSubmenu === submenu ? null : submenu)
             });
-            const arrow = document.createElement('span');
-            arrow.className = 'prts-submenu-arrow';
-            arrow.setAttribute('aria-hidden', 'true');
-            arrow.textContent = '›';
+            const arrow = createPrtsIcon('expandSubmenu');
+            arrow.classList.add('prts-submenu-arrow');
             button.appendChild(arrow);
             content.appendChild(button);
             submenuPanel.dataset.triggerId = button.id;
@@ -534,11 +525,11 @@ ${formatSklandImportSummary(summary)}`, 'success');
             submenus.push(submenu);
             return submenu;
         };
-        const cards = createSubmenu('cards', '作业卡片', 'layout');
-        const pageEnhancements = createSubmenu('page', '页面增强', 'settings');
-        const accounts = createSubmenu('accounts', '账号与数据', 'account');
-        const about = createSubmenu('about', '关于', 'info');
-        const diagnostics = createSubmenu('diagnostics', '诊断', 'filter');
+        const cards = createSubmenu('cards', '作业卡片', 'cards');
+        const pageEnhancements = createSubmenu('page', '页面增强', 'pageEnhancements');
+        const accounts = createSubmenu('accounts', '账号与数据', 'accounts');
+        const about = createSubmenu('about', '关于', 'about');
+        const diagnostics = createSubmenu('diagnostics', '诊断', 'compatDebug');
         const aboutContent = about.body;
         const aboutName = document.createElement('h3');
         aboutName.className = 'prts-about-name';
@@ -583,7 +574,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         reloadStatus.textContent = '已保存，刷新后生效';
         reloadNotice.appendChild(reloadStatus);
         reloadNotice.appendChild(createPrtsButton({
-            text: '立即刷新', icon: 'check', onClick: () => location.reload()
+            text: '立即刷新', icon: 'reload', onClick: () => location.reload()
         }));
         panel.appendChild(reloadNotice);
 
@@ -666,7 +657,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         });
         diagnostics.body.appendChild(updatePreviewActions);
         aboutContent.appendChild(createPrtsButton({
-            className: 'prts-btn prts-about-update', icon: 'download', text: '检查脚本更新',
+            className: 'prts-btn prts-about-update', icon: 'checkUpdates', text: '检查脚本更新',
             onClick: () => checkScriptUpdates(true)
         }));
 
@@ -676,7 +667,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         const accTitle = document.createElement('span');
         accTitle.className = 'prts-panel-item-label';
-        accTitle.appendChild(createPrtsIcon('account'));
+        accTitle.appendChild(createPrtsIcon('accounts'));
         const accTitleText = document.createElement('span');
         accTitleText.textContent = '账号管理';
         accTitle.appendChild(accTitleText);
@@ -693,7 +684,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         accounts.body.appendChild(accRow);
 
-        const importBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'import', text: '导入干员数据', onClick: handleImport });
+        const importBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'importOperators', text: '导入干员数据', onClick: handleImport });
         accounts.body.appendChild(importBtn);
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
@@ -702,9 +693,9 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
 
-        const exportBtn = createPrtsButton({ className: 'prts-btn', icon: 'download', text: '导出全部配置', onClick: handleExportAccountsBackup });
+        const exportBtn = createPrtsButton({ className: 'prts-btn', icon: 'exportBackup', text: '导出全部配置', onClick: handleExportAccountsBackup });
 
-        const importBackupBtn = createPrtsButton({ className: 'prts-btn', icon: 'upload', text: '导入全部配置', onClick: handleImportAccountsBackup });
+        const importBackupBtn = createPrtsButton({ className: 'prts-btn', icon: 'importBackup', text: '导入全部配置', onClick: handleImportAccountsBackup });
 
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
