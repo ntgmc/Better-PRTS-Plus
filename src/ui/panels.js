@@ -377,6 +377,31 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.style.left = `${panelLeft - ballLeft}px`;
         panel.style.right = 'auto';
         panel.style.top = `${panelTop - ballTop}px`;
+
+        const aboutPanel = document.getElementById('prts-about-panel');
+        container.classList.toggle('prts-submenu-left', savedPos.isRight);
+        if (!aboutPanel || aboutPanel.hidden) return;
+        const roomLeft = panelLeft - left - 12;
+        const roomRight = left + width - 12 - panelLeft - panel.offsetWidth;
+        let opensLeft = savedPos.isRight;
+        aboutPanel.style.setProperty('--prts-about-width', `${Math.max(0, width - 48)}px`);
+        aboutPanel.style.maxHeight = `${Math.max(0, height - 24)}px`;
+        const fitsLeft = roomLeft >= aboutPanel.offsetWidth + 8;
+        const fitsRight = roomRight >= aboutPanel.offsetWidth + 8;
+        if (opensLeft ? !fitsLeft && fitsRight : !fitsRight && fitsLeft) opensLeft = !opensLeft;
+        let aboutLeft;
+        if (fitsLeft || fitsRight) {
+            aboutLeft = opensLeft ? panelLeft - aboutPanel.offsetWidth - 8 : panelLeft + panel.offsetWidth + 8;
+        } else {
+            // 窄屏保留上一级的 24px 边缘，仍按同一方向逐层展开。
+            aboutPanel.style.setProperty('--prts-about-width', `${Math.max(0, panel.offsetWidth - 24)}px`);
+            aboutLeft = opensLeft ? panelLeft + panel.offsetWidth - aboutPanel.offsetWidth - 24 : panelLeft + 24;
+        }
+        const entryTop = document.getElementById('prts-settings-about-button').getBoundingClientRect().top;
+        const aboutTop = Math.max(top + 12, Math.min(entryTop, top + height - aboutPanel.offsetHeight - 12));
+        aboutPanel.style.left = `${aboutLeft - ballLeft}px`;
+        aboutPanel.style.top = `${aboutTop - ballTop}px`;
+        container.classList.toggle('prts-submenu-left', opensLeft);
     }
 
     function createFloatingBall() {
@@ -414,12 +439,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
         titleText.type = 'button';
         titleText.className = 'prts-settings-heading';
         titleText.textContent = '设置';
-        const backButton = createPrtsButton({
-            id: 'prts-settings-back', className: 'prts-btn prts-settings-back', icon: 'back',
-            ariaLabel: '返回设置', onClick: () => setAboutOpen(false)
-        });
-        backButton.hidden = true;
-        title.appendChild(backButton);
         title.appendChild(titleText);
         title.appendChild(createPrtsButton({
             className: 'prts-btn prts-settings-close', icon: 'close', ariaLabel: '关闭脚本设置面板',
@@ -435,10 +454,26 @@ ${formatSklandImportSummary(summary)}`, 'success');
         content.className = 'prts-settings-content';
         panel.appendChild(content);
 
+        const aboutPanel = document.createElement('div');
+        aboutPanel.id = 'prts-about-panel';
+        aboutPanel.hidden = true;
+        aboutPanel.setAttribute('role', 'region');
+        aboutPanel.setAttribute('aria-labelledby', 'prts-about-title');
+        const aboutHead = document.createElement('div');
+        aboutHead.className = 'prts-modal-head';
+        const aboutTitle = document.createElement('h2');
+        aboutTitle.id = 'prts-about-title';
+        aboutTitle.className = 'prts-modal-title';
+        aboutTitle.textContent = '关于';
+        aboutHead.appendChild(aboutTitle);
+        const aboutClose = createPrtsButton({
+            className: 'prts-btn prts-about-close', icon: 'close', ariaLabel: '收起关于',
+            onClick: () => setAboutOpen(false)
+        });
+        aboutHead.appendChild(aboutClose);
+        aboutPanel.appendChild(aboutHead);
         const aboutContent = document.createElement('div');
-        aboutContent.id = 'prts-settings-about';
-        aboutContent.className = 'prts-settings-content';
-        aboutContent.hidden = true;
+        aboutContent.className = 'prts-about-content';
         const aboutName = document.createElement('h3');
         aboutName.className = 'prts-about-name';
         aboutName.textContent = 'Better-PRTS-Plus';
@@ -472,7 +507,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             aboutLinks.appendChild(link);
         });
         aboutContent.appendChild(aboutLinks);
-        panel.appendChild(aboutContent);
+        aboutPanel.appendChild(aboutContent);
 
         const reloadNotice = document.createElement('div');
         reloadNotice.id = 'prts-settings-reload';
@@ -493,7 +528,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         if (debugOptionsRevealed) debugOptions.classList.add('is-visible');
 
         const revealDebugOptions = event => {
-            if (!event.shiftKey || !aboutContent.hidden) return;
+            if (!event.shiftKey) return;
             event.preventDefault();
             event.stopPropagation();
             debugOptionsRevealed = !debugOptionsRevealed;
@@ -655,8 +690,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         const aboutButton = createPrtsButton({
             id: 'prts-settings-about-button', className: 'prts-btn prts-settings-about-button',
-            icon: 'info', text: '关于', ariaControls: aboutContent.id, expanded: false,
-            onClick: () => setAboutOpen(true)
+            icon: 'info', text: '关于', ariaControls: aboutPanel.id, expanded: false,
+            onClick: () => setAboutOpen(aboutPanel.hidden)
         });
         const submenuArrow = document.createElement('span');
         submenuArrow.className = 'prts-submenu-arrow';
@@ -665,18 +700,15 @@ ${formatSklandImportSummary(summary)}`, 'success');
         aboutButton.appendChild(submenuArrow);
         content.appendChild(aboutButton);
 
-        const setAboutOpen = isOpen => {
-            content.hidden = isOpen;
-            aboutContent.hidden = !isOpen;
-            backButton.hidden = !isOpen;
-            titleText.textContent = isOpen ? '关于' : '设置';
-            panel.setAttribute('aria-label', `Better-PRTS-Plus ${isOpen ? '关于' : '设置'}`);
+        const setAboutOpen = (isOpen, restoreFocus = true) => {
+            aboutPanel.hidden = !isOpen;
             aboutButton.setAttribute('aria-expanded', String(isOpen));
-            updateFloatingLayout();
-            (isOpen ? backButton : aboutButton).focus({ preventScroll: true });
+            if (isOpen) updateFloatingLayout();
+            if (isOpen || restoreFocus) (isOpen ? aboutClose : aboutButton).focus({ preventScroll: true });
         };
 
         container.appendChild(panel);
+        container.appendChild(aboutPanel);
         container.appendChild(btn);
         document.body.appendChild(container);
         refreshAccountControls();
@@ -684,7 +716,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
         window.addEventListener('resize', updateFloatingLayout);
         window.visualViewport?.addEventListener('resize', updateFloatingLayout);
         window.visualViewport?.addEventListener('scroll', updateFloatingLayout);
-        new ResizeObserver(updateFloatingLayout).observe(panel);
+        const panelObserver = new ResizeObserver(updateFloatingLayout);
+        panelObserver.observe(panel);
+        panelObserver.observe(aboutPanel);
+        content.addEventListener('scroll', updateFloatingLayout);
 
         let isDragging = false;
         let hasMoved = false;
@@ -761,6 +796,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         document.addEventListener('pointercancel', finishDrag);
 
         const setFloatOpen = isOpen => {
+            if (!isOpen) setAboutOpen(false, false);
             if (isOpen) updateFloatingLayout();
             container.classList.toggle('prts-float-open', isOpen);
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
@@ -771,14 +807,19 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (!hasMoved || e.detail === 0) setFloatOpen(!container.classList.contains('prts-float-open'));
             hasMoved = false;
         };
-        panel.onclick = (e) => e.stopPropagation();
+        panel.onclick = event => {
+            event.stopPropagation();
+            if (!event.target.closest?.('#prts-settings-about-button')) setAboutOpen(false, false);
+        };
+        aboutPanel.onclick = event => event.stopPropagation();
         document.addEventListener('click', event => {
             if (!isDragging && !event.target.closest?.('#prts-modal-backdrop, #prts-import-dialog-backdrop')) setFloatOpen(false);
         });
         document.addEventListener('keydown', event => {
             if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
-                event.target.closest?.('#prts-modal-backdrop, #prts-import-dialog-backdrop')) return;
-            if (!aboutContent.hidden) setAboutOpen(false);
+                document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) return;
+            event.preventDefault();
+            if (!aboutPanel.hidden) setAboutOpen(false);
             else {
                 setFloatOpen(false);
                 btn.focus({ preventScroll: true });

@@ -1013,7 +1013,6 @@
         font-family: var(--prts-font-sans) !important;
     }
     .prts-settings-panel * { box-sizing: border-box; }
-    .prts-settings-panel [hidden] { display: none !important; }
     .prts-settings-panel > .prts-panel-title { flex-shrink: 0; gap: var(--prts-space-2); }
     .prts-settings-heading {
         margin-right: auto;
@@ -1026,19 +1025,33 @@
         white-space: nowrap;
     }
     .prts-settings-heading:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
-    .prts-settings-close, .prts-settings-back { flex: 0 0 44px; width: 44px; min-height: 44px !important; margin: 0 !important; padding: 0 !important; }
-    .prts-settings-back .bp4-icon { margin-right: 0 !important; }
+    .prts-settings-close, .prts-about-close { flex: 0 0 44px; width: 44px; min-height: 44px !important; margin: 0 !important; padding: 0 !important; }
+    .prts-about-close .bp4-icon { margin-right: 0 !important; }
     .prts-settings-content { min-height: 0; overflow: auto; overscroll-behavior: contain; }
-    /* Hallmark · component: about submenu · theme: existing PRTS tokens
-     * pre-emit critique: P4 H4 E4 S5 R5 V3 · states: default, hover, focus, active */
+    /* Hallmark · component: cascading about panel · theme: existing PRTS tokens
+     * states: open, closed, hover, focus, active */
+    #prts-about-panel {
+        position: absolute; z-index: 4; display: flex; flex-direction: column;
+        width: min(340px, var(--prts-about-width, calc(100vw - 48px)));
+        max-height: calc(100dvh - 24px); padding: 0; overflow: hidden; box-sizing: border-box;
+        border: 1px solid var(--prts-color-border-soft); border-radius: var(--prts-radius-lg);
+        background: var(--prts-color-surface); color: var(--prts-color-text);
+        box-shadow: var(--prts-shadow-lg); font-family: var(--prts-font-sans);
+    }
+    #prts-about-panel[hidden] { display: none !important; }
+    #prts-about-panel *, #prts-about-panel > .prts-modal-head { box-sizing: border-box; }
+    #prts-about-panel > .prts-modal-head { flex-shrink: 0; align-items: center; }
+    .prts-about-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 var(--prts-space-4) var(--prts-space-4); }
     .prts-settings-about-button { width: 100%; min-height: 44px !important; justify-content: flex-start !important; margin: var(--prts-space-3) 0 0 !important; }
     .prts-submenu-arrow { margin-left: auto; font-size: 20px; }
+    .prts-submenu-left .prts-submenu-arrow { transform: rotate(180deg); }
+    #prts-settings-about-button[aria-expanded='true'] { background: var(--prts-color-surface-hover) !important; }
     .prts-about-name { margin: var(--prts-space-2) 0; color: var(--prts-color-text); font-size: 17px; overflow-wrap: anywhere; }
     .prts-about-version { margin: 0 0 var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
     .prts-about-description, .prts-about-credits { margin: var(--prts-space-3) 0; color: var(--prts-color-text-muted); font-size: 13px; line-height: 1.65; white-space: pre-line; }
     .prts-about-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--prts-space-2); margin: var(--prts-space-3) 0; }
     .prts-about-links .prts-btn { min-width: 0; min-height: 44px !important; margin: 0 !important; text-decoration: none; }
-    #prts-settings-about .prts-btn, #prts-settings-about-button { color: var(--prts-color-text-muted) !important; }
+    #prts-about-panel .prts-btn, #prts-settings-about-button { color: var(--prts-color-text-muted) !important; }
     .prts-about-update { width: 100%; min-height: 44px !important; margin: var(--prts-space-2) 0 !important; }
     .prts-settings-content .prts-panel-actions { flex-wrap: wrap; }
     .prts-settings-content .prts-panel-actions .prts-btn { flex: 1 1 118px !important; min-width: 0; }

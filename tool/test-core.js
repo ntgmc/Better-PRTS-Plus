@@ -618,6 +618,28 @@ test('automatic checks defer until an active import or confirmation closes', asy
   assert.strictEqual(h.requests.length, 1);
 });
 
+test('automatic updates wait for About to close while manual checks can open above it', async () => {
+  const h = createScriptUpdateHarness();
+  let hidden = false;
+  h.sandbox.document.getElementById = id => id === 'prts-about-panel' ? { hidden } : null;
+  const automatic = h.api.checkScriptUpdates();
+  h.respond();
+  assert.strictEqual(await automatic, false);
+  assert.strictEqual(h.dialogs.length, 0);
+  const manual = h.api.checkScriptUpdates(true);
+  h.respond();
+  assert.strictEqual(await manual, true);
+  assert.strictEqual(h.dialogs.length, 1);
+  const other = createScriptUpdateHarness();
+  other.sandbox.document.getElementById = h.sandbox.document.getElementById;
+  const pending = other.api.checkScriptUpdates();
+  other.respond();
+  await pending;
+  hidden = true;
+  assert.strictEqual(await other.api.checkScriptUpdates(), true);
+  assert.strictEqual(other.dialogs.length, 1);
+});
+
 test('update style previews cover all levels and buttons without changing real update behavior', async () => {
   for (const level of ['normal', 'important', 'urgent']) {
     for (const choice of ['important', 'skip', true, null]) {
@@ -873,7 +895,7 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
-test('About submenu contains updates and project information, saves preferences and returns keyboard focus', () => {
+test('About cascades from unchanged settings and closes one level at a time', () => {
   const body = createTestElement('body');
   const listeners = new Map();
   const all = node => [node, ...node.children.flatMap(all)];
@@ -885,7 +907,8 @@ test('About submenu contains updates and project information, saves preferences 
   };
   document.createElement = tag => {
     const element = createTestElement(tag);
-    element.addEventListener = () => {};
+    element.events = new Map();
+    element.addEventListener = (event, listener) => element.events.set(event, listener);
     element.focus = () => { document.activeElement = element; };
     return element;
   };
@@ -907,12 +930,14 @@ test('About submenu contains updates and project information, saves preferences 
   sandbox.updateFloatingLayout = () => {};
   sandbox.createFloatingBall();
   const main = document.getElementById('prts-settings-main');
-  const about = document.getElementById('prts-settings-about');
+  const about = document.getElementById('prts-about-panel');
   const entry = document.getElementById('prts-settings-about-button');
-  const back = document.getElementById('prts-settings-back');
   const ball = body.firstChild.lastChild;
+  main.scrollTop = 123;
+  const originalContent = main.textContent;
+  assert.strictEqual(about.tagName, 'DIV');
+  assert.strictEqual(about.parentElement, ball.parentElement);
   assert.strictEqual(about.hidden, true);
-  assert.strictEqual(back.hidden, true);
   assert(!main.textContent.includes('脚本更新'));
   assert(!main.textContent.includes('检查脚本更新'));
   assert(about.textContent.includes('7.8.9-beta.1'));
@@ -923,34 +948,55 @@ test('About submenu contains updates and project information, saves preferences 
   assert(links.every(link => link.href.startsWith('https://github.com/') && link.target === '_blank' && link.rel === 'noopener noreferrer'));
   ball.onclick({ stopPropagation() {}, detail: 0 });
   entry._prtsClickHandler();
-  assert.strictEqual(main.hidden, true);
   assert.strictEqual(about.hidden, false);
+  assert.notStrictEqual(main.hidden, true);
+  assert.strictEqual(main.textContent, originalContent);
+  assert.strictEqual(main.scrollTop, 123);
   assert.strictEqual(entry.attributes.get('aria-expanded'), 'true');
-  assert.strictEqual(document.activeElement, back);
+  const close = all(about).find(node => node.attributes.get('aria-label') === '收起关于');
+  assert.strictEqual(document.activeElement, close);
   const preference = all(about).find(node => node.dataset.prtsConfigKey === 'importantUpdatesOnly');
   preference.onchange({ target: { checked: true } });
   assert.strictEqual(sandbox.CONFIG.importantUpdatesOnly, true);
   assert.strictEqual(saves, 1);
   all(about).find(node => node.tagName === 'BUTTON' && node.textContent === '检查脚本更新')._prtsClickHandler();
   assert.strictEqual(checks, 1);
-  const modalTarget = { closest: () => ({}) };
-  listeners.get('click')({ target: modalTarget });
-  listeners.get('keydown')({ key: 'Escape', target: modalTarget });
+  const escape = () => listeners.get('keydown')({ key: 'Escape', target: body, preventDefault() {} });
+  const modal = createTestElement();
+  modal.id = 'prts-modal';
+  body.appendChild(modal);
+  listeners.get('click')({ target: { closest: () => modal } });
+  escape();
   assert.strictEqual(about.hidden, false);
-  back._prtsClickHandler();
-  assert.strictEqual(main.hidden, false);
+  modal.remove();
+  escape();
   assert.strictEqual(about.hidden, true);
   assert.strictEqual(document.activeElement, entry);
+  assert(body.firstChild.classList.contains('prts-float-open'));
+  assert.strictEqual(main.scrollTop, 123);
+  assert.strictEqual(entry.attributes.get('aria-expanded'), 'false');
   entry._prtsClickHandler();
-  listeners.get('keydown')({ key: 'Escape', target: back });
+  entry._prtsClickHandler();
+  assert.strictEqual(about.hidden, true, 'clicking About again collapses just the child');
+  entry._prtsClickHandler();
+  close._prtsClickHandler();
   assert.strictEqual(about.hidden, true);
-  assert.strictEqual(document.activeElement, entry);
-  listeners.get('keydown')({ key: 'Escape', target: entry });
+  assert(body.firstChild.classList.contains('prts-float-open'));
+  entry._prtsClickHandler();
+  document.getElementById('prts-settings-panel').onclick({ target: body, stopPropagation() {} });
+  assert.strictEqual(about.hidden, true, 'using the parent collapses its child');
+  entry._prtsClickHandler();
+  listeners.get('click')({ target: body });
+  assert.strictEqual(about.hidden, true);
+  assert(!body.firstChild.classList.contains('prts-float-open'));
+  ball.onclick({ stopPropagation() {}, detail: 0 });
+  assert.strictEqual(about.hidden, true, 'reopening settings leaves the child collapsed');
+  escape();
   assert(!body.firstChild.classList.contains('prts-float-open'));
   assert.strictEqual(document.activeElement, ball);
 });
 
-test('real modal buttons return distinct update choices and preserve existing confirmation behavior', async () => {
+test('real modal buttons return distinct update choices and keep Escape local', async () => {
   const body = createTestElement('body');
   const listeners = new Map();
   const document = { body, activeElement: null, addEventListener: (event, listener) => listeners.set(event, listener), removeEventListener: event => listeners.delete(event) };
@@ -965,7 +1011,7 @@ test('real modal buttons return distinct update choices and preserve existing co
     return visit(body);
   };
   class ElementType { static [Symbol.hasInstance](value) { return value?.nodeType === 1; } }
-  const sandbox = { document, Node: ElementType, HTMLElement: ElementType, window: { setTimeout: callback => callback() } };
+  const sandbox = { document, Node: ElementType, HTMLElement: ElementType, window: { setTimeout: callback => callback(), clearTimeout() {} } };
   vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/ui/dom-helpers.js'), 'utf8'), sandbox);
   for (const [index, expected] of [[0, 'important'], [1, 'skip'], [2, true]]) {
     const pending = sandbox.showPrtsModal({ title: '更新', message: '说明', extraAction: { text: '仅重要更新提示', value: 'important' }, cancelValue: 'skip' });
@@ -980,8 +1026,13 @@ test('real modal buttons return distinct update choices and preserve existing co
   document.getElementById('prts-modal').lastChild.firstChild.onclick();
   assert.strictEqual(await confirm, false);
   const escaped = sandbox.showPrtsModal({ extraAction: { text: '偏好', value: 'important' } });
-  listeners.get('keydown')({ key: 'Escape' });
+  assert.strictEqual(document.getElementById('prts-modal-backdrop').parentElement, body);
+  let prevented = false, stopped = false;
+  listeners.get('keydown')({ key: 'Escape', preventDefault: () => { prevented = true; }, stopPropagation: () => { stopped = true; } });
   assert.strictEqual(await escaped, null);
+  assert(prevented && stopped);
+  sandbox.showPrtsToast('页面反馈', 'info', '', 0);
+  assert.strictEqual(document.getElementById('prts-toast-container').parentElement, body);
 });
 
 test('both host branches inject toast layout, state and reduced-motion styles', () => {
@@ -1380,7 +1431,7 @@ test('settings batch reload notices survive multiple changes and clear when reve
   assert.strictEqual(reloaded.needsSettingsReload(), false);
 });
 
-test('floating layout clamps both edges and the panel to the visible viewport', () => {
+test('floating layout cascades both edges and keeps parent and child within the visible viewport', () => {
   const page = createAccountPage(new Map(), 'prts.plus');
   const config = page.__testExports.CONFIG;
   const container = Object.assign(createTestElement(), { offsetWidth: 48, offsetHeight: 48 });
@@ -1390,7 +1441,17 @@ test('floating layout clamps both edges and the panel to the visible viewport', 
     get offsetWidth() { return Math.min(320, parseFloat(this.style['--prts-panel-width'])); },
     get offsetHeight() { return Math.min(560, parseFloat(this.style['--prts-panel-max-height'])); }
   };
-  page.document = { getElementById: id => id === 'prts-float-container' ? container : panel };
+  const about = {
+    hidden: false,
+    style: { setProperty(key, value) { this[key] = value; } },
+    get offsetWidth() { return Math.min(340, parseFloat(this.style['--prts-about-width'])); },
+    get offsetHeight() { return Math.min(600, parseFloat(this.style.maxHeight)); }
+  };
+  const entry = { getBoundingClientRect: () => ({ top: parseFloat(container.style.top) + parseFloat(panel.style.top) + panel.offsetHeight - 60 }) };
+  page.document = { getElementById: id => ({
+    'prts-float-container': container, 'prts-settings-panel': panel,
+    'prts-about-panel': about, 'prts-settings-about-button': entry
+  })[id] };
   for (const [width, height, offsetLeft, offsetTop] of [
     [320, 568, 0, 0], [375, 667, 0, 0], [414, 896, 0, 0],
     [768, 1024, 0, 0], [667, 375, 0, 0], [192, 340, 80, 120], [160, 284, 0, 0], [333, 187, 0, 0]
@@ -1411,6 +1472,19 @@ test('floating layout clamps both edges and the panel to the visible viewport', 
         const panelLeft = ballLeft + parseFloat(panel.style.left);
         assert(panelLeft >= offsetLeft + 12);
         assert(panelLeft + panel.offsetWidth <= offsetLeft + width - 12);
+        const aboutLeft = ballLeft + parseFloat(about.style.left);
+        const aboutTop = ballTop + parseFloat(about.style.top);
+        assert(aboutLeft >= offsetLeft + 12);
+        assert(aboutLeft + about.offsetWidth <= offsetLeft + width - 12);
+        assert(aboutTop >= offsetTop + 12);
+        assert(aboutTop + about.offsetHeight <= offsetTop + height - 12);
+        if (width >= 768) {
+          assert(isRight ? aboutLeft + about.offsetWidth + 8 <= panelLeft : aboutLeft >= panelLeft + panel.offsetWidth + 8);
+        } else {
+          assert.strictEqual(about.offsetWidth, panel.offsetWidth - 24);
+          assert.strictEqual(isRight ? panelLeft + panel.offsetWidth - aboutLeft - about.offsetWidth : aboutLeft - panelLeft, 24);
+        }
+        assert.strictEqual(container.classList.contains('prts-submenu-left'), isRight);
         assert.strictEqual(parseFloat(panel.style['--prts-panel-width']), width - 24);
         assert.strictEqual(container.classList.contains('snap-right'), isRight);
         assert.strictEqual(panel.classList.contains('prts-settings-compact'), height < 240);

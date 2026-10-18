@@ -7,7 +7,6 @@
 
     const PRTS_ICON_PATHS = {
         account: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
-        back: 'M7.7 1.3 1 8l6.7 6.7 1.4-1.4L4.8 9H15V7H4.8l4.3-4.3-1.4-1.4z',
         archive: 'M2 2h12v3H2V2zm1 4h10v8H3V6zm3 2v1.5h4V8H6z',
         check: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
         close: 'M3.72 2.28 8 6.56l4.28-4.28 1.44 1.44L9.44 8l4.28 4.28-1.44 1.44L8 9.44l-4.28 4.28-1.44-1.44L6.56 8 2.28 3.72z',
@@ -351,7 +350,11 @@
 
             const finish = value => closePrtsModal(value);
             const handleKeydown = event => {
-                if (event.key === 'Escape') finish(null);
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    finish(null);
+                }
                 if (event.key === 'Tab') {
                     const focusable = getFocusableDialogElements(dialog);
                     if (focusable.length === 0) return;

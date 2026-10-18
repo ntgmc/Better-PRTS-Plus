@@ -62,7 +62,9 @@
             GM_getValue(SCRIPT_IGNORED_VERSION_KEY, '') === update.version ||
             (CONFIG.importantUpdatesOnly && update.level === 'normal'))) return false;
         // 避免自动检查关闭正在进行的导入或确认窗口；下一轮检查继续提示。
-        if (document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) {
+        const aboutPanel = document.getElementById('prts-about-panel');
+        if (document.getElementById('prts-modal') || document.getElementById('prts-import-dialog') ||
+            (!manual && aboutPanel && !aboutPanel.hidden)) {
             if (manual) showPrtsToast('发现新版本', 'info', '请先关闭当前窗口，再点击“检查脚本更新”。');
             return false;
         }
