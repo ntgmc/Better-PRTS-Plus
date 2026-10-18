@@ -500,17 +500,6 @@
         syncRow.className = 'prts-filter-sync-row';
         if (syncRow.parentElement !== controlBar) controlBar.appendChild(syncRow);
 
-        const paths = {
-            import: 'M11 6h3l-6 6-6-6h3V1h6v5zm-9 8v2h12v-2h-2v1H4v-1H2z',
-            eyeOn: 'M8 3C3 3 0 8 0 8s3 5 8 5 8-5 8-5-3-5-8-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z M8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
-            eyeOff: 'M6.41 7.83c-.03.39.07.79.31 1.12.24.34.59.58.98.68.39.1.81.02 1.15-.21.34-.23.59-.57.7-.96.1-.39.02-.8-.21-1.15-.16-.23-.38-.42-.64-.53L6.41 7.83z M2.05 2.64L1.03 3.66l2.54 2.54C2.22 6.75 1.12 7.34 0 8c0 0 4 5.6 8 5.6 1.41 0 2.71-.35 3.85-.96l2.08 2.09 1.02-1.02L2.05 2.64z M8 12c-2.21 0-4-1.79-4-4 0-.2.02-.39.05-.58l5.04 5.04c-1.24.74-3.46.59-1.09-.46z M13.57 11.6c.54-1.06.83-2.24.83-3.6 0 0-4-5.6-8-5.6-.69 0-1.34.09-1.98.25L6.07 4.3C6.68 4.1 7.33 4 8 4c2.21 0 4 1.79 4 4 0 .64-.14 1.24-.38 1.79l1.95 1.81z',
-            perfect: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
-            support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm3.2-1.6c0-1.77-1.43-3.2-3.2-3.2-.45 0-.86.1-1.26.26.7.74 1.15 1.72 1.24 2.82.02.21.02.41 0 .62-.1 1.04-.51 1.98-1.16 2.71.37.13.75.19 1.18.19 1.77.01 3.2-1.42 3.2-3.4zM8.8 10.4H2.4c-.88 0-1.6.72-1.6 1.6v2.4h9.6V12c0-.88-.72-1.6-1.6-1.6zm-5.6 2.4h4.8v.8H3.2v-.8zm12-1.6h-4.8c.21 0 .4.03.59.07.67.15 1.29.44 1.81.85.91.71 1.5 1.81 1.57 3.04.01.1.01.18.03.28V12c0-.88-.72-1.6-1.6-1.6z',
-            user: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
-            sidebarToggle: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
-            skland: 'skland'
-        };
-
         // 顺序生成元素
 
         // (1) 少量账号点击轮换，三个及以上直接选择。
@@ -553,15 +542,7 @@
         const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
         const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: CONFIG.displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
 
-        // (4) 分割线
-        let divider = document.getElementById('prts-divider-el');
-        if (!divider) {
-            divider = document.createElement('div');
-            divider.className = 'prts-divider';
-            divider.id = 'prts-divider-el';
-        }
-
-        // (5) 完美阵容
+        // (4) 完美阵容
         const btnPerfect = createPrtsButton({
             id: 'btn-perfect',
             text: '完美阵容',
@@ -571,7 +552,7 @@
             pressed: CONFIG.filterMode === 'PERFECT'
         });
 
-        // (6) 允许助战
+        // (5) 允许助战
         const btnSupport = createPrtsButton({
             id: 'btn-support',
             text: '允许助战',
@@ -586,11 +567,24 @@
         });
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
 
-        // 原生下拉框展开时，移动它或父节点会关闭菜单并丢失焦点。
-        [accountControl, btnImport, btnSklandImport, btnSetting, divider, btnPerfect, btnSupport, btnTraining]
-            .forEach((control, index) => {
-                if (mainRow.children[index] !== control) mainRow.insertBefore(control, mainRow.children[index] || null);
+        [
+            ['prts-filter-accounts', '账号与数据', [accountControl, btnImport, btnSklandImport]],
+            ['prts-filter-options', '筛选条件与显示模式', [btnPerfect, btnSupport, btnTraining, btnSetting]]
+        ].forEach(([id, label, controls], index) => {
+            let group = document.getElementById(id);
+            if (!group) {
+                group = document.createElement('div');
+                group.id = id;
+                group.className = 'prts-filter-group';
+                group.setAttribute('role', 'group');
+                group.setAttribute('aria-label', label);
+            }
+            // 原生下拉框展开时，移动它或父节点会关闭菜单并丢失焦点。
+            if (mainRow.children[index] !== group) mainRow.insertBefore(group, mainRow.children[index] || null);
+            controls.forEach((control, controlIndex) => {
+                if (group.children[controlIndex] !== control) group.insertBefore(control, group.children[controlIndex] || null);
             });
+        });
 
         renderFilterResults();
         if (isNew) requestFilterUpdate();

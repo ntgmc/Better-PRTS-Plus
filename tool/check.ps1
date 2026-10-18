@@ -273,7 +273,7 @@ if ($userScript -notmatch "function showSklandBindingPicker\([^)]*\)[\s\S]*prts-
     throw "Skland role picker should render accessible role choices with nickname, UID, and channel"
 }
 if ($userScript -notmatch "const SKLAND_FAVICON_SVG = '<svg" -or
-    $userScript -notmatch "skland:\s*'skland'" -or
+    $userScript -notmatch "icon:\s*'skland'" -or
     $userScript -notmatch 'viewBox="0 0 16 16"' -or
     $userScript -notmatch "function createSklandIconImage" -or
     $userScript -notmatch "new DOMParser\(\)\.parseFromString\(SKLAND_FAVICON_SVG") {

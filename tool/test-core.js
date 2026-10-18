@@ -2932,16 +2932,25 @@ test('toolbar selects three or more accounts and cycles sparse IDs below three w
   assert.strictEqual(page.document.getElementById('btn-account').disabled, true);
 });
 
-test('periodic toolbar refresh preserves attached controls, account focus and unchanged select values', () => {
+test('grouped toolbar preserves attached controls, account focus and unchanged select values on refresh', () => {
   const { page } = createFilterPage('GRAY');
   const control = page.document.getElementById('btn-account');
   const mainRow = page.document.getElementById('prts-filter-main-row');
   const bar = page.document.getElementById('prts-filter-bar');
   const originalOrder = [...mainRow.children];
+  const accountGroup = page.document.getElementById('prts-filter-accounts');
+  const optionsGroup = page.document.getElementById('prts-filter-options');
+  const accountControls = [...accountGroup.children];
+  const optionControls = [...optionsGroup.children];
+  assert.deepStrictEqual(originalOrder, [accountGroup, optionsGroup]);
+  assert.strictEqual(accountGroup.attributes.get('role'), 'group');
+  assert.strictEqual(optionsGroup.attributes.get('aria-label'), '筛选条件与显示模式');
+  assert.deepStrictEqual(accountControls.map(node => node.id), ['btn-account', 'btn-import', 'btn-skland-import']);
+  assert.deepStrictEqual(optionControls.map(node => node.id), ['btn-perfect', 'btn-support', 'btn-training', 'btn-setting']);
   Object.defineProperty(bar.parentElement.firstChild, 'nextElementSibling', { get: () => bar });
   let moves = 0, writes = 0, value = control.value;
   // Keeping the same JS object is insufficient: reattaching it or an ancestor closes native menus.
-  [bar, mainRow, ...originalOrder].forEach(node => {
+  [bar, mainRow, ...originalOrder, ...accountControls, ...optionControls].forEach(node => {
     const remove = node.remove;
     node.remove = function () { moves++; remove.call(this); };
   });
@@ -2953,6 +2962,8 @@ test('periodic toolbar refresh preserves attached controls, account focus and un
   assert.strictEqual(writes, 0);
   assert.strictEqual(page.document.activeElement, control);
   assert.deepStrictEqual(mainRow.children, originalOrder);
+  assert.deepStrictEqual(accountGroup.children, accountControls);
+  assert.deepStrictEqual(optionsGroup.children, optionControls);
   page.createAccountSelect('btn-account', 2, control.onchange);
   assert.strictEqual(control.value, '2');
   assert.strictEqual(writes, 1, 'an actual account change must still update the select');

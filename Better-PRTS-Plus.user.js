@@ -1743,52 +1743,15 @@ function createSklandImportCancelledError() {
 
     .prts-bili-link .bp4-icon { margin-right: 4px; font-size: 11px; }
 
-    /* 3. 筛选栏与按钮 */
-    #prts-filter-bar { display: flex; align-items: flex-start; flex-direction: column; width: 100%; margin-top: 8px; margin-bottom: 12px; padding-left: 2px; }
-    .prts-filter-main-row { display: flex; align-items: center; flex-wrap: wrap; width: 100%; }
-    .prts-filter-sync-row { display: flex; align-items: center; width: 100%; padding-left: 48px; margin-top: 2px; }
-    .prts-filter-sync-row:empty { display: none; }
-    .prts-btn {
-        background: none !important; background-color: transparent !important; border: none !important;
-        box-shadow: none !important; cursor: pointer !important; display: inline-flex !important;
-        align-items: center !important; justify-content: center !important; padding: 6px 12px !important;
-        font-size: 14px !important; color: #5c7080 !important; border-radius: 3px !important;
-        min-height: 30px !important; line-height: 1 !important; font-weight: normal !important;
-        margin-right: 4px !important; transition: background-color 0.1s cubic-bezier(0.4, 1, 0.75, 0.9) !important;
-    }
-    .prts-btn:hover { background-color: rgba(167, 182, 194, 0.3) !important; color: #1c2127 !important; text-decoration: none !important; }
-    .prts-btn.prts-active { background-color: rgba(167, 182, 194, 0.3) !important; color: #2563eb !important; font-weight: 600 !important; }
-    .prts-btn .bp4-icon { width: 16px !important; height: 16px !important; margin-right: 7px !important; color: #5c7080 !important; fill: currentColor !important; display: inline-flex !important; align-items: center !important; justify-content: center !important; flex: 0 0 auto !important; line-height: 0 !important; vertical-align: middle !important; }
-    .prts-btn .bp4-icon svg { width: 16px !important; height: 16px !important; display: block !important; flex: 0 0 auto !important; }
-    .prts-btn-icon-img, .prts-btn-icon-svg { width: 16px !important; height: 16px !important; margin-right: 7px !important; border-radius: 3px !important; flex: 0 0 auto !important; object-fit: contain !important; display: inline-block !important; vertical-align: middle !important; }
-    .prts-btn-icon-svg { overflow: visible !important; }
-    .prts-btn.prts-active .bp4-icon { color: #2563eb !important; }
-
-    body.dark .prts-btn { color: #8a9baa !important; }
-    body.dark .prts-btn:hover, body.dark .prts-btn.prts-active {
-        background-color: rgba(138, 155, 168, 0.15) !important; color: #f5f8fa !important;
-    }
-    body.dark .prts-btn.prts-active { color: #60a5fa !important; }
-    body.dark .prts-btn .bp4-icon { color: #8a9baa !important; }
-    body.dark .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
-
-    body.high-contrast-theme .prts-btn { color: #a7b6c2 !important; }
-    body.high-contrast-theme .prts-btn:hover, body.high-contrast-theme .prts-btn.prts-active {
-        background-color: rgba(138, 155, 168, 0.15) !important; color: #f5f8fa !important;
-    }
-    body.high-contrast-theme .prts-btn.prts-active { color: #60a5fa !important; }
-    body.high-contrast-theme .prts-btn .bp4-icon { color: #a7b6c2 !important; }
-    body.high-contrast-theme .prts-btn.prts-active .bp4-icon { color: #60a5fa !important; }
-
+    /* 3. 通用按钮图标 */
+    .prts-btn .bp4-icon { fill: currentColor; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; line-height: 0; }
+    .prts-btn .bp4-icon svg { width: 16px; height: 16px; display: block; flex: 0 0 auto; }
+    .prts-btn-icon-img, .prts-btn-icon-svg { border-radius: var(--prts-radius-sm); flex: 0 0 auto; object-fit: contain; display: inline-block; vertical-align: middle; }
+    .prts-btn-icon-svg { overflow: visible; }
 
     .prts-account-sync-chip { display: inline-flex; align-items: center; max-width: min(100%, 360px); min-height: 26px; padding: 3px 8px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 12px; font-weight: 700; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .prts-panel-actions { display: flex; gap: 8px; margin-top: 8px; width: 100%; }
     .prts-panel-actions .prts-btn { flex: 1 1 0 !important; margin: 0 !important; padding: 6px 8px !important; font-size: 13px !important; }
-
-
-    .prts-divider { width: 1px; height: 16px; background-color: rgba(16, 22, 26, 0.15); margin: 0 8px; display: inline-block; }
-    body.dark .prts-divider { background-color: rgba(255, 255, 255, 0.15); }
-    body.high-contrast-theme .prts-divider { background-color: rgba(255, 255, 255, 0.15); }
 
 
     /* 4. 状态标签与卡片置灰 */
@@ -2146,19 +2109,55 @@ function createSklandImportCancelledError() {
         --prts-shadow-md: 0 10px 30px rgba(0, 0, 0, 0.55);
         --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
     }
+    /* Hallmark · component: filter toolbar · genre: modern-minimal · theme: existing PRTS tokens
+     * states: default, hover, focus, pressed, disabled; pre-emit critique: P5 H5 E4 S5 R5 V4 */
     #prts-filter-bar {
-        gap: 0 !important;
-        padding: var(--prts-space-1) 0 !important;
-        margin-top: var(--prts-space-2) !important;
-        margin-bottom: var(--prts-space-3) !important;
+        container: prts-filter / inline-size;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        gap: var(--prts-space-1);
+        width: 100%;
+        min-width: 0;
+        margin: var(--prts-space-2) 0 var(--prts-space-3);
+        padding: 0;
+        color: var(--prts-color-text);
         font-family: var(--prts-font-sans);
     }
-    .prts-filter-main-row {
-        gap: var(--prts-space-1) !important;
+    #prts-filter-bar * { box-sizing: border-box; }
+    .prts-filter-main-row { display: flex; align-items: center; flex-wrap: wrap; gap: var(--prts-space-2); min-width: 0; }
+    .prts-filter-group { display: contents; }
+    #prts-filter-accounts > #btn-account { width: 160px; min-width: 0; justify-content: flex-start !important; text-align: left; }
+    #prts-filter-bar .prts-btn { flex: 0 0 auto; gap: var(--prts-space-2) !important; min-width: 0; min-height: 44px !important; padding: var(--prts-space-2) var(--prts-space-3) !important; color: var(--prts-color-text) !important; font-size: 14px !important; line-height: 20px !important; white-space: nowrap; }
+    @media (hover: hover) and (pointer: fine) {
+        #prts-filter-bar .prts-btn { min-height: 38px !important; height: 38px; }
+        #prts-filter-bar .prts-account-select { min-height: 32px !important; height: 32px; }
     }
-    .prts-filter-sync-row {
-        padding-left: 48px;
-        margin-top: 2px;
+    #prts-filter-bar .prts-btn:enabled:hover { background: var(--prts-color-surface-hover) !important; }
+    #prts-filter-bar .prts-btn:enabled:active { background: var(--prts-color-primary-soft) !important; }
+    #prts-filter-bar .prts-btn[aria-pressed='true'] {
+        border-color: transparent !important;
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary-hover) !important;
+    }
+    #prts-filter-bar #btn-account:disabled { opacity: 1 !important; cursor: default !important; }
+    #prts-filter-options > #btn-setting { margin-left: var(--prts-space-1); }
+    .prts-filter-sync-row { display: flex; min-width: 0; }
+    .prts-filter-sync-row:empty { display: none; }
+    #prts-filter-bar .prts-account-sync-chip {
+        max-width: 100%; min-height: 0; padding: 0; border: 0; border-radius: 0;
+        background: transparent; color: var(--prts-color-text-muted); font-weight: 400; line-height: 1.6;
+        white-space: normal; overflow-wrap: anywhere;
+    }
+    @container prts-filter (max-width: 360px) {
+        .prts-filter-main-row { display: grid; }
+        #prts-filter-accounts, #prts-filter-options { display: grid; align-items: center; gap: var(--prts-space-2); grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        #prts-filter-accounts > #btn-account { grid-column: 1 / -1; width: 100%; }
+        #prts-filter-options > #btn-setting { margin-left: 0; }
+        #prts-filter-bar .prts-btn { padding-inline: var(--prts-space-2) !important; }
+    }
+    @container prts-filter (max-width: 280px) {
+        #prts-filter-accounts { grid-template-columns: minmax(0, 1fr); }
     }
     /* Hallmark · component: filter results · theme: existing PRTS tokens
      * states: loading, summary, empty, pending, focus; pre-emit critique: P5 H4 E4 S5 R5 V4 */
@@ -2166,15 +2165,17 @@ function createSklandImportCancelledError() {
         box-sizing: border-box;
         width: 100%;
         min-width: 0;
-        padding: var(--prts-space-2) var(--prts-space-3) 0;
+        padding: var(--prts-space-2) 0 0;
+        border-top: 1px solid var(--prts-color-border-soft);
         color: var(--prts-color-text-muted);
         font-size: 13px;
         line-height: 1.6;
         overflow-wrap: anywhere;
         font-variant-numeric: tabular-nums;
     }
-    .prts-filter-summary, .prts-filter-empty-message { margin: 0; }
-    .prts-filter-empty {
+    #prts-filter-bar > #prts-filter-results { padding-top: 0; border-top: 0; font-size: 12px; line-height: 1.5; }
+    #prts-filter-results .prts-filter-summary, #prts-filter-results .prts-filter-empty-message { margin: 0; color: inherit; }
+    #prts-filter-results .prts-filter-empty {
         margin-top: var(--prts-space-2);
         padding: var(--prts-space-3);
         border: 1px solid var(--prts-color-border-soft);
@@ -2186,6 +2187,10 @@ function createSklandImportCancelledError() {
     #btn-filter-show-all:active { background: var(--prts-color-surface-hover) !important; }
     .prts-filter-empty[hidden], #btn-filter-show-all[hidden] { display: none !important; }
     .prts-btn {
+        box-sizing: border-box;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
         gap: 6px !important;
         min-height: 34px !important;
         padding: 6px 10px !important;
@@ -2195,11 +2200,15 @@ function createSklandImportCancelledError() {
         color: var(--prts-color-text-muted) !important;
         background: transparent !important;
         font-family: var(--prts-font-sans) !important;
+        font-size: 14px !important;
         font-weight: 600 !important;
-        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out) !important;
+        line-height: 1.25 !important;
+        box-shadow: none !important;
+        cursor: pointer !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out) !important;
         touch-action: manipulation;
     }
-    .prts-btn:hover {
+    .prts-btn:not(:disabled):hover {
         background: var(--prts-color-surface-hover) !important;
         color: var(--prts-color-text) !important;
         text-decoration: none !important;
@@ -2315,11 +2324,6 @@ function createSklandImportCancelledError() {
         background: var(--prts-color-primary-soft);
         color: var(--prts-color-primary);
         flex: 0 1 auto;
-    }
-    .prts-divider {
-        height: 24px !important;
-        margin: 0 var(--prts-space-1) !important;
-        background: var(--prts-color-border-soft) !important;
     }
     .prts-status-label {
         width: fit-content;
@@ -2668,7 +2672,7 @@ function createSklandImportCancelledError() {
         width: min(292px, var(--prts-panel-width, calc(100vw - 24px))) !important;
         max-height: min(560px, var(--prts-panel-max-height, calc(100dvh - 24px)));
         overflow: hidden;
-        padding: var(--prts-space-4) !important;
+        padding: var(--prts-space-3) !important;
         border-color: var(--prts-color-border-soft) !important;
         border-radius: var(--prts-radius-lg) !important;
         background: var(--prts-color-surface) !important;
@@ -2711,13 +2715,16 @@ function createSklandImportCancelledError() {
     .prts-submenu-left { --prts-submenu-offset: 20px; --prts-submenu-origin: top right; }
     .prts-submenu-panel.is-open { z-index: 5; visibility: visible; opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); }
     .prts-submenu-panel * { box-sizing: border-box; }
-    .prts-submenu-panel > .prts-modal-head { flex-shrink: 0; align-items: center; }
-    .prts-submenu-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--prts-space-3) var(--prts-space-4) var(--prts-space-4); }
+    .prts-submenu-panel > .prts-modal-head { flex-shrink: 0; align-items: center; padding: var(--prts-space-2) var(--prts-space-3); }
+    .prts-submenu-panel .prts-modal-title { font-size: 14px; }
+    .prts-submenu-content { min-height: 0; overflow: auto; overscroll-behavior: contain; padding: var(--prts-space-1) var(--prts-space-3) var(--prts-space-3); }
+    .prts-panel-item.prts-account-section { flex-direction: column; align-items: stretch; gap: 0; }
+    .prts-account-import { width: 100%; margin-top: var(--prts-space-2); }
     .prts-submenu-button { flex-shrink: 0; width: 100%; min-height: 44px !important; justify-content: flex-start !important; margin: 0 !important; }
     .prts-submenu-button[hidden] { display: none !important; }
     .prts-submenu-arrow { margin-left: auto; font-size: 20px; }
     .prts-submenu-left .prts-submenu-arrow { transform: rotate(180deg); }
-    .prts-submenu-button[aria-expanded='true'] { background: var(--prts-color-surface-hover) !important; }
+    #prts-float-container .prts-submenu-button[aria-expanded='true'] { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary-hover) !important; }
     .prts-about-name { margin: var(--prts-space-2) 0; color: var(--prts-color-text); font-size: 17px; overflow-wrap: anywhere; }
     .prts-about-version { margin: 0 0 var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
     .prts-about-description, .prts-about-credits { margin: var(--prts-space-3) 0; color: var(--prts-color-text-muted); font-size: 13px; line-height: 1.65; white-space: pre-line; }
@@ -2747,8 +2754,17 @@ function createSklandImportCancelledError() {
         color: var(--prts-color-text) !important;
         border-color: var(--prts-color-border-soft) !important;
     }
-    .prts-panel-item { color: var(--prts-color-text-muted) !important; }
-    .prts-panel-choice { align-items: flex-start; flex-direction: column; gap: var(--prts-space-2); }
+    .prts-panel-item {
+        min-height: 44px;
+        gap: var(--prts-space-3);
+        margin: 0;
+        padding: var(--prts-space-1) 0;
+        border-bottom: 1px solid var(--prts-color-border-soft);
+        color: var(--prts-color-text-muted) !important;
+        line-height: 1.5;
+    }
+    .prts-panel-item:last-child { border-bottom: 0; }
+    .prts-panel-choice { align-items: flex-start; flex-direction: column; gap: var(--prts-space-2); padding: var(--prts-space-3) 0; }
     .prts-panel-segments {
         display: flex;
         width: 100%;
@@ -2785,7 +2801,9 @@ function createSklandImportCancelledError() {
         outline-offset: -2px;
         box-shadow: none;
     }
-    .prts-switch { width: 40px; height: 22px; flex: 0 0 auto; }
+    .prts-switch { width: 44px; height: 44px; flex: 0 0 auto; }
+    .prts-switch .prts-slider { top: 11px; bottom: 11px; left: 2px; right: 2px; }
+    .prts-slider:before { left: 3px; bottom: 3px; }
     .prts-switch input:focus-visible + .prts-slider {
         outline: 2px solid var(--prts-color-primary);
         outline-offset: 2px;
@@ -2802,13 +2820,8 @@ function createSklandImportCancelledError() {
     input:checked + .prts-slider { background: var(--prts-color-primary) !important; }
     input:checked + .prts-slider:before { transform: translateX(18px) !important; }
     @media (max-width: 520px) {
-        #prts-filter-bar { gap: var(--prts-space-2) !important; }
         .prts-btn, .prts-acc-btn, .prts-account-rename, .prts-import-action {
             min-height: 44px !important;
-        }
-        #prts-filter-bar .prts-btn {
-            flex: 1 1 calc(50% - var(--prts-space-2));
-            min-width: 0;
         }
         #prts-float-container { max-width: calc(100vw - 24px); }
         .prts-settings-panel {
@@ -5065,17 +5078,6 @@ function createSklandImportCancelledError() {
         syncRow.className = 'prts-filter-sync-row';
         if (syncRow.parentElement !== controlBar) controlBar.appendChild(syncRow);
 
-        const paths = {
-            import: 'M11 6h3l-6 6-6-6h3V1h6v5zm-9 8v2h12v-2h-2v1H4v-1H2z',
-            eyeOn: 'M8 3C3 3 0 8 0 8s3 5 8 5 8-5 8-5-3-5-8-5zm0 8c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3z M8 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z',
-            eyeOff: 'M6.41 7.83c-.03.39.07.79.31 1.12.24.34.59.58.98.68.39.1.81.02 1.15-.21.34-.23.59-.57.7-.96.1-.39.02-.8-.21-1.15-.16-.23-.38-.42-.64-.53L6.41 7.83z M2.05 2.64L1.03 3.66l2.54 2.54C2.22 6.75 1.12 7.34 0 8c0 0 4 5.6 8 5.6 1.41 0 2.71-.35 3.85-.96l2.08 2.09 1.02-1.02L2.05 2.64z M8 12c-2.21 0-4-1.79-4-4 0-.2.02-.39.05-.58l5.04 5.04c-1.24.74-3.46.59-1.09-.46z M13.57 11.6c.54-1.06.83-2.24.83-3.6 0 0-4-5.6-8-5.6-.69 0-1.34.09-1.98.25L6.07 4.3C6.68 4.1 7.33 4 8 4c2.21 0 4 1.79 4 4 0 .64-.14 1.24-.38 1.79l1.95 1.81z',
-            perfect: 'M13.76 3.84l-7.2 7.2L3.04 7.52 1.6 8.96l5.04 5.04 8.64-8.64z',
-            support: 'M12 6.4c0-1.77-1.43-3.2-3.2-3.2S5.6 4.63 5.6 6.4s1.43 3.2 3.2 3.2 3.2-1.43 3.2-3.2zm-3.2 1.6c-.88 0-1.6-.72-1.6-1.6s.72-1.6 1.6-1.6 1.6.72 1.6 1.6-.72 1.6-1.6 1.6zm3.2-1.6c0-1.77-1.43-3.2-3.2-3.2-.45 0-.86.1-1.26.26.7.74 1.15 1.72 1.24 2.82.02.21.02.41 0 .62-.1 1.04-.51 1.98-1.16 2.71.37.13.75.19 1.18.19 1.77.01 3.2-1.42 3.2-3.4zM8.8 10.4H2.4c-.88 0-1.6.72-1.6 1.6v2.4h9.6V12c0-.88-.72-1.6-1.6-1.6zm-5.6 2.4h4.8v.8H3.2v-.8zm12-1.6h-4.8c.21 0 .4.03.59.07.67.15 1.29.44 1.81.85.91.71 1.5 1.81 1.57 3.04.01.1.01.18.03.28V12c0-.88-.72-1.6-1.6-1.6z',
-            user: 'M8 8c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0 1c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z',
-            sidebarToggle: 'M14 3H2c-.55 0-1 .45-1 1v8c0 .55.45 1 1 1h12c.55 0 1-.45 1-1V4c0-.55-.45-1-1-1zm-1 9H9V4h4v8zM3 4h4v8H3V4z',
-            skland: 'skland'
-        };
-
         // 顺序生成元素
 
         // (1) 少量账号点击轮换，三个及以上直接选择。
@@ -5118,15 +5120,7 @@ function createSklandImportCancelledError() {
         const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
         const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: CONFIG.displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
 
-        // (4) 分割线
-        let divider = document.getElementById('prts-divider-el');
-        if (!divider) {
-            divider = document.createElement('div');
-            divider.className = 'prts-divider';
-            divider.id = 'prts-divider-el';
-        }
-
-        // (5) 完美阵容
+        // (4) 完美阵容
         const btnPerfect = createPrtsButton({
             id: 'btn-perfect',
             text: '完美阵容',
@@ -5136,7 +5130,7 @@ function createSklandImportCancelledError() {
             pressed: CONFIG.filterMode === 'PERFECT'
         });
 
-        // (6) 允许助战
+        // (5) 允许助战
         const btnSupport = createPrtsButton({
             id: 'btn-support',
             text: '允许助战',
@@ -5151,11 +5145,24 @@ function createSklandImportCancelledError() {
         });
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
 
-        // 原生下拉框展开时，移动它或父节点会关闭菜单并丢失焦点。
-        [accountControl, btnImport, btnSklandImport, btnSetting, divider, btnPerfect, btnSupport, btnTraining]
-            .forEach((control, index) => {
-                if (mainRow.children[index] !== control) mainRow.insertBefore(control, mainRow.children[index] || null);
+        [
+            ['prts-filter-accounts', '账号与数据', [accountControl, btnImport, btnSklandImport]],
+            ['prts-filter-options', '筛选条件与显示模式', [btnPerfect, btnSupport, btnTraining, btnSetting]]
+        ].forEach(([id, label, controls], index) => {
+            let group = document.getElementById(id);
+            if (!group) {
+                group = document.createElement('div');
+                group.id = id;
+                group.className = 'prts-filter-group';
+                group.setAttribute('role', 'group');
+                group.setAttribute('aria-label', label);
+            }
+            // 原生下拉框展开时，移动它或父节点会关闭菜单并丢失焦点。
+            if (mainRow.children[index] !== group) mainRow.insertBefore(group, mainRow.children[index] || null);
+            controls.forEach((control, controlIndex) => {
+                if (group.children[controlIndex] !== control) group.insertBefore(control, group.children[controlIndex] || null);
             });
+        });
 
         renderFilterResults();
         if (isNew) requestFilterUpdate();
@@ -6671,11 +6678,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         // 账号管理
         const accRow = document.createElement('div');
-        accRow.className = 'prts-panel-item';
-        accRow.style.marginTop = '8px';
-        accRow.style.marginBottom = '8px';
-        accRow.style.flexDirection = 'column';
-        accRow.style.alignItems = 'stretch';
+        accRow.className = 'prts-panel-item prts-account-section';
 
         const accTitle = document.createElement('span');
         accTitle.className = 'prts-panel-item-label';
@@ -6696,12 +6699,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         accounts.body.appendChild(accRow);
 
-        const importBtn = createPrtsButton({ className: 'prts-btn', icon: 'import', text: '导入干员数据', onClick: handleImport });
-        importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
+        const importBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'import', text: '导入干员数据', onClick: handleImport });
         accounts.body.appendChild(importBtn);
 
-        const sklandBtn = createPrtsButton({ className: 'prts-btn', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
-        sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
+        const sklandBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         accounts.body.appendChild(sklandBtn);
 
         const backupActions = document.createElement('div');

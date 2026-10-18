@@ -672,11 +672,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         // 账号管理
         const accRow = document.createElement('div');
-        accRow.className = 'prts-panel-item';
-        accRow.style.marginTop = '8px';
-        accRow.style.marginBottom = '8px';
-        accRow.style.flexDirection = 'column';
-        accRow.style.alignItems = 'stretch';
+        accRow.className = 'prts-panel-item prts-account-section';
 
         const accTitle = document.createElement('span');
         accTitle.className = 'prts-panel-item-label';
@@ -697,12 +693,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
         accRow.appendChild(accBtnGroup);
         accounts.body.appendChild(accRow);
 
-        const importBtn = createPrtsButton({ className: 'prts-btn', icon: 'import', text: '导入干员数据', onClick: handleImport });
-        importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
+        const importBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'import', text: '导入干员数据', onClick: handleImport });
         accounts.body.appendChild(importBtn);
 
-        const sklandBtn = createPrtsButton({ className: 'prts-btn', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
-        sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
+        const sklandBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         accounts.body.appendChild(sklandBtn);
 
         const backupActions = document.createElement('div');
