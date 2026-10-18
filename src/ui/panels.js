@@ -378,30 +378,30 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.style.right = 'auto';
         panel.style.top = `${panelTop - ballTop}px`;
 
-        const aboutPanel = document.getElementById('prts-about-panel');
         container.classList.toggle('prts-submenu-left', savedPos.isRight);
-        if (!aboutPanel || aboutPanel.hidden) return;
-        const roomLeft = panelLeft - left - 12;
-        const roomRight = left + width - 12 - panelLeft - panel.offsetWidth;
-        let opensLeft = savedPos.isRight;
-        aboutPanel.style.setProperty('--prts-about-width', `${Math.max(0, width - 48)}px`);
-        aboutPanel.style.maxHeight = `${Math.max(0, height - 24)}px`;
-        const fitsLeft = roomLeft >= aboutPanel.offsetWidth + 8;
-        const fitsRight = roomRight >= aboutPanel.offsetWidth + 8;
-        if (opensLeft ? !fitsLeft && fitsRight : !fitsRight && fitsLeft) opensLeft = !opensLeft;
-        let aboutLeft;
-        if (fitsLeft || fitsRight) {
-            aboutLeft = opensLeft ? panelLeft - aboutPanel.offsetWidth - 8 : panelLeft + panel.offsetWidth + 8;
-        } else {
-            // 窄屏保留上一级的 24px 边缘，仍按同一方向逐层展开。
-            aboutPanel.style.setProperty('--prts-about-width', `${Math.max(0, panel.offsetWidth - 24)}px`);
-            aboutLeft = opensLeft ? panelLeft + panel.offsetWidth - aboutPanel.offsetWidth - 24 : panelLeft + 24;
-        }
-        const entryTop = document.getElementById('prts-settings-about-button').getBoundingClientRect().top;
-        const aboutTop = Math.max(top + 12, Math.min(entryTop, top + height - aboutPanel.offsetHeight - 12));
-        aboutPanel.style.left = `${aboutLeft - ballLeft}px`;
-        aboutPanel.style.top = `${aboutTop - ballTop}px`;
-        container.classList.toggle('prts-submenu-left', opensLeft);
+        container.querySelectorAll('.prts-submenu-panel').forEach(submenu => {
+            const roomLeft = panelLeft - left - 12;
+            const roomRight = left + width - 12 - panelLeft - panel.offsetWidth;
+            let opensLeft = savedPos.isRight;
+            submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, width - 48)}px`);
+            submenu.style.maxHeight = `${Math.max(0, height - 24)}px`;
+            const fitsLeft = roomLeft >= submenu.offsetWidth + 8;
+            const fitsRight = roomRight >= submenu.offsetWidth + 8;
+            if (opensLeft ? !fitsLeft && fitsRight : !fitsRight && fitsLeft) opensLeft = !opensLeft;
+            let submenuLeft;
+            if (fitsLeft || fitsRight) {
+                submenuLeft = opensLeft ? panelLeft - submenu.offsetWidth - 8 : panelLeft + panel.offsetWidth + 8;
+            } else {
+                // 窄屏保留上一级的 24px 边缘，仍按同一方向逐层展开。
+                submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, panel.offsetWidth - 24)}px`);
+                submenuLeft = opensLeft ? panelLeft + panel.offsetWidth - submenu.offsetWidth - 24 : panelLeft + 24;
+            }
+            const entryTop = document.getElementById(submenu.dataset.triggerId).getBoundingClientRect().top;
+            const submenuTop = Math.max(top + 12, Math.min(entryTop, top + height - submenu.offsetHeight - 12));
+            submenu.style.left = `${submenuLeft - ballLeft}px`;
+            submenu.style.top = `${submenuTop - ballTop}px`;
+            container.classList.toggle('prts-submenu-left', opensLeft);
+        });
     }
 
     function createFloatingBall() {
@@ -454,26 +454,73 @@ ${formatSklandImportSummary(summary)}`, 'success');
         content.className = 'prts-settings-content';
         panel.appendChild(content);
 
-        const aboutPanel = document.createElement('div');
-        aboutPanel.id = 'prts-about-panel';
-        aboutPanel.hidden = true;
-        aboutPanel.setAttribute('role', 'region');
-        aboutPanel.setAttribute('aria-labelledby', 'prts-about-title');
-        const aboutHead = document.createElement('div');
-        aboutHead.className = 'prts-modal-head';
-        const aboutTitle = document.createElement('h2');
-        aboutTitle.id = 'prts-about-title';
-        aboutTitle.className = 'prts-modal-title';
-        aboutTitle.textContent = '关于';
-        aboutHead.appendChild(aboutTitle);
-        const aboutClose = createPrtsButton({
-            className: 'prts-btn prts-about-close', icon: 'close', ariaLabel: '收起关于',
-            onClick: () => setAboutOpen(false)
-        });
-        aboutHead.appendChild(aboutClose);
-        aboutPanel.appendChild(aboutHead);
-        const aboutContent = document.createElement('div');
-        aboutContent.className = 'prts-about-content';
+        const submenus = [];
+        let activeSubmenu = null;
+        const setSubmenuOpen = (next, restoreFocus = true) => {
+            const previous = activeSubmenu;
+            if (previous) {
+                previous.panel.classList.remove('is-open');
+                previous.panel.inert = true;
+                previous.panel.setAttribute('aria-hidden', 'true');
+                previous.button.setAttribute('aria-expanded', 'false');
+            }
+            activeSubmenu = next;
+            if (next) {
+                next.panel.inert = false;
+                next.panel.setAttribute('aria-hidden', 'false');
+                next.button.setAttribute('aria-expanded', 'true');
+                updateFloatingLayout();
+                next.panel.classList.add('is-open');
+                next.close.focus({ preventScroll: true });
+            } else if (restoreFocus && previous) previous.button.focus({ preventScroll: true });
+        };
+        const createSubmenu = (id, label, icon) => {
+            const submenuPanel = document.createElement('div');
+            submenuPanel.id = `prts-${id}-panel`;
+            submenuPanel.className = 'prts-submenu-panel';
+            submenuPanel.inert = true;
+            submenuPanel.setAttribute('aria-hidden', 'true');
+            submenuPanel.setAttribute('role', 'region');
+            submenuPanel.setAttribute('aria-labelledby', `prts-${id}-title`);
+            const head = document.createElement('div');
+            head.className = 'prts-modal-head';
+            const heading = document.createElement('h2');
+            heading.id = `prts-${id}-title`;
+            heading.className = 'prts-modal-title';
+            heading.textContent = label;
+            head.appendChild(heading);
+            const close = createPrtsButton({
+                className: 'prts-btn prts-submenu-close', icon: 'close', ariaLabel: `收起${label}`,
+                onClick: () => setSubmenuOpen(null)
+            });
+            head.appendChild(close);
+            submenuPanel.appendChild(head);
+            const body = document.createElement('div');
+            body.className = 'prts-submenu-content';
+            submenuPanel.appendChild(body);
+            const button = createPrtsButton({
+                id: `prts-settings-${id}-button`, className: 'prts-btn prts-submenu-button',
+                icon, text: label, ariaControls: submenuPanel.id, expanded: false,
+                onClick: () => setSubmenuOpen(activeSubmenu === submenu ? null : submenu)
+            });
+            const arrow = document.createElement('span');
+            arrow.className = 'prts-submenu-arrow';
+            arrow.setAttribute('aria-hidden', 'true');
+            arrow.textContent = '›';
+            button.appendChild(arrow);
+            content.appendChild(button);
+            submenuPanel.dataset.triggerId = button.id;
+            submenuPanel.onclick = event => event.stopPropagation();
+            const submenu = { panel: submenuPanel, body, button, close };
+            submenus.push(submenu);
+            return submenu;
+        };
+        const cards = createSubmenu('cards', '作业卡片', 'layout');
+        const pageEnhancements = createSubmenu('page', '页面增强', 'settings');
+        const accounts = createSubmenu('accounts', '账号与数据', 'account');
+        const about = createSubmenu('about', '关于', 'info');
+        const diagnostics = createSubmenu('diagnostics', '诊断', 'filter');
+        const aboutContent = about.body;
         const aboutName = document.createElement('h3');
         aboutName.className = 'prts-about-name';
         aboutName.textContent = 'Better-PRTS-Plus';
@@ -507,7 +554,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
             aboutLinks.appendChild(link);
         });
         aboutContent.appendChild(aboutLinks);
-        aboutPanel.appendChild(aboutContent);
 
         const reloadNotice = document.createElement('div');
         reloadNotice.id = 'prts-settings-reload';
@@ -523,31 +569,32 @@ ${formatSklandImportSummary(summary)}`, 'success');
         panel.appendChild(reloadNotice);
 
         let debugOptionsRevealed = CONFIG.compatDebug === true;
-        const debugOptions = document.createElement('div');
-        debugOptions.className = 'prts-debug-options';
-        if (debugOptionsRevealed) debugOptions.classList.add('is-visible');
+        diagnostics.button.hidden = !debugOptionsRevealed;
 
         const revealDebugOptions = event => {
             if (!event.shiftKey) return;
             event.preventDefault();
             event.stopPropagation();
             debugOptionsRevealed = !debugOptionsRevealed;
-            debugOptions.classList.toggle('is-visible', debugOptionsRevealed);
+            diagnostics.button.hidden = !debugOptionsRevealed;
+            if (!debugOptionsRevealed && activeSubmenu === diagnostics) setSubmenuOpen(null, false);
+            updateFloatingLayout();
         };
 
         titleText.addEventListener('click', revealDebugOptions);
 
-        let currentGroup = '';
+        const groupContents = {
+            '作业卡片': cards.body, '页面增强': pageEnhancements.body,
+            '脚本更新': aboutContent, '诊断': diagnostics.body
+        };
         Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
             if (!definition.group) return;
-            const target = definition.group === '诊断' ? debugOptions
-                : definition.group === '脚本更新' ? aboutContent : content;
-            if (definition.group !== currentGroup) {
+            const target = groupContents[definition.group];
+            if (definition.group === '脚本更新') {
                 const groupTitle = document.createElement('div');
                 groupTitle.className = 'prts-panel-title';
                 groupTitle.textContent = definition.group;
                 target.appendChild(groupTitle);
-                currentGroup = definition.group;
             }
             const onChange = value => {
                 CONFIG[key] = value;
@@ -590,7 +637,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const updatePreviewLabel = document.createElement('div');
         updatePreviewLabel.className = 'prts-panel-item-label';
         updatePreviewLabel.textContent = '更新弹窗预览';
-        debugOptions.appendChild(updatePreviewLabel);
+        diagnostics.body.appendChild(updatePreviewLabel);
         const updatePreviewActions = document.createElement('div');
         updatePreviewActions.className = 'prts-panel-actions';
         Object.entries(RELEASE_LEVELS).forEach(([level, text]) => {
@@ -598,8 +645,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 text, onClick: () => previewScriptUpdate(level)
             }));
         });
-        debugOptions.appendChild(updatePreviewActions);
-        content.appendChild(debugOptions);
+        diagnostics.body.appendChild(updatePreviewActions);
         aboutContent.appendChild(createPrtsButton({
             className: 'prts-btn prts-about-update', icon: 'download', text: '检查脚本更新',
             onClick: () => checkScriptUpdates(true)
@@ -667,15 +713,15 @@ ${formatSklandImportSummary(summary)}`, 'success');
             accBtnGroup.appendChild(row);
         }
         accRow.appendChild(accBtnGroup);
-        content.appendChild(accRow);
+        accounts.body.appendChild(accRow);
 
         const importBtn = createPrtsButton({ className: 'prts-btn', icon: 'import', text: '导入干员数据', onClick: handleImport });
         importBtn.style.width = '100%'; importBtn.style.marginTop = '4px';
-        content.appendChild(importBtn);
+        accounts.body.appendChild(importBtn);
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         sklandBtn.style.width = '100%'; sklandBtn.style.marginTop = '8px';
-        content.appendChild(sklandBtn);
+        accounts.body.appendChild(sklandBtn);
 
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
@@ -686,29 +732,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         backupActions.appendChild(exportBtn);
         backupActions.appendChild(importBackupBtn);
-        content.appendChild(backupActions);
-
-        const aboutButton = createPrtsButton({
-            id: 'prts-settings-about-button', className: 'prts-btn prts-settings-about-button',
-            icon: 'info', text: '关于', ariaControls: aboutPanel.id, expanded: false,
-            onClick: () => setAboutOpen(aboutPanel.hidden)
-        });
-        const submenuArrow = document.createElement('span');
-        submenuArrow.className = 'prts-submenu-arrow';
-        submenuArrow.setAttribute('aria-hidden', 'true');
-        submenuArrow.textContent = '›';
-        aboutButton.appendChild(submenuArrow);
-        content.appendChild(aboutButton);
-
-        const setAboutOpen = (isOpen, restoreFocus = true) => {
-            aboutPanel.hidden = !isOpen;
-            aboutButton.setAttribute('aria-expanded', String(isOpen));
-            if (isOpen) updateFloatingLayout();
-            if (isOpen || restoreFocus) (isOpen ? aboutClose : aboutButton).focus({ preventScroll: true });
-        };
+        accounts.body.appendChild(backupActions);
 
         container.appendChild(panel);
-        container.appendChild(aboutPanel);
+        submenus.forEach(submenu => container.appendChild(submenu.panel));
         container.appendChild(btn);
         document.body.appendChild(container);
         refreshAccountControls();
@@ -718,7 +745,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         window.visualViewport?.addEventListener('scroll', updateFloatingLayout);
         const panelObserver = new ResizeObserver(updateFloatingLayout);
         panelObserver.observe(panel);
-        panelObserver.observe(aboutPanel);
+        submenus.forEach(submenu => panelObserver.observe(submenu.panel));
         content.addEventListener('scroll', updateFloatingLayout);
 
         let isDragging = false;
@@ -796,7 +823,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         document.addEventListener('pointercancel', finishDrag);
 
         const setFloatOpen = isOpen => {
-            if (!isOpen) setAboutOpen(false, false);
+            if (!isOpen) setSubmenuOpen(null, false);
             if (isOpen) updateFloatingLayout();
             container.classList.toggle('prts-float-open', isOpen);
             btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
@@ -809,9 +836,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         };
         panel.onclick = event => {
             event.stopPropagation();
-            if (!event.target.closest?.('#prts-settings-about-button')) setAboutOpen(false, false);
+            if (!event.target.closest?.('.prts-submenu-button')) setSubmenuOpen(null, false);
         };
-        aboutPanel.onclick = event => event.stopPropagation();
         document.addEventListener('click', event => {
             if (!isDragging && !event.target.closest?.('#prts-modal-backdrop, #prts-import-dialog-backdrop')) setFloatOpen(false);
         });
@@ -819,7 +845,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
                 document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) return;
             event.preventDefault();
-            if (!aboutPanel.hidden) setAboutOpen(false);
+            if (activeSubmenu) setSubmenuOpen(null);
             else {
                 setFloatOpen(false);
                 btn.focus({ preventScroll: true });

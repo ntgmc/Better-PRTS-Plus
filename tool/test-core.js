@@ -473,7 +473,7 @@ function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
     saveConfig: () => sandbox.GM_setValue('config', JSON.stringify(sandbox.CONFIG)),
     showPrtsToast: (...args) => toasts.push(args),
     showPrtsModal: options => { dialogs.push(options); return Promise.resolve(h.choice); },
-    document: { createElement: createTestElement, getElementById: () => h.busy ? {} : null, querySelectorAll: () => [] },
+    document: { createElement: createTestElement, getElementById: () => h.busy ? {} : null, querySelector: () => null, querySelectorAll: () => [] },
     setTimeout: callback => { const id = Symbol(); timers.set(id, () => { timers.delete(id); callback(); }); return id; },
     clearTimeout: id => timers.delete(id)
   };
@@ -618,10 +618,13 @@ test('automatic checks defer until an active import or confirmation closes', asy
   assert.strictEqual(h.requests.length, 1);
 });
 
-test('automatic updates wait for About to close while manual checks can open above it', async () => {
+test('automatic updates wait for settings submenus while manual checks can open above them', async () => {
   const h = createScriptUpdateHarness();
-  let hidden = false;
-  h.sandbox.document.getElementById = id => id === 'prts-about-panel' ? { hidden } : null;
+  let open = true;
+  h.sandbox.document.querySelector = selector => {
+    assert.strictEqual(selector, '.prts-submenu-panel.is-open');
+    return open ? {} : null;
+  };
   const automatic = h.api.checkScriptUpdates();
   h.respond();
   assert.strictEqual(await automatic, false);
@@ -631,11 +634,11 @@ test('automatic updates wait for About to close while manual checks can open abo
   assert.strictEqual(await manual, true);
   assert.strictEqual(h.dialogs.length, 1);
   const other = createScriptUpdateHarness();
-  other.sandbox.document.getElementById = h.sandbox.document.getElementById;
+  other.sandbox.document.querySelector = h.sandbox.document.querySelector;
   const pending = other.api.checkScriptUpdates();
   other.respond();
   await pending;
-  hidden = true;
+  open = false;
   assert.strictEqual(await other.api.checkScriptUpdates(), true);
   assert.strictEqual(other.dialogs.length, 1);
 });
@@ -895,7 +898,7 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
-test('About cascades from unchanged settings and closes one level at a time', () => {
+test('settings categories preserve controls and state while switching and collapsing submenus', () => {
   const body = createTestElement('body');
   const listeners = new Map();
   const all = node => [node, ...node.children.flatMap(all)];
@@ -913,17 +916,19 @@ test('About cascades from unchanged settings and closes one level at a time', ()
     return element;
   };
   document.createElementNS = (_namespace, tag) => document.createElement(tag);
+  document.createTextNode = text => createTestElement('text', text);
   let saves = 0, checks = 0;
+  const actions = [];
   const sandbox = {
     document, window: { addEventListener() {} },
     GM_info: { script: { version: '7.8.9-beta.1' } },
     SCRIPT_RELEASE_URL: 'https://github.com/ntgmc/Better-PRTS-Plus/releases',
-    CONFIG: { importantUpdatesOnly: false, compatDebug: false },
-    CONFIG_DEFINITIONS: Object.fromEntries(['collapseDescription', 'importantUpdatesOnly', 'compatDebug'].map(key => [key, CONFIG_DEFINITIONS[key]])),
+    CONFIG: { importantUpdatesOnly: false, compatDebug: false }, CONFIG_DEFINITIONS,
     RELEASE_LEVELS: { normal: '普通更新', important: '重要更新', urgent: '紧急更新' }, BP_SELECTORS: {},
     saveConfig: () => { saves++; }, checkScriptUpdates: manual => { assert.strictEqual(manual, true); checks++; },
     refreshAccountControls() {}, syncPageScaffold() {}, enhancePopover() {}, requestFilterUpdate() {},
-    handleImport() {}, handleOpenSklandImport() {}, handleExportAccountsBackup() {}, handleImportAccountsBackup() {},
+    handleImport: () => actions.push('import'), handleOpenSklandImport: () => actions.push('skland'),
+    handleExportAccountsBackup: () => actions.push('export'), handleImportAccountsBackup: () => actions.push('restore'),
     ResizeObserver: class { observe() {} }
   };
   vm.runInNewContext(['src/ui/dom-helpers.js', 'src/ui/panels.js'].map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), sandbox);
@@ -937,7 +942,25 @@ test('About cascades from unchanged settings and closes one level at a time', ()
   const originalContent = main.textContent;
   assert.strictEqual(about.tagName, 'DIV');
   assert.strictEqual(about.parentElement, ball.parentElement);
-  assert.strictEqual(about.hidden, true);
+  assert.strictEqual(about.inert, true);
+  const categoryIds = ['cards', 'page', 'accounts', 'about', 'diagnostics'];
+  const categoryPanels = categoryIds.map(id => document.getElementById(`prts-${id}-panel`));
+  const categoryButtons = categoryIds.map(id => document.getElementById(`prts-settings-${id}-button`));
+  assert.strictEqual(main.children.length, categoryIds.length);
+  assert(categoryPanels.every(node => node.inert && node.attributes.get('aria-hidden') === 'true'));
+  assert.strictEqual(categoryButtons[4].hidden, true);
+  Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
+    if (!definition.group) return;
+    const target = { '作业卡片': 0, '页面增强': 1, '脚本更新': 3, '诊断': 4 }[definition.group];
+    const controls = all(categoryPanels[target]).filter(node => node.dataset.prtsConfigKey === key);
+    assert.strictEqual(controls.length, definition.options?.length || 1, key);
+    assert(!all(main).some(node => node.dataset.prtsConfigKey === key));
+  });
+  for (const [text, expected] of [['导入干员数据', 'import'], ['森空岛导入', 'skland'], ['导出全部配置', 'export'], ['导入全部配置', 'restore']]) {
+    all(categoryPanels[2]).find(node => node.tagName === 'BUTTON' && node.textContent === text)._prtsClickHandler();
+    assert.strictEqual(actions.at(-1), expected);
+  }
+  assert.strictEqual(all(categoryPanels[2]).filter(node => node.className === 'prts-acc-btn').length, 3);
   assert(!main.textContent.includes('脚本更新'));
   assert(!main.textContent.includes('检查脚本更新'));
   assert(about.textContent.includes('7.8.9-beta.1'));
@@ -948,7 +971,8 @@ test('About cascades from unchanged settings and closes one level at a time', ()
   assert(links.every(link => link.href.startsWith('https://github.com/') && link.target === '_blank' && link.rel === 'noopener noreferrer'));
   ball.onclick({ stopPropagation() {}, detail: 0 });
   entry._prtsClickHandler();
-  assert.strictEqual(about.hidden, false);
+  assert.strictEqual(about.inert, false);
+  assert(about.classList.contains('is-open'));
   assert.notStrictEqual(main.hidden, true);
   assert.strictEqual(main.textContent, originalContent);
   assert.strictEqual(main.scrollTop, 123);
@@ -967,30 +991,53 @@ test('About cascades from unchanged settings and closes one level at a time', ()
   body.appendChild(modal);
   listeners.get('click')({ target: { closest: () => modal } });
   escape();
-  assert.strictEqual(about.hidden, false);
+  assert.strictEqual(about.inert, false);
   modal.remove();
   escape();
-  assert.strictEqual(about.hidden, true);
+  assert.strictEqual(about.inert, true);
+  assert(!about.classList.contains('is-open'));
+  assert.notStrictEqual(about.hidden, true, 'closing keeps the panel rendered for its exit animation');
   assert.strictEqual(document.activeElement, entry);
   assert(body.firstChild.classList.contains('prts-float-open'));
   assert.strictEqual(main.scrollTop, 123);
   assert.strictEqual(entry.attributes.get('aria-expanded'), 'false');
   entry._prtsClickHandler();
   entry._prtsClickHandler();
-  assert.strictEqual(about.hidden, true, 'clicking About again collapses just the child');
+  assert.strictEqual(about.inert, true, 'clicking About again collapses just the child');
   entry._prtsClickHandler();
   close._prtsClickHandler();
-  assert.strictEqual(about.hidden, true);
+  assert.strictEqual(about.inert, true);
   assert(body.firstChild.classList.contains('prts-float-open'));
   entry._prtsClickHandler();
   document.getElementById('prts-settings-panel').onclick({ target: body, stopPropagation() {} });
-  assert.strictEqual(about.hidden, true, 'using the parent collapses its child');
-  entry._prtsClickHandler();
+  assert.strictEqual(about.inert, true, 'using the parent collapses its child');
+  for (const [index, button] of categoryButtons.entries()) {
+    button._prtsClickHandler();
+    assert.strictEqual(categoryPanels.filter(node => node.classList.contains('is-open')).length, 1);
+    assert.strictEqual(categoryPanels[index].inert, false);
+    assert.strictEqual(button.attributes.get('aria-expanded'), 'true');
+    assert(categoryPanels.filter((_, i) => i !== index).every(node => node.inert));
+  }
+  const heading = all(body).find(node => node.className === 'prts-settings-heading');
+  heading.events.get('click')({ shiftKey: true, preventDefault() {}, stopPropagation() {} });
+  assert.strictEqual(categoryButtons[4].hidden, false);
+  heading.events.get('click')({ shiftKey: true, preventDefault() {}, stopPropagation() {} });
+  assert.strictEqual(categoryButtons[4].hidden, true);
+  assert(categoryPanels.every(node => node.inert));
+  categoryButtons[0]._prtsClickHandler();
+  const collapse = all(categoryPanels[0]).find(node => node.dataset.prtsConfigKey === 'collapseDescription');
+  collapse.onchange({ target: { checked: false } });
+  assert.strictEqual(sandbox.CONFIG.collapseDescription, false);
+  assert.strictEqual(saves, 2);
+  const detailed = all(categoryPanels[0]).find(node => node.dataset.prtsConfigKey === 'trainingPromptStyle' && node.value === 'DETAILED');
+  detailed._prtsClickHandler();
+  assert.strictEqual(sandbox.CONFIG.trainingPromptStyle, 'DETAILED');
+  assert.strictEqual(saves, 3);
   listeners.get('click')({ target: body });
-  assert.strictEqual(about.hidden, true);
+  assert(categoryPanels.every(node => node.inert));
   assert(!body.firstChild.classList.contains('prts-float-open'));
   ball.onclick({ stopPropagation() {}, detail: 0 });
-  assert.strictEqual(about.hidden, true, 'reopening settings leaves the child collapsed');
+  assert(categoryPanels.every(node => node.inert), 'reopening settings leaves children collapsed');
   escape();
   assert(!body.firstChild.classList.contains('prts-float-open'));
   assert.strictEqual(document.activeElement, ball);
@@ -1442,11 +1489,12 @@ test('floating layout cascades both edges and keeps parent and child within the 
     get offsetHeight() { return Math.min(560, parseFloat(this.style['--prts-panel-max-height'])); }
   };
   const about = {
-    hidden: false,
+    dataset: { triggerId: 'prts-settings-about-button' },
     style: { setProperty(key, value) { this[key] = value; } },
-    get offsetWidth() { return Math.min(340, parseFloat(this.style['--prts-about-width'])); },
+    get offsetWidth() { return Math.min(340, parseFloat(this.style['--prts-submenu-width'])); },
     get offsetHeight() { return Math.min(600, parseFloat(this.style.maxHeight)); }
   };
+  container.querySelectorAll = () => [about];
   const entry = { getBoundingClientRect: () => ({ top: parseFloat(container.style.top) + parseFloat(panel.style.top) + panel.offsetHeight - 60 }) };
   page.document = { getElementById: id => ({
     'prts-float-container': container, 'prts-settings-panel': panel,
@@ -2616,6 +2664,18 @@ function createOperatorImportPage(sharedStorage) {
   vm.runInContext(fs.readFileSync(path.join(repoRoot, 'src/ui/import-controls.js'), 'utf8'), page);
   return { page, readers, toasts, previews };
 }
+
+test('Escape closes only the operator import dialog and stops before settings shortcuts', () => {
+  const { page } = createOperatorImportPage(new Map());
+  let keydown;
+  page.document.addEventListener = (event, listener) => { if (event === 'keydown') keydown = listener; };
+  page.openOperatorImportDialog();
+  assert(page.document.getElementById('prts-import-dialog'));
+  let prevented = false, stopped = false;
+  keydown({ key: 'Escape', preventDefault: () => { prevented = true; }, stopPropagation: () => { stopped = true; } });
+  assert.strictEqual(page.document.getElementById('prts-import-dialog'), null);
+  assert(prevented && stopped);
+});
 
 test('file and paste imports preview destructive changes before writing and preserve data on cancellation', async () => {
   const initial = createAccountState({ activeAccountId: 2,

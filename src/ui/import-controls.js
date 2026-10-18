@@ -261,7 +261,11 @@
 
         const handleKeydown = event => {
             if (document.getElementById('prts-modal')) return;
-            if (event.key === 'Escape') closeOperatorImportDialog();
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                event.stopPropagation();
+                closeOperatorImportDialog();
+            }
             if (event.key === 'Tab') {
                 const focusable = getFocusableDialogElements(dialog);
                 if (focusable.length === 0) return;
