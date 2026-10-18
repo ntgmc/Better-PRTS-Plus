@@ -147,7 +147,12 @@
         });
     }
 
+    function syncSiteRedesign() {
+        document.body?.classList.toggle('prts-site-redesign', isPrtsHost() && CONFIG.siteRedesign);
+    }
+
     function syncPageScaffold() {
+        syncSiteRedesign();
         applySidebarCollapse();
         optimizeDialogContent();
         createFloatingBall();

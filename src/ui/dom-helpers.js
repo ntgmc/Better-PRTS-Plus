@@ -23,6 +23,7 @@
         reload: 'M13.5 1v5.5H8L10 4.5a4.5 4.5 0 1 0 2.4 5H14A6 6 0 1 1 11.1 3.4Z',
         cards: 'M4 1h11v11h-1.5V2.5H4ZM1 4h11v11H1Zm1.5 1.5v8h8v-8ZM4 8h5v1.5H4Zm0 3h4v1.5H4Z',
         pageEnhancements: 'M1 2h14v12H1Zm1.5 4v6.5h11V6Zm0-2.5v1h11v-1ZM8 6.5l.9 2.1L11 9.5l-2.1.9L8 12.5l-.9-2.1L5 9.5l2.1-.9Z',
+        siteRedesign: 'M1 2h14v12H1Zm1.5 1.5v2h11v-2Zm0 3.5v5.5h3V7Zm4.5 0v5.5h6.5V7Zm1 1h4.5v1.5H8Zm0 2.5h3V12H8Z',
         collapseDescription: 'M2 1h12v1.5H2Zm0 3h12v1.5H2Zm0 3h8v1.5H2Zm2 6 4-4 4 4-1.1 1.1L8 11.2l-2.9 2.9Z',
         operatorAvatars: 'M1 1h14v14H1Zm1.5 1.5v11h11v-11ZM10.5 6a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM4 12c0-2 1.5-3 4-3s4 1 4 3Z',
         stageBadge: 'M8 1a5 5 0 0 1 5 5c0 3.5-5 9-5 9S3 9.5 3 6a5 5 0 0 1 5-5Zm0 1.5A3.5 3.5 0 0 0 4.5 6c0 2.1 2.2 5.2 3.5 6.7 1.3-1.5 3.5-4.6 3.5-6.7A3.5 3.5 0 0 0 8 2.5ZM10 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',

@@ -1381,6 +1381,45 @@ test('real modal buttons return distinct update choices and keep Escape local', 
   assert.strictEqual(document.getElementById('prts-toast-container').parentElement, body);
 });
 
+test('site redesign defaults off, persists and restores immediately without touching host theme classes', () => {
+  const saved = new Map();
+  const createPage = () => {
+    const page = vm.createContext({
+      ...context,
+      window: { ...context.window, BetterPRTSPlusDebug: {}, location: { ...context.window.location, hostname: 'prts.plus' } },
+      GM_getValue: (key, fallback) => saved.has(key) ? saved.get(key) : fallback,
+      GM_setValue: (key, value) => saved.set(key, value)
+    });
+    page.globalThis = page;
+    vm.runInContext(source, page);
+    return page;
+  };
+  const page = createPage();
+  const config = page.__testExports.CONFIG;
+  const body = createTestElement('body');
+  body.className = 'dark bp6-dark';
+  page.document = { body };
+  assert.strictEqual(config.siteRedesign, false);
+  assert.strictEqual(normalizeConfig({ siteRedesign: 'true' }).siteRedesign, false);
+  page.syncSiteRedesign();
+  assert.strictEqual(body.className, 'dark bp6-dark');
+  config.siteRedesign = true;
+  page.saveConfig();
+  page.syncSiteRedesign();
+  assert(body.classList.contains('prts-site-redesign'));
+  assert.strictEqual(createPage().__testExports.CONFIG.siteRedesign, true);
+  config.siteRedesign = false;
+  page.saveConfig();
+  page.syncSiteRedesign();
+  assert.strictEqual(body.className, 'dark bp6-dark');
+  assert.strictEqual(page.needsSettingsReload(), false);
+  assert.strictEqual(createPage().__testExports.CONFIG.siteRedesign, false);
+  config.siteRedesign = true;
+  page.window.location.hostname = 'www.skland.com';
+  page.syncSiteRedesign();
+  assert.strictEqual(body.className, 'dark bp6-dark');
+});
+
 test('both host branches inject icon, toast layout, state and reduced-motion styles', () => {
   for (const skland of [false, true]) {
     let css = '';
@@ -1395,6 +1434,7 @@ test('both host branches inject icon, toast layout, state and reduced-motion sty
     }
     assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\.prts-toast/);
     assert(css.includes('.prts-toast.is-leaving'));
+    assert.strictEqual(css.includes('body.prts-site-redesign'), !skland, 'site redesign is only injected on PRTS');
   }
 });
 
