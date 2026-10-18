@@ -70,8 +70,14 @@ Push-Location $testRoot
 try {
     Copy-Item -Path (Join-Path $repoRoot "src"), (Join-Path $repoRoot "tool"), (Join-Path $repoRoot "resources") -Destination $testRepo -Recurse
     Copy-Item -Path (Join-Path $repoRoot "README.md"), (Join-Path $repoRoot "Better-PRTS-Plus.user.js") -Destination $testRepo
+    New-Item -ItemType Directory -Path (Join-Path $testRepo "release-notes") | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $testRepo "release-notes/99.0.2.md"), "### Added`n`n- Offline Markdown fixture`n", $utf8NoBom)
     $releaseNotes = @("99.0.1", "99.0.2", "99.0.3", "99.0.4-beta.1", "99.0.4-beta.2", "99.0.4") | ForEach-Object {
-        @{ version = $_; level = "normal"; notes = "Offline release test fixture for $_"; humanWritten = $true }
+        if ($_ -eq "99.0.2") {
+            @{ version = $_; level = "normal"; notesFile = "release-notes/$_.md"; humanWritten = $true }
+        } else {
+            @{ version = $_; level = "normal"; notes = "Offline release test fixture for $_"; humanWritten = $true }
+        }
     }
     [System.IO.File]::WriteAllText((Join-Path $testRepo "releases.json"),
         (@{ schemaVersion = 1; releases = @($releaseNotes) } | ConvertTo-Json -Depth 4), $utf8NoBom)
@@ -157,9 +163,17 @@ try {
     Assert ((Invoke-TestGit rev-parse HEAD) -eq $uploadHead) "Missing notes created a commit"
     Assert ((Invoke-TestGit tag --list v99.0.0) -eq "") "Missing notes created a tag"
 
+    $markdownNotes = "### Added`n`n- New release notes file`n`n### Fixed`n`n- Offline fixture`n"
+    [System.IO.File]::WriteAllText((Join-Path $testRepo "release-notes/99.0.1.md"), $markdownNotes, $utf8NoBom)
+    $firstRelease = $releaseNotes | Where-Object { $_.version -eq "99.0.1" }
+    $firstRelease.Remove("notes")
+    $firstRelease.notesFile = "release-notes/99.0.1.md"
+    [System.IO.File]::WriteAllText((Join-Path $testRepo "releases.json"),
+        (@{ schemaVersion = 1; releases = @($releaseNotes) } | ConvertTo-Json -Depth 4), $utf8NoBom)
     Write-Hook $receiveHook "#!/bin/sh`nexit 1"
     Assert-Failure { & $publish -Version "99.0.1" } "failed"
     $releaseHead = Invoke-TestGit rev-parse HEAD
+    Assert ((Invoke-TestGit show "HEAD:release-notes/99.0.1.md") -eq $markdownNotes.Trim()) "Publish did not commit the new Markdown notes"
     $updateCalls = $operatorUpdateCalls
     Assert ((Invoke-TestGit rev-list --count HEAD) -eq "3") "Publish did not create exactly one commit"
     Assert ((Invoke-TestGit rev-parse "refs/tags/v99.0.1^{commit}") -eq $releaseHead) "Local release tag is missing"
@@ -201,6 +215,11 @@ done
     Assert ((Invoke-TestGit rev-parse HEAD) -eq $releaseHead) "Local tag conflict created a commit"
     Invoke-TestGit restore -- src/meta/userscript-header.js | Out-Null
     Invoke-TestGit tag -d v99.0.3 | Out-Null
+
+    Add-Content -LiteralPath (Join-Path $testRepo "release-notes/99.0.2.md") -Value "- Changed notes after tagging"
+    Assert-Failure { & $publish -Version "99.0.2" } "Release files have changes"
+    Assert ((Invoke-TestGit rev-parse HEAD) -eq $releaseHead) "Changed tagged notes created a commit"
+    Invoke-TestGit restore -- release-notes/99.0.2.md | Out-Null
 
     $newSource = Join-Path $testRepo "src/release-test.js"
     [System.IO.File]::WriteAllText($newSource, "// changed release`n", $utf8NoBom)

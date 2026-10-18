@@ -73,13 +73,81 @@
         return true;
     }
 
+    function appendReleaseNoteText(container, text) {
+        let offset = 0;
+        // 只创建白名单节点；HTML 保留为文字，链接只允许 HTTP(S)。
+        const tokens = /`([^`\n]+)`|\*\*([^*\n]+)\*\*|\*([^*\n]+)\*|\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g;
+        for (const match of text.matchAll(tokens)) {
+            container.appendChild(document.createTextNode(text.slice(offset, match.index)));
+            const node = document.createElement(match[1] ? 'code' : match[2] ? 'strong' : match[3] ? 'em' : 'a');
+            node.textContent = match[1] || match[2] || match[3] || match[4];
+            if (match[5]) {
+                node.href = match[5];
+                node.target = '_blank';
+                node.rel = 'noopener noreferrer';
+            }
+            container.appendChild(node);
+            offset = match.index + match[0].length;
+        }
+        container.appendChild(document.createTextNode(text.slice(offset)));
+    }
+
+    function renderReleaseNotes(markdown) {
+        const content = document.createElement('div');
+        content.className = 'prts-release-notes';
+        let list = null, paragraph = null;
+        for (const line of markdown.split(/\r?\n/)) {
+            if (!line.trim()) { list = null; paragraph = null; continue; }
+            const heading = line.match(/^ {0,3}#{1,6}\s+(.+?)(?:\s+#+)?$/);
+            const item = line.match(/^ {0,3}(?:[-+*]|(\d+)[.)])\s+(.+)$/);
+            if (heading) {
+                list = null; paragraph = null;
+                const title = document.createElement('h4');
+                appendReleaseNoteText(title, heading[1]);
+                content.appendChild(title);
+            } else if (item) {
+                paragraph = null;
+                const tag = item[1] ? 'ol' : 'ul';
+                if (!list || list.tagName.toLowerCase() !== tag) {
+                    list = document.createElement(tag);
+                    if (item[1]) list.start = Number(item[1]);
+                    content.appendChild(list);
+                }
+                const entry = document.createElement('li');
+                appendReleaseNoteText(entry, item[2]);
+                list.appendChild(entry);
+            } else {
+                if (list && /^\s+/.test(line)) {
+                    appendReleaseNoteText(list.lastChild, '\n' + line.trim());
+                    continue;
+                }
+                list = null;
+                if (!paragraph) {
+                    paragraph = document.createElement('p');
+                    content.appendChild(paragraph);
+                } else paragraph.appendChild(document.createTextNode('\n'));
+                appendReleaseNoteText(paragraph, line);
+            }
+        }
+        return content;
+    }
+
     function showScriptUpdateModal(update, preview = false) {
         const message = document.createElement('div');
         message.className = 'prts-update-notes';
-        message.textContent = `当前版本：${GM_info.script.version}\n新版本：${update.version} · ${RELEASE_LEVELS[update.level]}\n\n` +
-            update.releases.map(release => `${release.version} · ${RELEASE_LEVELS[release.level]}\n${release.notes}`).join('\n\n') +
-            (preview ? '\n\n这是样式预览，点击下方按钮仅显示操作反馈。'
-                : '\n\n点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。');
+        const versions = document.createElement('p');
+        versions.textContent = `当前版本：${GM_info.script.version}\n新版本：${update.version} · ${RELEASE_LEVELS[update.level]}`;
+        message.appendChild(versions);
+        for (const release of update.releases) {
+            const title = document.createElement('h3');
+            title.textContent = `${release.version} · ${RELEASE_LEVELS[release.level]}`;
+            message.appendChild(title);
+            message.appendChild(renderReleaseNotes(release.notes));
+        }
+        const hint = document.createElement('p');
+        hint.textContent = preview ? '这是样式预览，点击下方按钮仅显示操作反馈。'
+            : '点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。';
+        message.appendChild(hint);
         return showPrtsModal({
             title: preview ? 'Better-PRTS-Plus 更新弹窗预览' : 'Better-PRTS-Plus 发现新版本', message,
             extraAction: { text: '仅重要更新提示', value: 'important' },
@@ -95,7 +163,7 @@
         }
         const release = {
             version: '99.0.0', level,
-            notes: '以下内容为样式测试示例。\n\n示例新增：展示新版本、更新级别和多行更新说明。\n示例修复：检查长文本在较窄屏幕上的自动换行，确认内容完整显示，底部操作按钮清晰可用。\n示例说明：可切换网站的浅色、深色或高对比主题，重复预览。'
+            notes: '以下内容为样式测试示例。\n\n### 新增\n\n- 展示新版本、**更新级别**和分类更新说明。\n\n### 优化\n\n- 可切换网站的浅色、深色或高对比主题，重复预览。\n\n### 修复\n\n- 检查较窄屏幕上的长文本换行，确认内容完整显示，底部操作按钮清晰可用。'
         };
         const choice = await showScriptUpdateModal({ ...release, releases: [release] }, true);
         if (choice !== null) {

@@ -34,7 +34,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
         run: |
           if [[ -z "$BASE_SHA" || "$BASE_SHA" == 0000000000000000000000000000000000000000 ]] ||
-            ! git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- 'tool/*.ps1' tool/prepare-release.js src/core/release-manifest.js releases.json .githooks .github/workflows; then
+            ! git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- 'tool/*.ps1' tool/prepare-release.js src/core/release-manifest.js releases.json release-notes .githooks .github/workflows; then
             pwsh -NoProfile -ExecutionPolicy Bypass -File tool/test-release.ps1
           else
             echo "Release tooling is unchanged; skipping offline release tests."

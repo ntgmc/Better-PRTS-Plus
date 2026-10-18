@@ -10,14 +10,36 @@
 {
   "version": "下一次发布的版本号",
   "level": "normal",
-  "notes": "维护者亲自填写的更新内容，可用换行分项说明。",
+  "notesFile": "release-notes/下一次发布的版本号.md",
   "humanWritten": true
 }
 ```
 
+`version` 不带 `v`，例如 `4.0.0`；对应的 Git tag 由发布脚本生成为 `v4.0.0`。
+
+更新正文放在 `notesFile` 指向的独立 Markdown 文件中，路径必须位于 `release-notes/` 目录内，以 `.md` 结尾。按实际变化填写“新增”“优化”“修复”等分类，没有内容的分类直接省略：
+
+```markdown
+### 新增
+
+- 新功能的用途和使用方式。
+
+### 优化
+
+- 已有功能的体验改进。
+
+### 修复
+
+- 修复的问题及影响。
+```
+
+GitHub Release 直接使用这份 Markdown。脚本更新弹窗支持分类标题、有序及无序列表、**粗体**、*斜体*、行内代码和 HTTP(S) 链接；普通文本及换行仍可使用，HTML 作为文字显示。更复杂的 Markdown 语法可在 GitHub 查看。
+
+发布工具会读取文件，将正文写入 Release 和 `update.json` 的 `notes` 字段；更新附件包含完整说明，无需客户端另行下载 `.md`。旧记录仍可直接使用字符串 `notes`，但同一记录不能同时填写 `notes` 和 `notesFile`。
+
 更新级别：`normal` 为普通功能和体验调整，`important` 为影响核心功能的变更或修复，`urgent` 为需要尽快安装的修复。级别由维护者判断。
 
-更新说明可以使用 AI 辅助梳理或润色，但必须由维护者本人提供最终内容，不能完全由 AI 代写。确认后设置 `humanWritten: true`；这是维护者的声明，工具无法自动鉴别文字作者。清单初始为空，首次发布前需要补齐目标版本说明，不要求为接入前的历史版本补写。
+更新说明可以使用 AI 辅助梳理或润色，但必须由维护者本人提供最终内容，不能完全由 AI 代写。确认后设置 `humanWritten: true`；这是维护者的声明，工具无法自动鉴别文字作者。发布前需要补齐目标版本说明，不要求为接入前的历史版本补写。
 
 ### 获取 AI 参考摘要
 
@@ -48,7 +70,7 @@ GitHub 未提供 diff 的文件会标为需要人工核对。GitHub Compare 最�
 
 ## 发布脚本
 
-两个脚本都会写入版本号、构建 userscript、同步 README 版本徽章，检查通过后提交并上传。资源由定时 CI 更新，发布时使用仓库中的生成数据。通过 `-Version` 指定版本号；省略时使用 `src/meta/userscript-header.js` 当前的 `// @version`。
+两个脚本都会写入版本号、构建 userscript、同步 README 版本徽章，检查通过后提交并上传；`releases.json` 和 `release-notes/` 会一起提交，无需提前单独 commit。运行前不要留有暂存改动，已有暂存内容需先提交或取消暂存。资源由定时 CI 更新，发布时使用仓库中的生成数据。通过 `-Version` 指定版本号；省略时使用 `src/meta/userscript-header.js` 当前的 `// @version`。
 
 ### 上传并发布 Release
 
@@ -75,7 +97,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/upload-release.ps1 -Ver
 
 推送完成后，等待 GitHub Actions 创建 Release，确认发布附件中包含 `Better-PRTS-Plus.user.js` 和 `update.json`，再将 GreasyFork 同步或手动更新到对应版本。README 继续推荐从 GreasyFork 安装。
 
-运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tool/test-release.ps1` 可检查发布重试流程。检查使用离线数据源和临时本地 Git 远端，结束后自动清理。Check CI 在发布工具、版本说明校验逻辑、`releases.json`、`.githooks/` 或 `.github/workflows/` 变更时自动运行这套测试，首次推送或无法比较提交范围时也会运行；仅修改业务代码或文档时继续运行项目检查。离线发布测试步骤最多运行 5 分钟，可在 Actions 的步骤耗时中观察执行成本。
+运行 `powershell -NoProfile -ExecutionPolicy Bypass -File tool/test-release.ps1` 可检查发布重试流程。检查使用离线数据源和临时本地 Git 远端，结束后自动清理。Check CI 在发布工具、版本说明校验逻辑、`releases.json`、`release-notes/`、`.githooks/` 或 `.github/workflows/` 变更时自动运行这套测试，首次推送或无法比较提交范围时也会运行；仅修改业务代码或文档时继续运行项目检查。离线发布测试步骤最多运行 5 分钟，可在 Actions 的步骤耗时中观察执行成本。
 
 ## 资源更新
 
@@ -98,7 +120,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/update-operator-data.ps
 ## 发布门禁
 
 - `tool/check.ps1` 检查 `src/` 拼接产物与 `Better-PRTS-Plus.user.js` 是否一致，并检查 userscript 语法、README 版本徽章、干员生成物与内嵌数据是否同步，以及已有安全约束。干员组匹配由 `tool/test-core.js` 直接调用实际 JS 验证，覆盖候选重分配、固定干员占用和助战放行；检查脚本不再维护另一份匹配算法。
-- `tool/check-release.ps1 -Tag vX.Y.Z` 检查 tag 格式，要求 tag 版本与 userscript `@version` 完全一致，并检查 `releases.json` 中存在对应版本、说明非空、级别有效且已确认 `humanWritten: true`。缺少任一项都会停止发布。
+- `tool/check-release.ps1 -Tag vX.Y.Z` 检查 tag 格式，要求 tag 版本与 userscript `@version` 完全一致，并检查 `releases.json` 中存在对应版本、Markdown 文件可读且说明非空、级别有效且已确认 `humanWritten: true`。缺少任一项都会停止发布。
 - `tool/publish-release.ps1` 在本地调用 `tool/check-release.ps1`，并在提交前检查已有 tag。只有 tag 指向当前 HEAD 且发布文件没有改动时，脚本才会复用该 tag；否则需要使用新版本号。
 - GitHub Release workflow 会在全部检查通过后创建 Release。tag 与 `@version` 不一致或人工说明校验失败时，发布流程会在创建 Release 前停止。`update.json` 只包含不高于目标发布版本的记录，避免混入未来版本。
 - 带有预发布后缀的版本会在 GitHub Release 中标记为 prerelease。例如，`2.15.0-beta.1` 对应的 tag 是 `v2.15.0-beta.1`。

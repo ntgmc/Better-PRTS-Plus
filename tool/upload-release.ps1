@@ -21,6 +21,7 @@ $releasePaths = @(
     "Better-PRTS-Plus.user.js",
     "README.md",
     "releases.json",
+    "release-notes",
     "resources",
     "tool/operator-data.generated.json",
     "tool/operator-data-update-summary.json"

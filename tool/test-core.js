@@ -484,7 +484,8 @@ function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
     saveConfig: () => sandbox.GM_setValue('config', JSON.stringify(sandbox.CONFIG)),
     showPrtsToast: (...args) => toasts.push(args),
     showPrtsModal: options => { dialogs.push(options); return Promise.resolve(h.choice); },
-    document: { createElement: createTestElement, getElementById: () => h.busy ? {} : null, querySelector: () => null, querySelectorAll: () => [] },
+    document: { createElement: createTestElement, createTextNode: text => createTestElement('text', text),
+      getElementById: () => h.busy ? {} : null, querySelector: () => null, querySelectorAll: () => [] },
     setTimeout: callback => { const id = Symbol(); timers.set(id, () => { timers.delete(id); callback(); }); return id; },
     clearTimeout: id => timers.delete(id)
   };
@@ -548,7 +549,7 @@ test('script checks deduplicate requests, throttle downloads and prompt once per
   assert.strictEqual(await pending, true);
   assert.strictEqual(h.timers.size, 0);
   assert(h.dialogs[0].message.textContent.includes('<img src=x onerror=alert(1)>\n保留换行'));
-  assert.strictEqual(h.dialogs[0].message.children.length, 0);
+  assert.strictEqual(h.dialogs[0].message.querySelector('img'), null);
   assert.strictEqual(h.dialogs[0].extraAction.text, '仅重要更新提示');
   assert.strictEqual(h.dialogs[0].cancelText, '当前版本不再提示');
   assert.strictEqual(h.dialogs[0].confirmText, '立即更新');
@@ -560,6 +561,36 @@ test('script checks deduplicate requests, throttle downloads and prompt once per
   h.respond(releaseManifest(updateRelease('3.12.0')));
   await next;
   assert.strictEqual(h.dialogs.length, 2);
+});
+
+test('release notes render Markdown categories, lists and safe inline formatting while preserving plain text', async () => {
+  const h = createScriptUpdateHarness();
+  const pending = h.api.checkScriptUpdates();
+  const notes = '### 新增\n\n- 支持 **分类说明**、*强调*和 `notesFile`。\n- [使用说明](https://example.com/guide)\n  列表续行\n\n### 修复\n\n3. 修复第一项\n4. 修复第二项\n\n<img src=x onerror=alert(1)>\n<script>alert(1)</script>\n[危险链接](javascript:alert(1))\n[数据链接](data:text/html,example)';
+  h.respond(releaseManifest(updateRelease('3.12.0', 'important', notes), updateRelease('3.11.0', 'normal', '旧说明\n保留换行')));
+  assert.strictEqual(await pending, true);
+  const message = h.dialogs[0].message;
+  const all = node => [node, ...node.children.flatMap(all)];
+  const nodes = all(message);
+  assert.deepStrictEqual(nodes.filter(node => node.tagName === 'H4').map(node => node.textContent), ['新增', '修复']);
+  assert.deepStrictEqual(nodes.filter(node => node.tagName === 'H3').map(node => node.textContent), ['3.12.0 · 重要更新', '3.11.0 · 普通更新']);
+  assert.strictEqual(message.querySelector('strong').textContent, '分类说明');
+  assert.strictEqual(message.querySelector('em').textContent, '强调');
+  assert.strictEqual(message.querySelector('code').textContent, 'notesFile');
+  assert.strictEqual(message.querySelector('ul').children.length, 2);
+  assert(message.querySelector('ul').lastChild.textContent.includes('使用说明\n列表续行'));
+  assert.strictEqual(message.querySelector('ol').start, 3);
+  assert.strictEqual(message.querySelector('ol').children.length, 2);
+  const links = nodes.filter(node => node.tagName === 'A');
+  assert.strictEqual(links.length, 1);
+  assert.strictEqual(links[0].href, 'https://example.com/guide');
+  assert.strictEqual(links[0].target, '_blank');
+  assert.strictEqual(links[0].rel, 'noopener noreferrer');
+  assert(!nodes.some(node => ['IMG', 'SCRIPT'].includes(node.tagName)));
+  assert(message.textContent.includes('<script>alert(1)</script>'));
+  assert(message.textContent.includes('[危险链接](javascript:alert(1))'));
+  assert(message.textContent.includes('[数据链接](data:text/html,example)'));
+  assert(message.textContent.includes('旧说明\n保留换行'));
 });
 
 test('script checks use the first valid origin or mirror and cancel slower requests', async () => {
@@ -801,17 +832,34 @@ test('release preparation refuses unconfirmed notes and publishes only the selec
     fs.writeFileSync(path.join(temporary, 'src/core/release-manifest.js'), releaseManifestSource);
     const prepare = () => require('child_process').spawnSync(process.execPath,
       [path.join(temporary, 'tool/prepare-release.js'), '3.11.0', path.join(temporary, 'output')], { encoding: 'utf8' });
-    for (const manifest of [releaseManifest(), releaseManifest({ ...updateRelease(), humanWritten: false }), releaseManifest({ ...updateRelease(), notes: '' })]) {
+    fs.mkdirSync(path.join(temporary, 'release-notes'));
+    const notes = '### 新增\n\n- 维护者提供的**正式说明**\n\n### 修复\n\n- 第二项原文';
+    fs.writeFileSync(path.join(temporary, 'release-notes/3.11.0.md'), notes + '\n');
+    fs.writeFileSync(path.join(temporary, 'release-notes/empty.md'), ' \n');
+    fs.writeFileSync(path.join(temporary, 'release-notes/notes.txt'), notes);
+    fs.writeFileSync(path.join(temporary, 'outside.md'), notes);
+    const fileRelease = { version: '3.11.0', level: 'important', notesFile: 'release-notes/3.11.0.md', humanWritten: true };
+    const invalidFiles = ['', null, 123, 'release-notes/missing.md', 'release-notes/empty.md', 'release-notes/notes.txt',
+      'release-notes/../outside.md', path.join(temporary, 'outside.md')];
+    if (process.platform !== 'win32') {
+      fs.symlinkSync(path.join(temporary, 'outside.md'), path.join(temporary, 'release-notes/link.md'));
+      invalidFiles.push('release-notes/link.md');
+    }
+    for (const manifest of [releaseManifest(), releaseManifest({ ...updateRelease(), humanWritten: false }), releaseManifest({ ...updateRelease(), notes: '' }),
+      releaseManifest({ ...fileRelease, notes: '不能同时提供两份说明' }), releaseManifest({ ...fileRelease, humanWritten: false }),
+      ...invalidFiles.map(notesFile => releaseManifest({ ...fileRelease, notesFile }))]) {
       fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(manifest));
       assert.notStrictEqual(prepare().status, 0);
       assert(!fs.existsSync(path.join(temporary, 'output')));
     }
-    const notes = '维护者提供的正式说明\n第二行原文';
-    fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(releaseManifest(updateRelease('3.12.0'), updateRelease('3.11.0', 'important', notes), updateRelease('3.10.1'))));
+    fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(releaseManifest(updateRelease('3.12.0'), fileRelease, updateRelease('3.10.1'))));
     const result = prepare();
     assert.strictEqual(result.status, 0, result.stderr);
     const manifest = JSON.parse(fs.readFileSync(path.join(temporary, 'output/update.json'), 'utf8'));
     assert.deepStrictEqual(manifest.releases.map(release => release.version), ['3.11.0', '3.10.1']);
+    assert.strictEqual(manifest.releases[0].notes, notes + '\n');
+    assert(!Object.hasOwn(manifest.releases[0], 'notesFile'));
+    assert.strictEqual(manifest.releases[1].notes, '更新测试说明');
     assert.strictEqual(fs.readFileSync(path.join(temporary, 'output/RELEASE_NOTES.md'), 'utf8'), `## 3.11.0 · 重要更新\n\n${notes}\n`);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
