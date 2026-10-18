@@ -842,22 +842,30 @@ test('AI summaries default to comparing main with the latest release and support
         assert(Object.hasOwn(routes, route), `Unexpected GitHub route: ${route}`);
         return { ok: true, json: async () => routes[route] };
       }
-      const response = apiType === 'message' ? { content: [{ type: 'text', text: '版本变更摘要' }] }
-        : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text: '版本变更摘要' }] }] }
-          : { choices: [{ message: { content: '版本变更摘要' }, finish_reason: 'stop' }] };
+      const text = requests.filter(item => !item.url.startsWith('https://api.github.com/')).length === 1 ? '版本分块事实' : '版本变更摘要\n更新级别：重要';
+      const response = apiType === 'message' ? { content: [{ type: 'text', text }] }
+        : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text }] }] }
+          : { choices: [{ message: { content: text }, finish_reason: 'stop' }] };
       return { ok: true, json: async () => response };
     });
     assert(summary.includes(`main 对比 ${tag}`));
     assert(summary.includes(`Base SHA：${base}`) && summary.includes(`Head SHA：${head}`));
-    assert(summary.includes('版本变更摘要') && summary.includes('最终更新内容须由维护者本人提供'));
-    assert.strictEqual(requests.length, baseTag ? 4 : 5);
+    assert(summary.includes('版本变更摘要') && summary.includes('更新级别：重要'));
+    assert(!summary.includes('版本分块事实') && !summary.includes('最终更新内容'));
+    assert.strictEqual(requests.length, baseTag ? 5 : 6);
     assert.strictEqual(requests.some(item => item.url.endsWith('/releases/latest')), !baseTag);
-    const ai = requests.at(-1);
-    assert(ai.options.body.includes('+releaseChange();'));
-    assert(ai.options.body.includes(base) && ai.options.body.includes(head));
-    assert(!ai.options.body.includes('BUILD_OUTPUT_MUST_BE_SKIPPED'));
-    assert(!ai.options.headers.Authorization?.includes('test-github-key'));
-    assert(requests.slice(0, -1).every(item => item.options.headers.Authorization === 'Bearer test-github-key' && !item.options.headers['x-api-key']));
+    const extraction = requests.at(-2);
+    const reduction = requests.at(-1);
+    assert(extraction.options.body.includes('+releaseChange();'));
+    assert(extraction.options.body.includes(base) && extraction.options.body.includes(head));
+    assert(!extraction.options.body.includes('BUILD_OUTPUT_MUST_BE_SKIPPED'));
+    assert(reduction.options.body.includes('版本分块事实') && reduction.options.body.includes('合并同类项'));
+    const extractBody = JSON.parse(extraction.options.body);
+    const extractSystem = apiType === 'message' ? extractBody.system : (extractBody.input || extractBody.messages)[0].content;
+    assert(!/普通|重要|紧急|维护者|人工确认|仅供/.test(extractSystem));
+    assert(!reduction.options.body.includes('维护者') && !reduction.options.body.includes('人工确认'));
+    assert([extraction, reduction].every(item => !item.options.headers.Authorization?.includes('test-github-key')));
+    assert(requests.slice(0, -2).every(item => item.options.headers.Authorization === 'Bearer test-github-key' && !item.options.headers['x-api-key']));
   }
   assert.strictEqual(fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8'), before);
 });
@@ -887,7 +895,7 @@ test('version summaries skip unchanged ranges and refuse incomplete or unrelated
   }
 });
 
-test('PR summaries support three APIs and leave final release notes to the maintainer', async () => {
+test('PR summaries support three APIs and preserve the release manifest', async () => {
   const { summarizeChanges } = require('./summarize-pr-changelog');
   const before = fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8');
   for (const apiType of ['message', 'response', 'chatcompletion']) {
@@ -904,10 +912,10 @@ test('PR summaries support three APIs and leave final release notes to the maint
       return { ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : response };
     });
     assert(summary.includes('AI 测试摘要'));
-    assert(summary.includes('最终更新内容须由维护者本人提供'));
+    assert(!summary.includes('最终更新内容') && !summary.includes('humanWritten'));
     assert(summary.includes(pr.head.sha));
-    assert.strictEqual(requests.length, 4);
-    const ai = requests.at(-1);
+    assert.strictEqual(requests.length, 5);
+    const ai = requests.at(-2);
     assert(!ai.options.body.includes('BUILD_OUTPUT_MUST_BE_SKIPPED'));
     assert(ai.options.body.includes('+checkScriptUpdates();'));
     assert.strictEqual(ai.options.redirect, 'error');
@@ -922,26 +930,79 @@ test('PR summaries support three APIs and leave final release notes to the maint
   assert.strictEqual(fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8'), before);
 });
 
-test('PR analysis paginates files, splits long diffs and rejects changed heads and HTTP failures', async () => {
+test('PR analysis merges all chunks, judges importance once and logs request progress', async () => {
   const { summarizeChanges } = require('./summarize-pr-changelog');
   const env = { SUMMARY_TYPE: 'pr', GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model' };
   const pr = { title: 'Long PR', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 101 };
   const files = Array.from({ length: 101 }, (_, index) => ({ filename: `file-${index}.js`, patch: '+' + 'x'.repeat(300), status: 'modified', additions: 1, deletions: 0 }));
   let modelCalls = 0;
+  const logs = [];
   const summary = await summarizeChanges(env, async (url, options) => ({ ok: true, json: async () => {
     if (url.startsWith('https://api.github.com/')) return url.includes('/files?') ? files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101) : pr;
     modelCalls++;
-    assert(JSON.parse(options.body).messages[0].content.length < 25000);
-    return { content: [{ type: 'text', text: `摘要 ${modelCalls}` }] };
-  } }));
-  assert.strictEqual(modelCalls, 2);
-  assert(summary.includes('摘要 1') && summary.includes('摘要 2'));
+    const payload = JSON.parse(options.body);
+    if (modelCalls <= 2) {
+      assert(payload.messages[0].content.length < 25000);
+      assert(!/普通|重要|紧急/.test(payload.system));
+    } else {
+      assert(payload.messages[0].content.includes('分块 1/2\n摘要 1：统一账号切换'));
+      assert(payload.messages[0].content.includes('分块 2/2\n摘要 2：统一账号切换'));
+      assert(payload.system.includes('合并同类项') && payload.system.includes('根据整体影响'));
+    }
+    return { content: [{ type: 'text', text: modelCalls <= 2 ? `摘要 ${modelCalls}：统一账号切换` : '新增统一账号切换。\n更新级别：普通，属于体验调整。' }],
+      usage: { input_tokens: 81, output_tokens: 23 }, stop_reason: 'end_turn' };
+  } }), message => logs.push(message));
+  assert.strictEqual(modelCalls, 3);
+  assert(summary.includes('新增统一账号切换。') && summary.includes('更新级别：普通'));
+  assert(!summary.includes('摘要 1') && !summary.includes('摘要 2'));
+  for (const stage of ['分块分析 1/2', '分块分析 2/2', '合并总结']) {
+    assert(logs.some(line => line.includes(`${stage} 开始：`) && line.includes('input_chars=') && line.includes('estimated_tokens=')));
+    assert(logs.some(line => line.includes(`${stage} 响应：input_tokens=81 output_tokens=23 stop=end_turn elapsed_ms=`)));
+    assert(logs.some(line => line.includes(`${stage} 完成：output_chars=`)));
+  }
+  assert(logs.some(line => line.includes('文件=101 分析文件=101') && line.includes('分块=2')));
+  assert(!logs.join('\n').includes('test-key') && !logs.join('\n').includes('test-ai-key'));
   let metadataReads = 0;
   await assert.rejects(summarizeChanges(env, async url => ({ ok: true, json: async () => {
     if (url.includes('/files?')) return files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101);
     return metadataReads++ ? { ...pr, head: { sha: 'b'.repeat(40) } } : pr;
   } })), /PR 已更新/);
   await assert.rejects(summarizeChanges(env, async () => ({ ok: false, status: 429 })), /HTTP 429/);
+});
+
+test('final summarization rejects truncation, bad responses and request failures for all APIs', async () => {
+  const { summarizeChanges } = require('./summarize-pr-changelog');
+  const pr = { title: 'Example', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 1 };
+  const files = [{ filename: 'src/main.js', patch: '+change();', status: 'modified', additions: 1, deletions: 0 }];
+  for (const apiType of ['message', 'response', 'chatcompletion']) {
+    const env = { SUMMARY_TYPE: 'pr', GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType };
+    const extraction = apiType === 'message' ? { content: [{ type: 'text', text: '分块事实' }] }
+      : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text: '分块事实' }] }] }
+        : { choices: [{ message: { content: '分块事实' }, finish_reason: 'stop' }] };
+    const truncated = apiType === 'message' ? { stop_reason: 'max_tokens' }
+      : apiType === 'response' ? { status: 'incomplete' } : { choices: [{ finish_reason: 'length' }] };
+    for (const failure of ['truncated', 'empty', 'http', 'json', 'network']) {
+      let modelCalls = 0;
+      const logs = [];
+      await assert.rejects(summarizeChanges(env, async url => {
+        if (url.startsWith('https://api.github.com/')) return { ok: true, json: async () => url.includes('/files?') ? files : pr };
+        modelCalls++;
+        if (modelCalls === 2 && failure === 'network') throw new Error('https://secret:test-ai-key@model.invalid');
+        return { ok: !(modelCalls === 2 && failure === 'http'), status: 429, json: async () => {
+          if (modelCalls === 1) return extraction;
+          if (failure === 'json') throw new Error('private API response');
+          return failure === 'truncated' ? truncated : {};
+        } };
+      }, message => logs.push(message)), error => {
+        assert(/合并总结.*(截断|有效摘要|HTTP 429|有效 JSON|网络错误)/.test(error.message));
+        assert(!error.message.includes('test-ai-key') && !error.message.includes('private API response'));
+        return true;
+      });
+      assert.strictEqual(modelCalls, 2);
+      assert(logs.some(line => line.includes('合并总结 开始')));
+      assert(!logs.some(line => line.includes('合并总结 完成') || line.includes('变更总结完成')));
+    }
+  }
 });
 
 test('unified settings migrate legacy values, validate types and prefer saved independent choices', () => {

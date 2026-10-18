@@ -36,11 +36,15 @@
 | Secret 或 Variable | `CHANGELOG_BASE_URL` | 接口根地址，可包含 `/v1`；默认 `https://api.anthropic.com`，也兼容变量 `ANTHROPIC_BASE_URL`。 |
 | Variable | `CHANGELOG_API_TYPE` | `message`、`response` 或 `chatcompletion`，默认 `message`；也可在每次运行时选择。 |
 
-工作流按实际文件 diff 分段总结用户可见变化、修复和待核对事项，省略与 src 重复的 userscript 构建产物。版本模式先将基准 tag 和 main 固定到提交 SHA，再比较两者，摘要标出基准版本及 Base/Head SHA；基准版本必须是 main 的祖先。PR 模式标出 PR Head SHA。范围内没有文件变化时直接生成说明，不调用 AI。
+工作流先按实际文件 diff 分块提取变化，再将全部分块摘要交给 AI 合并同类项、去重，输出一份总摘要。分块只总结变化，最终总结根据整体影响判断普通、重要或紧急级别并说明理由。即使只有一个分块，也会执行最终总结；没有文件变化时不调用 AI。
+
+分析会省略与 src 重复的 userscript 构建产物。版本模式先将基准 tag 和 main 固定到提交 SHA，再比较两者，摘要标出基准版本及 Base/Head SHA；基准版本必须是 main 的祖先。PR 模式标出 PR Head SHA。
+
+Actions 日志显示 GitHub 读取阶段、文件数、diff 大小、分块进度，以及各次 AI 请求的接口类型、模型、输入规模、token 用量（服务返回时）、结束状态和耗时。失败时显示具体阶段及 HTTP 状态、超时、响应格式或截断原因。
 
 GitHub 未提供 diff 的文件会标为需要人工核对。GitHub Compare 最多返回 300 个文件，版本模式达到该上限时会停止，避免输出不完整摘要；PR 模式通过分页读取文件并校验数量。超大 diff 或模型截断也会停止，需要缩小范围后重试。
 
-结果位于 Actions 运行摘要和保留 14 天的 `ai-release-reference` 或 `ai-pr-reference` 附件内，仅供维护者参考。工作流只读仓库与 PR，不执行 PR 代码、不写评论、不设置合并状态，也不会写入 `releases.json`、提交代码或发布 Release。维护者核对摘要后，亲自填写最终更新说明。运行时会将所选范围的 diff 发送给所配置的 AI 服务。
+结果位于 Actions 运行摘要和保留 14 天的 `ai-release-reference` 或 `ai-pr-reference` 附件内，包含合并后的变更总结和整体更新级别。合并总结失败时本次运行失败。运行时会将所选范围的 diff 及分块摘要发送给所配置的 AI 服务。
 
 ## 发布脚本
 
