@@ -818,19 +818,88 @@ test('release preparation refuses unconfirmed notes and publishes only the selec
   }
 });
 
-test('AI summaries support three APIs and leave final release notes to the maintainer', async () => {
-  const { summarizePullRequest } = require('./summarize-pr-changelog');
+test('AI summaries default to comparing main with the latest release and support explicit version tags', async () => {
+  const { summarizeChanges } = require('./summarize-pr-changelog');
+  const before = fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8');
+  const base = 'a'.repeat(40);
+  const head = 'b'.repeat(40);
+  const files = [{ filename: 'src/main.js', status: 'modified', additions: 1, deletions: 0, patch: '+releaseChange();' },
+    { filename: 'Better-PRTS-Plus.user.js', patch: 'BUILD_OUTPUT_MUST_BE_SKIPPED' }];
+  for (const [baseTag, apiType] of [['', 'message'], ['v3.9.0', 'response'], ['archive/v3.8.0', 'chatcompletion']]) {
+    const tag = baseTag || 'v3.10.1';
+    const requests = [];
+    const env = { GITHUB_REPOSITORY: 'owner/repo', BASE_TAG: baseTag, GITHUB_TOKEN: 'test-github-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType };
+    const routes = {
+      'releases/latest': { tag_name: tag },
+      [`commits/${encodeURIComponent(tag)}`]: { sha: base },
+      'commits/main': { sha: head },
+      [`compare/${base}...${head}?per_page=1`]: { status: 'ahead', files }
+    };
+    const summary = await summarizeChanges(env, async (url, options) => {
+      requests.push({ url, options });
+      const route = url.replace('https://api.github.com/repos/owner/repo/', '');
+      if (url.startsWith('https://api.github.com/')) {
+        assert(Object.hasOwn(routes, route), `Unexpected GitHub route: ${route}`);
+        return { ok: true, json: async () => routes[route] };
+      }
+      const response = apiType === 'message' ? { content: [{ type: 'text', text: '版本变更摘要' }] }
+        : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text: '版本变更摘要' }] }] }
+          : { choices: [{ message: { content: '版本变更摘要' }, finish_reason: 'stop' }] };
+      return { ok: true, json: async () => response };
+    });
+    assert(summary.includes(`main 对比 ${tag}`));
+    assert(summary.includes(`Base SHA：${base}`) && summary.includes(`Head SHA：${head}`));
+    assert(summary.includes('版本变更摘要') && summary.includes('最终更新内容须由维护者本人提供'));
+    assert.strictEqual(requests.length, baseTag ? 4 : 5);
+    assert.strictEqual(requests.some(item => item.url.endsWith('/releases/latest')), !baseTag);
+    const ai = requests.at(-1);
+    assert(ai.options.body.includes('+releaseChange();'));
+    assert(ai.options.body.includes(base) && ai.options.body.includes(head));
+    assert(!ai.options.body.includes('BUILD_OUTPUT_MUST_BE_SKIPPED'));
+    assert(!ai.options.headers.Authorization?.includes('test-github-key'));
+    assert(requests.slice(0, -1).every(item => item.options.headers.Authorization === 'Bearer test-github-key' && !item.options.headers['x-api-key']));
+  }
+  assert.strictEqual(fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8'), before);
+});
+
+test('version summaries skip unchanged ranges and refuse incomplete or unrelated comparisons', async () => {
+  const { summarizeChanges } = require('./summarize-pr-changelog');
+  const env = { GITHUB_REPOSITORY: 'owner/repo', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model' };
+  const base = 'a'.repeat(40);
+  const head = 'b'.repeat(40);
+  const run = (comparison, overrides = {}) => summarizeChanges(env, async url => {
+    assert(url.startsWith('https://api.github.com/'), 'Unchanged or invalid comparisons must not request AI');
+    const result = url.endsWith('/releases/latest') ? { tag_name: 'v3.10.1' }
+      : url.endsWith('/commits/v3.10.1') ? { sha: base }
+        : url.endsWith('/commits/main') ? { sha: head } : comparison;
+    return { ok: true, json: async () => Object.hasOwn(overrides, url.split('/').at(-1)) ? overrides[url.split('/').at(-1)] : result };
+  });
+  assert((await run({ status: 'identical', files: [] })).includes('没有文件变化'));
+  await assert.rejects(run({ status: 'ahead', files: Array.from({ length: 300 }, () => ({})) }), /300 文件上限/);
+  await assert.rejects(run({ status: 'diverged', files: [] }), /不是 main 的祖先/);
+  await assert.rejects(run({ status: 'behind', files: [] }), /不是 main 的祖先/);
+  await assert.rejects(run({ status: 'ahead' }), /文件列表格式无效/);
+  await assert.rejects(run({}, { latest: {} }), /未找到上一正式版本/);
+  await assert.rejects(run({}, { main: { sha: 'invalid' } }), /版本提交无效/);
+  await assert.rejects(summarizeChanges(env, async () => ({ ok: false, status: 404 })), /HTTP 404/);
+  for (const invalid of [{ SUMMARY_TYPE: 'unknown' }, { BASE_TAG: 'invalid\nref' }, { SUMMARY_TYPE: 'pr' }]) {
+    await assert.rejects(summarizeChanges({ ...env, ...invalid }, () => { throw new Error('must not request'); }), /请选择|请填写/);
+  }
+});
+
+test('PR summaries support three APIs and leave final release notes to the maintainer', async () => {
+  const { summarizeChanges } = require('./summarize-pr-changelog');
   const before = fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8');
   for (const apiType of ['message', 'response', 'chatcompletion']) {
     const requests = [];
-    const env = { GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-github-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType, CHANGELOG_BASE_URL: 'https://model.invalid/v1' };
+    const env = { SUMMARY_TYPE: 'pr', GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-github-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType, CHANGELOG_BASE_URL: 'https://model.invalid/v1' };
     const pr = { title: 'Example', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 2 };
     const files = [{ filename: 'src/main.js', status: 'modified', additions: 1, deletions: 0, patch: '+checkScriptUpdates();' },
       { filename: 'Better-PRTS-Plus.user.js', patch: 'BUILD_OUTPUT_MUST_BE_SKIPPED' }];
     const response = apiType === 'message' ? { content: [{ type: 'text', text: 'AI 测试摘要' }] }
       : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text: 'AI 测试摘要' }] }] }
         : { choices: [{ message: { content: 'AI 测试摘要' }, finish_reason: 'stop' }] };
-    const summary = await summarizePullRequest(env, async (url, options) => {
+    const summary = await summarizeChanges(env, async (url, options) => {
       requests.push({ url, options });
       return { ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : response };
     });
@@ -845,21 +914,21 @@ test('AI summaries support three APIs and leave final release notes to the maint
     assert(!ai.options.headers.Authorization?.includes('test-github-key'));
     assert(requests.slice(0, 3).every(item => !item.options.headers['x-api-key']));
     for (const invalid of [{ CHANGELOG_API_KEY: '' }, { CHANGELOG_API_TYPE: 'unknown' }, { CHANGELOG_BASE_URL: 'http://model.invalid' }, { PR_NUMBER: '../secret' }]) {
-      await assert.rejects(summarizePullRequest({ ...env, ...invalid }, () => { throw new Error('must not request'); }));
+      await assert.rejects(summarizeChanges({ ...env, ...invalid }, () => { throw new Error('must not request'); }));
     }
-    await assert.rejects(summarizePullRequest(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files.slice(0, 1) : pr })), /不完整/);
-    await assert.rejects(summarizePullRequest(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : { stop_reason: 'max_tokens' } })), /截断/);
+    await assert.rejects(summarizeChanges(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files.slice(0, 1) : pr })), /不完整/);
+    await assert.rejects(summarizeChanges(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : { stop_reason: 'max_tokens' } })), /截断/);
   }
   assert.strictEqual(fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8'), before);
 });
 
-test('AI analysis paginates files, splits long diffs and rejects changed heads and HTTP failures', async () => {
-  const { summarizePullRequest } = require('./summarize-pr-changelog');
-  const env = { GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model' };
+test('PR analysis paginates files, splits long diffs and rejects changed heads and HTTP failures', async () => {
+  const { summarizeChanges } = require('./summarize-pr-changelog');
+  const env = { SUMMARY_TYPE: 'pr', GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model' };
   const pr = { title: 'Long PR', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 101 };
   const files = Array.from({ length: 101 }, (_, index) => ({ filename: `file-${index}.js`, patch: '+' + 'x'.repeat(300), status: 'modified', additions: 1, deletions: 0 }));
   let modelCalls = 0;
-  const summary = await summarizePullRequest(env, async (url, options) => ({ ok: true, json: async () => {
+  const summary = await summarizeChanges(env, async (url, options) => ({ ok: true, json: async () => {
     if (url.startsWith('https://api.github.com/')) return url.includes('/files?') ? files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101) : pr;
     modelCalls++;
     assert(JSON.parse(options.body).messages[0].content.length < 25000);
@@ -868,11 +937,11 @@ test('AI analysis paginates files, splits long diffs and rejects changed heads a
   assert.strictEqual(modelCalls, 2);
   assert(summary.includes('摘要 1') && summary.includes('摘要 2'));
   let metadataReads = 0;
-  await assert.rejects(summarizePullRequest(env, async url => ({ ok: true, json: async () => {
+  await assert.rejects(summarizeChanges(env, async url => ({ ok: true, json: async () => {
     if (url.includes('/files?')) return files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101);
     return metadataReads++ ? { ...pr, head: { sha: 'b'.repeat(40) } } : pr;
   } })), /PR 已更新/);
-  await assert.rejects(summarizePullRequest(env, async () => ({ ok: false, status: 429 })), /HTTP 429/);
+  await assert.rejects(summarizeChanges(env, async () => ({ ok: false, status: 429 })), /HTTP 429/);
 });
 
 test('unified settings migrate legacy values, validate types and prefer saved independent choices', () => {

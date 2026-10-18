@@ -21,7 +21,11 @@
 
 ### 获取 AI 参考摘要
 
-参考 `goofish-infrast-v1` 的 `record-pr-changelog`，本仓库提供 **Summarize PR for Maintainer** 手动工作流（`.github/workflows/record-pr-changelog.yml`）。在 Actions 选择该工作流，使用 main 分支，填写 PR 编号后运行；可处理目标为 main 的未合并或已合并 PR。
+在 Actions 选择 **Summarize Changes for Maintainer** 手动工作流（`.github/workflows/record-pr-changelog.yml`），使用 main 分支。主要用于发布前对比上一版本与 main，梳理尚未发布的变化：
+
+- `summary_type` 默认 `release`：将最新正式 GitHub Release 的 tag 与 main 对比，无需填写 PR 编号。
+- `base_tag` 可指定基准版本，例如 `v3.10.1`；留空自动使用最新正式 Release。尚无正式 Release 时，需填写已有的版本 tag。
+- 单独分析 PR 时，将 `summary_type` 改为 `pr` 并填写 `pull_request_number`；支持目标为 main 的未合并或已合并 PR，此时忽略 `base_tag`。
 
 运行前在仓库 Actions 设置中配置：
 
@@ -32,9 +36,11 @@
 | Secret 或 Variable | `CHANGELOG_BASE_URL` | 接口根地址，可包含 `/v1`；默认 `https://api.anthropic.com`，也兼容变量 `ANTHROPIC_BASE_URL`。 |
 | Variable | `CHANGELOG_API_TYPE` | `message`、`response` 或 `chatcompletion`，默认 `message`；也可在每次运行时选择。 |
 
-工作流按实际 PR diff 分段总结用户可见变化、修复和待核对事项，省略与 src 重复的 userscript 构建产物，并标出 PR Head SHA。GitHub 未提供 diff 的文件会标为需要人工核对。超大 PR 需要拆分，摘要被模型截断时本次运行失败。
+工作流按实际文件 diff 分段总结用户可见变化、修复和待核对事项，省略与 src 重复的 userscript 构建产物。版本模式先将基准 tag 和 main 固定到提交 SHA，再比较两者，摘要标出基准版本及 Base/Head SHA；基准版本必须是 main 的祖先。PR 模式标出 PR Head SHA。范围内没有文件变化时直接生成说明，不调用 AI。
 
-结果位于 Actions 运行摘要和保留 14 天的 `ai-pr-编号-reference` 附件内，仅供维护者参考。工作流只读仓库与 PR，不执行 PR 代码、不写评论、不设置合并状态，也不会写入 `releases.json`、提交代码或发布 Release。维护者核对摘要后，亲自填写最终更新说明。运行时会将相关 PR diff 发送给所配置的 AI 服务。
+GitHub 未提供 diff 的文件会标为需要人工核对。GitHub Compare 最多返回 300 个文件，版本模式达到该上限时会停止，避免输出不完整摘要；PR 模式通过分页读取文件并校验数量。超大 diff 或模型截断也会停止，需要缩小范围后重试。
+
+结果位于 Actions 运行摘要和保留 14 天的 `ai-release-reference` 或 `ai-pr-reference` 附件内，仅供维护者参考。工作流只读仓库与 PR，不执行 PR 代码、不写评论、不设置合并状态，也不会写入 `releases.json`、提交代码或发布 Release。维护者核对摘要后，亲自填写最终更新说明。运行时会将所选范围的 diff 发送给所配置的 AI 服务。
 
 ## 发布脚本
 

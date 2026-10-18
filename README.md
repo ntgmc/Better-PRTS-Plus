@@ -120,7 +120,7 @@
 
 ## 发布版本
 
-发布前，由维护者在 [releases.json](releases.json) 中亲自填写目标版本的更新内容和级别，并确认 `humanWritten: true`；缺少说明或人工确认时，发布流程会停止。可先运行 **Summarize PR for Maintainer** 获取 AI 参考摘要，最终说明仍由维护者提供。
+发布前，由维护者在 [releases.json](releases.json) 中亲自填写目标版本的更新内容和级别，并确认 `humanWritten: true`；缺少说明或人工确认时，发布流程会停止。可先运行 **Summarize Changes for Maintainer** 获取 AI 参考摘要，默认对比最新正式 Release 与 main，也支持指定基准版本 tag 或分析单个 PR；最终说明仍由维护者提供。
 
 AI 接口配置、说明格式和发布命令见 [发布流程](RELEASE.md)。
 

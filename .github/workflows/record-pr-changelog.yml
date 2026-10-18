@@ -1,11 +1,23 @@
-name: Summarize PR for Maintainer
+name: Summarize Changes for Maintainer
 
 on:
   workflow_dispatch:
     inputs:
-      pull_request_number:
-        description: "需要 AI 总结的 PR 编号（目标分支 main）"
+      summary_type:
+        description: "摘要范围：release 对比上一版本与 main；pr 分析单个 PR"
         required: true
+        type: choice
+        default: release
+        options:
+          - release
+          - pr
+      base_tag:
+        description: "基准版本 tag（release 模式；留空使用最新正式 Release）"
+        required: false
+        type: string
+      pull_request_number:
+        description: "PR 编号（仅 pr 模式填写，目标分支 main）"
+        required: false
         type: string
       api_type:
         description: "AI 接口；default 使用仓库变量 CHANGELOG_API_TYPE（默认 message）"
@@ -23,7 +35,7 @@ permissions:
   pull-requests: read
 
 concurrency:
-  group: ai-summary-pr-${{ inputs.pull_request_number }}
+  group: ai-summary-${{ inputs.summary_type }}-${{ inputs.base_tag }}-${{ inputs.pull_request_number }}
   cancel-in-progress: true
 
 jobs:
@@ -46,6 +58,8 @@ jobs:
       - name: Generate AI reference summary
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          SUMMARY_TYPE: ${{ inputs.summary_type }}
+          BASE_TAG: ${{ inputs.base_tag }}
           PR_NUMBER: ${{ inputs.pull_request_number }}
           CHANGELOG_API_TYPE: ${{ inputs.api_type != 'default' && inputs.api_type || vars.CHANGELOG_API_TYPE || 'message' }}
           CHANGELOG_API_KEY: ${{ secrets.CHANGELOG_API_KEY || secrets.ANTHROPIC_API_KEY }}
@@ -56,7 +70,7 @@ jobs:
       - name: Upload reference for maintainer
         uses: actions/upload-artifact@v4
         with:
-          name: ai-pr-${{ inputs.pull_request_number }}-reference
+          name: ai-${{ inputs.summary_type }}-reference
           path: AI_CHANGE_SUMMARY.md
           retention-days: 14
           if-no-files-found: error
