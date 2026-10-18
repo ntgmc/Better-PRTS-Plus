@@ -1419,9 +1419,12 @@
     }
     .prts-account-select:focus {
         border-color: var(--prts-color-primary);
+        outline: none;
+        box-shadow: none;
+    }
+    .prts-account-select:focus-visible {
         outline: 2px solid var(--prts-color-primary);
-        outline-offset: 2px;
-        box-shadow: 0 0 0 4px var(--prts-color-ring);
+        outline-offset: -2px;
     }
     .prts-account-select:disabled { opacity: 0.56; cursor: not-allowed; }
     #prts-skland-target-account { width: 100%; margin-bottom: 12px; }
