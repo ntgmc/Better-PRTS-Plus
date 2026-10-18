@@ -1,4 +1,11 @@
 {
   "schemaVersion": 1,
-  "releases": []
+  "releases": [
+    {
+      "version": "4.0.0",
+      "level": "important",
+      "notesFile": "release-notes/4.0.0.md",
+      "humanWritten": true
+    }
+  ]
 }
