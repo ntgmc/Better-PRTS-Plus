@@ -1,22 +1,28 @@
-    function createEmptyAccountsData() {
-        return { 1: [], 2: [], 3: [] };
+    function getAccountIds(value = accountsData) {
+        return Object.keys(value || {})
+            .filter(key => /^[1-9]\d*$/.test(key) && Number.isSafeInteger(Number(key)))
+            .map(Number).sort((a, b) => a - b);
+    }
+
+    function createEmptyAccountsData(ids = LEGACY_ACCOUNT_IDS) {
+        return Object.fromEntries(ids.map(id => [id, []]));
     }
 
     function getDefaultAccountLabel(id) {
         return `账号 ${normalizeAccountId(id)}`;
     }
 
-    function createDefaultAccountMeta() {
+    function createDefaultAccountMeta(ids = LEGACY_ACCOUNT_IDS) {
         const meta = {};
-        ACCOUNT_IDS.forEach(id => {
+        ids.forEach(id => {
             meta[id] = { label: getDefaultAccountLabel(id), labelSource: 'default' };
         });
         return meta;
     }
 
     function normalizeAccountId(id) {
-        const parsed = parseInt(id, 10);
-        return ACCOUNT_IDS.includes(parsed) ? parsed : 1;
+        const parsed = Number(id);
+        return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
     }
 
     function normalizeOperatorName(name) {
@@ -56,8 +62,9 @@
     }
 
     function normalizeAccountsTraining(value, accounts) {
-        const result = { 1: {}, 2: {}, 3: {} };
-        ACCOUNT_IDS.forEach(id => {
+        const result = {};
+        getAccountIds(accounts).forEach(id => {
+            result[id] = {};
             (accounts[id] || []).forEach(name => {
                 if (!Object.prototype.hasOwnProperty.call(value?.[id] || {}, name)) return;
                 const training = normalizeOperatorTraining(value[id][name]);
@@ -70,10 +77,11 @@
     }
 
     function normalizeAccountsData(value) {
-        const normalized = createEmptyAccountsData();
-        if (!value || typeof value !== 'object') return normalized;
+        const ids = isPlainRecord(value) ? getAccountIds(value) : [];
+        const normalized = createEmptyAccountsData(ids.length ? ids : LEGACY_ACCOUNT_IDS);
+        if (!isPlainRecord(value)) return normalized;
 
-        ACCOUNT_IDS.forEach(id => {
+        getAccountIds(normalized).forEach(id => {
             normalized[id] = sanitizeOperatorNames(value[id]);
         });
         return normalized;
@@ -140,11 +148,11 @@
         return lines.join('\n');
     }
 
-    function normalizeAccountMeta(value) {
-        const normalized = createDefaultAccountMeta();
-        if (!value || typeof value !== 'object') return normalized;
+    function normalizeAccountMeta(value, ids = LEGACY_ACCOUNT_IDS) {
+        const normalized = createDefaultAccountMeta(ids);
+        if (!isPlainRecord(value)) return normalized;
 
-        ACCOUNT_IDS.forEach(id => {
+        ids.forEach(id => {
             const raw = value[id];
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
 

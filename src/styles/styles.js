@@ -539,7 +539,7 @@
         color: var(--prts-color-text) !important;
         text-decoration: none !important;
     }
-    .prts-btn:focus-visible, .prts-import-action:focus-visible, .prts-account-rename:focus-visible, .prts-skland-close:focus-visible, .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-float-btn:focus-visible {
+    .prts-btn:focus-visible, .prts-import-action:focus-visible, .prts-account-rename:focus-visible, .prts-skland-close:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-float-btn:focus-visible {
         outline: 2px solid var(--prts-color-primary) !important;
         outline-offset: 2px !important;
         box-shadow: 0 0 0 4px var(--prts-color-ring) !important;
@@ -579,11 +579,14 @@
     }
     /* Hallmark · component: account switcher · theme: existing PRTS · states: default, hover, focus, pressed, selected
      * pre-emit critique: P4 H5 E4 S5 R5 V4 */
-    .prts-account-list { display: flex; flex-direction: column; gap: var(--prts-space-2); width: 100%; margin-top: var(--prts-space-2); }
+    .prts-account-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--prts-space-2); }
+    .prts-account-toolbar .prts-btn { min-height: 44px !important; white-space: nowrap; }
+    .prts-account-list { display: flex; flex-direction: column; gap: var(--prts-space-2); width: 100%; max-height: min(320px, 45vh); margin-top: var(--prts-space-2); overflow-y: auto; overscroll-behavior: contain; }
     .prts-account-row {
+        flex-shrink: 0;
         box-sizing: border-box;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 44px;
+        grid-template-columns: minmax(0, 1fr) 44px 44px;
         align-items: center;
         width: 100%;
         border: 1px solid var(--prts-color-border-soft);
@@ -638,6 +641,8 @@
         .prts-account-row:hover { border-color: var(--prts-color-primary); }
         .prts-account-rename:hover { background: var(--prts-color-surface-hover); color: var(--prts-color-primary); }
     }
+    #prts-float-container .prts-account-delete { color: var(--prts-color-danger); }
+    .prts-account-rename:disabled { opacity: 0.45; cursor: not-allowed; }
     .prts-acc-btn:active, .prts-account-rename:active { background: var(--prts-color-surface-hover); }
     .prts-acc-btn:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
     .prts-account-sync-chip {
@@ -1179,9 +1184,6 @@
     .prts-skland-close:hover { background: #f1f5f9; color: #0f172a; }
     .prts-skland-body { padding: 12px 14px 14px; }
     .prts-skland-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #475569; }
-    .prts-skland-accounts { display: flex; gap: 6px; margin-bottom: 12px; }
-    .prts-skland-account { flex: 1; height: 30px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #475569; cursor: pointer; font-size: 13px; font-weight: 700; }
-    .prts-skland-account.active { border-color: #2563eb; background: #2563eb; color: #ffffff; }
     .prts-skland-primary { width: 100%; height: 36px; border: none; border-radius: 4px; background: #2563eb; color: #ffffff; cursor: pointer; font-size: 14px; font-weight: 700; }
     .prts-skland-primary:hover { background: #1d4ed8; }
     .prts-skland-primary:disabled { background: #94a3b8; cursor: wait; }
@@ -1336,18 +1338,6 @@
         background: var(--prts-color-surface-hover) !important;
         color: var(--prts-color-text) !important;
     }
-    .prts-skland-account {
-        min-height: 44px;
-        border-color: var(--prts-color-border) !important;
-        border-radius: var(--prts-radius-md) !important;
-        background: var(--prts-color-surface) !important;
-        color: var(--prts-color-text-muted) !important;
-    }
-    .prts-skland-account.active {
-        border-color: var(--prts-color-primary) !important;
-        background: var(--prts-color-primary) !important;
-        color: #ffffff !important;
-    }
     .prts-skland-primary {
         min-height: 44px;
         border-radius: var(--prts-radius-md) !important;
@@ -1387,7 +1377,7 @@
         background: var(--prts-color-primary-soft) !important;
         color: var(--prts-color-primary) !important;
     }
-    .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-import-close:focus-visible, .prts-import-action:focus-visible {
+    .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-import-close:focus-visible, .prts-import-action:focus-visible {
         outline: 2px solid var(--prts-color-primary);
         outline-offset: 2px;
         box-shadow: 0 0 0 4px var(--prts-color-ring);
@@ -1405,6 +1395,33 @@
     }
 `;
 
+    const accountSelectStyles = `
+    /* Hallmark · component: account select · theme: existing PRTS tokens
+     * pre-emit critique: P4 H4 E4 S5 R5 V4 · states: default, hover, focus, disabled */
+    .prts-account-select {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+        width: 220px;
+        min-height: 44px;
+        padding: 6px 10px;
+        border: 1px solid var(--prts-color-border);
+        border-radius: var(--prts-radius-md);
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text);
+        font: 600 13px var(--prts-font-sans);
+        text-overflow: ellipsis;
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+    @media (hover: hover) {
+        .prts-account-select:hover { border-color: var(--prts-color-primary); }
+    }
+    .prts-account-select:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
+    .prts-account-select:disabled { opacity: 0.56; cursor: not-allowed; }
+    #prts-skland-target-account { width: 100%; margin-bottom: 12px; }
+`;
+
     const scriptUpdateStyles = `
     /* Hallmark · component: update modal · theme: existing PRTS tokens
      * pre-emit critique: P4 H4 E4 S5 R5 V3 · states: default, hover, focus, active */
@@ -1414,4 +1431,4 @@
     .prts-modal-actions-extra .prts-import-action:active { transform: translateY(1px); }
 `;
 
-    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + scriptUpdateStyles);
+    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + accountSelectStyles + scriptUpdateStyles);

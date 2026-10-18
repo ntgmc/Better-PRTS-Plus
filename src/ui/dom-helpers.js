@@ -191,6 +191,32 @@
         return btn;
     }
 
+    function createAccountSelect(id, selectedId, onChange) {
+        let select = document.getElementById(id);
+        if (select?.tagName !== 'SELECT') {
+            select?.remove();
+            select = document.createElement('select');
+            select.id = id;
+            select.className = 'prts-account-select';
+            select.setAttribute('aria-label', id === 'btn-account' ? '切换当前账号' : '选择导入目标账号');
+        }
+        const ids = getAccountIds();
+        const signature = JSON.stringify(ids.map(accountId => [accountId, getAccountLabel(accountId)]));
+        if (select.dataset.accounts !== signature) {
+            select.replaceChildren(...ids.map(accountId => {
+                const option = document.createElement('option');
+                option.value = String(accountId);
+                const label = getAccountLabel(accountId);
+                option.textContent = label === getDefaultAccountLabel(accountId) ? label : `${label}（账号 ${accountId}）`;
+                return option;
+            }));
+            select.dataset.accounts = signature;
+        }
+        select.value = String(ids.includes(selectedId) ? selectedId : activeAccountId);
+        select.onchange = onChange;
+        return select;
+    }
+
     function createPrtsSwitch({ label, checked, onChange, configKey, icon = null } = {}) {
         const item = document.createElement('div');
         item.className = 'prts-panel-item';

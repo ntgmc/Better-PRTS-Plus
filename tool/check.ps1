@@ -316,6 +316,8 @@ foreach ($requiredStateFunction in @(
     "serializeAccountState",
     "resolveStoredAccountState",
     "createRenamedAccountState",
+    "createAddedAccountState",
+    "createRemovedAccountState",
     "createSklandImportState",
     "commitAccountState"
 )) {
@@ -345,7 +347,7 @@ if ($userScript -notmatch "function createRenamedAccountState\([^)]*\)[\s\S]*cur
 if ($userScript -notmatch "function injectFilterControls\(\)[\s\S]*getAccountSklandSyncMeta\(activeAccountId\)[\s\S]*prts-account-sync-chip") {
     throw "Filter toolbar should show current account Skland sync status from account metadata"
 }
-if ($userScript -notmatch "function createSklandImportPanel\(\)[\s\S]*renderSklandSelectedAccountStatus\(status, targetAccountId" -or
+if ($userScript -notmatch "function createSklandImportPanel\(\)[\s\S]*renderSklandSelectedAccountStatus\(status, Number\(accountSelect\.value\)" -or
     $userScript -match "const lastSummary = readSklandLastImportSummary") {
     throw "Skland import panel should show selected account sync status instead of the global last import summary"
 }

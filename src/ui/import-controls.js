@@ -513,10 +513,20 @@
 
         // 顺序生成元素
 
-        // (1) 账号循环切换按钮
-        const btnAccountText = getAccountLabel(activeAccountId);
-        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: 'account', ariaLabel: `当前账号 ${btnAccountText}，点击切换账号`, onClick: cycleAccount });
-        mainRow.appendChild(btnAccount);
+        // (1) 少量账号点击轮换，三个及以上直接选择。
+        let accountControl;
+        if (getAccountIds().length < 3) {
+            const existing = document.getElementById('btn-account');
+            if (existing && existing.tagName !== 'BUTTON') existing.remove();
+            const label = getAccountLabel(activeAccountId);
+            accountControl = createPrtsButton({
+                id: 'btn-account', text: label, icon: 'account', disabled: getAccountIds().length === 1,
+                ariaLabel: `当前账号 ${label}${getAccountIds().length === 1 ? '，仅有一个账号' : '，点击切换账号'}`, onClick: cycleAccount
+            });
+        } else {
+            accountControl = createAccountSelect('btn-account', activeAccountId, event => switchAccount(Number(event.target.value)));
+        }
+        mainRow.appendChild(accountControl);
 
         const activeSklandSync = getAccountSklandSyncMeta(activeAccountId);
         let accountSyncChip = document.getElementById('prts-account-sync-chip');

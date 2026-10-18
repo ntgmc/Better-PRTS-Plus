@@ -24,6 +24,16 @@ const source = sourceFiles
   .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8'))
   .join('\n') + `
 globalThis.__testExports = {
+  getAccountIds,
+  createAddedAccountState,
+  createRemovedAccountState,
+  addAccount,
+  removeAccount,
+  renameAccount,
+  switchAccount,
+  cycleAccount,
+  confirmOperatorImport,
+  formatAccountsBackupSummary,
   getOperatorImportDiff,
   BUILTIN_RESOURCE_VERSION,
   CONFIG_KEY,
@@ -927,6 +937,7 @@ test('settings categories preserve controls and state while switching and collap
     RELEASE_LEVELS: { normal: '普通更新', important: '重要更新', urgent: '紧急更新' }, BP_SELECTORS: {},
     saveConfig: () => { saves++; }, checkScriptUpdates: manual => { assert.strictEqual(manual, true); checks++; },
     refreshAccountControls() {}, syncPageScaffold() {}, enhancePopover() {}, requestFilterUpdate() {},
+    getAccountIds: () => [1, 2, 3], addAccount() {},
     handleImport: () => actions.push('import'), handleOpenSklandImport: () => actions.push('skland'),
     handleExportAccountsBackup: () => actions.push('export'), handleImportAccountsBackup: () => actions.push('restore'),
     ResizeObserver: class { observe() {} }
@@ -1142,10 +1153,14 @@ test('Skland sync reports success, failure and cancellation and restores control
     let complete;
     const sandbox = {
       document: {
-        body, createElement: createTestElement,
-        getElementById: id => body.children.find(child => child.id === id)
+        body, createElement: createTestElement, createElementNS: (_namespace, tag) => createTestElement(tag),
+        getElementById: id => {
+          const all = node => [node, ...node.children.flatMap(all)];
+          return all(body).find(child => child.id === id);
+        }
       },
-      activeAccountId: '1', ACCOUNT_IDS: ['1', '2', '3'],
+      activeAccountId: 1, getAccountIds: () => [1, 2, 3, 4],
+      getDefaultAccountLabel: id => `账号 ${id}`,
       normalizeAccountId: id => id,
       getAccountLabel: id => `账号 ${id}`,
       formatAccountSklandTitle: () => '',
@@ -1158,22 +1173,25 @@ test('Skland sync reports success, failure and cancellation and restores control
       isSklandImportCancelledError: error => error.message === 'cancel',
       console: { error() {} }
     };
-    vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/ui/panels.js'), 'utf8'), sandbox);
+    vm.runInNewContext(['src/ui/dom-helpers.js', 'src/ui/panels.js'].map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), sandbox);
+    sandbox.showPrtsToast = (...args) => { messages.push(args); return (...next) => messages.push(next); };
     sandbox.formatSklandImportSummary = () => '账号 1 已导入 2 名干员。';
     sandbox.createSklandImportPanel();
     const panel = body.firstChild;
     const button = panel.querySelector('.prts-skland-primary');
     const status = panel.querySelector('.prts-skland-status');
-    const accounts = panel.querySelector('.prts-skland-accounts').children;
+    const accounts = panel.querySelector('.prts-account-select');
+    accounts.value = '4';
+    assert.strictEqual(accounts.children[0].textContent, '账号 1');
     const pending = button.onclick();
     assert.strictEqual(button.disabled, true);
-    assert(accounts.every(account => account.disabled));
+    assert.strictEqual(accounts.disabled, true);
     assert.strictEqual(messages[0][1], 'loading');
     assert.strictEqual(messages[0][3], 0);
     complete();
     await pending;
     assert.strictEqual(button.disabled, false);
-    assert(accounts.every(account => !account.disabled));
+    assert.strictEqual(accounts.disabled, false);
     assert.strictEqual(messages.length, 2);
     assert.strictEqual(messages[1][1], outcome === 'cancel' ? 'info' : outcome);
     assert.strictEqual(status.attributes.get('role'), outcome === 'error' ? 'alert' : 'status');
@@ -2510,6 +2528,155 @@ test('Skland imports new and additional module branches without hiding missing d
     '结城理：模组Y数据未知');
 });
 
+test('dynamic accounts preserve legacy slots, grow beyond three and round trip sparse IDs and backups', () => {
+  const { getAccountIds, createAddedAccountState, createRemovedAccountState, formatAccountsBackupSummary } = context.__testExports;
+  const initial = createAccountState({ accountsData: { 2: ['W'] } });
+  assert.deepStrictEqual(hostArray(getAccountIds(initial.accountsData)), [1, 2, 3]);
+  let state = initial;
+  for (let index = 4; index <= 12; index++) state = createAddedAccountState(state, index === 4 ? '主账号' : '');
+  assert.strictEqual(state.activeAccountId, 12);
+  assert.strictEqual(getAccountIds(state.accountsData).length, 12);
+  assert.strictEqual(state.accountMeta[4].label, '主账号');
+  assert.strictEqual(state.accountMeta[12].label, '账号 12');
+  state = createSklandImportState(state, { accountId: 4, names: ['阿米娅'], training: { 阿米娅: { level: 80 } },
+    binding: { uid: '444', nickname: '博士' }, importedAt: '2026-10-18T00:00:00Z' }).state;
+  state = createRemovedAccountState(state, 2);
+  state = createRemovedAccountState(state, 12);
+  const restored = createAccountState(JSON.parse(serializeAccountState(state)));
+  assert.deepStrictEqual(hostObject(restored), hostObject(state));
+  assert(!getAccountIds(restored.accountsData).includes(2));
+  const previous = getCurrentAccountState();
+  try {
+    publishAccountState(restored);
+    const backup = parseAccountsBackup(hostObject(buildAccountsBackup()));
+    const { preferences, ...backupState } = backup;
+    assert.deepStrictEqual(hostObject(backupState), hostObject(restored));
+    assert.strictEqual(backup.accountMeta[4].skland.uid, '444');
+    assert.strictEqual(backup.accountsTraining[4].阿米娅.level, 80);
+    assert(formatAccountsBackupSummary(backup).includes('10 个账号'));
+  } finally { publishAccountState(previous); }
+  const added = createAddedAccountState(restored, '新增');
+  assert.strictEqual(added.activeAccountId, 13, 'removed IDs must not be reused by a pending import');
+  assert.deepStrictEqual(hostObject(initial.accountsData), { 1: [], 2: ['W'], 3: [] });
+});
+
+test('removing accounts keeps one, selects a remaining account and refuses deleted import targets', () => {
+  const { getAccountIds, createRemovedAccountState } = context.__testExports;
+  let state = createAccountState({ activeAccountId: 2, accountsData: { 2: ['W'] } });
+  state = createRemovedAccountState(state, 2);
+  assert.strictEqual(state.activeAccountId, 1);
+  assert(!('2' in state.accountsTraining));
+  assert(!('2' in state.accountMeta));
+  state = createRemovedAccountState(state, 1);
+  assert.strictEqual(state.activeAccountId, 3);
+  assert.deepStrictEqual(hostArray(getAccountIds(state.accountsData)), [3]);
+  assert.throws(() => createRemovedAccountState(state, 3), /至少需要保留一个账号/);
+  assert.throws(() => createRenamedAccountState(state, 2, '旧目标'), /已删除/);
+  assert.throws(() => createAccountSwitchState(state, 2), /已删除/);
+  assert.throws(() => createSklandImportState(state, { accountId: 2 }), /已删除/);
+  const malformed = JSON.parse('{"0":[],"-1":[],"01":[],"__proto__":{},"9007199254740992":[],"7":["W"]}');
+  const normalized = createAccountState({ nextAccountId: 2, activeAccountId: 9, accountsData: malformed });
+  assert.deepStrictEqual(hostArray(getAccountIds(normalized.accountsData)), [7]);
+  assert.strictEqual(normalized.activeAccountId, 7);
+  assert.strictEqual(normalized.nextAccountId, 8);
+});
+
+test('account actions use latest shared data, reconfirm changed deletion and preserve state on failed writes', async () => {
+  const initial = createAccountState({ accountsData: { 1: ['阿米娅'] } });
+  const sharedStorage = new Map([['prts_plus_accounts_data', serializeAccountState(initial)]]);
+  const page = createAccountPage(sharedStorage, 'prts.plus');
+  const actions = page.__testExports;
+  const toasts = [];
+  page.document = { getElementById: () => null };
+  page.showPrtsToast = (...args) => toasts.push(args);
+  page.refreshAccountStateUi = () => {};
+  page.showPrtsPrompt = async () => {
+    const remote = createRenamedAccountState(JSON.parse(sharedStorage.get('prts_plus_accounts_data')), 2, '远端改名');
+    remote.accountsData[3] = ['W'];
+    sharedStorage.set('prts_plus_accounts_data', serializeAccountState(remote));
+    return '新账号';
+  };
+  await actions.addAccount();
+  let saved = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
+  assert.strictEqual(saved.activeAccountId, 4);
+  assert.strictEqual(saved.accountMeta[2].label, '远端改名');
+  assert.deepStrictEqual(saved.accountsData[3], ['W']);
+  page.showPrtsPrompt = async () => '本地改名';
+  await actions.renameAccount(4);
+  assert.strictEqual(JSON.parse(sharedStorage.get('prts_plus_accounts_data')).accountMeta[4].label, '本地改名');
+  let confirmations = 0;
+  page.showPrtsConfirm = async () => {
+    if (++confirmations === 1) {
+      const remote = JSON.parse(sharedStorage.get('prts_plus_accounts_data'));
+      remote.accountsData[4] = ['能天使'];
+      sharedStorage.set('prts_plus_accounts_data', JSON.stringify(remote));
+    }
+    return true;
+  };
+  await actions.removeAccount(4);
+  assert.strictEqual(confirmations, 2);
+  saved = sharedStorage.get('prts_plus_accounts_data');
+  assert(!JSON.parse(saved).accountsData[4]);
+  assert.deepStrictEqual(JSON.parse(saved).accountsData[3], ['W']);
+  page.showPrtsConfirm = async () => false;
+  await actions.removeAccount(2);
+  assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), saved);
+  page.showPrtsPrompt = async () => null;
+  await actions.addAccount();
+  assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), saved);
+  const published = hostObject(actions.getCurrentAccountState());
+  page.GM_setValue = () => { throw new Error('write failed'); };
+  page.showPrtsPrompt = async () => '失败';
+  await actions.addAccount();
+  assert.strictEqual(toasts.at(-1)[0], '添加账号失败');
+  assert.deepStrictEqual(hostObject(actions.getCurrentAccountState()), published);
+  assert.strictEqual(sharedStorage.get('prts_plus_accounts_data'), saved);
+});
+
+test('imports stop if another page removes the target before or during confirmation', async () => {
+  const { createAddedAccountState, createRemovedAccountState } = context.__testExports;
+  for (const beforePreview of [true, false]) {
+    const initial = createAddedAccountState(createAccountState(), '待导入');
+    const sharedStorage = new Map([['prts_plus_accounts_data', serializeAccountState(initial)]]);
+    const page = createAccountPage(sharedStorage, 'prts.plus');
+    const removeTarget = () => sharedStorage.set('prts_plus_accounts_data', serializeAccountState(createRemovedAccountState(initial, 4)));
+    if (beforePreview) removeTarget();
+    page.showPrtsConfirm = async () => { removeTarget(); return true; };
+    await assert.rejects(page.confirmOperatorImport(4, ['W'], {}, '文本'), /已删除/);
+    assert(!JSON.parse(sharedStorage.get('prts_plus_accounts_data')).accountsData[4]);
+    assert.throws(() => page.commitSklandImport({ accountId: 4, names: ['W'] }), /已删除/);
+  }
+});
+
+test('toolbar selects three or more accounts and cycles sparse IDs below three without losing focus', () => {
+  const { createRemovedAccountState } = context.__testExports;
+  const { page } = createFilterPage('GRAY');
+  page.refreshAccountStateUi = () => {
+    page.document.getElementById('prts-filter-bar')?.remove();
+    page.injectFilterControls();
+  };
+  let control = page.document.getElementById('btn-account');
+  assert.strictEqual(control.tagName, 'SELECT');
+  assert.strictEqual(control.children.length, 3);
+  page.injectFilterControls();
+  assert.strictEqual(page.document.getElementById('btn-account'), control, 'periodic updates preserve the open native control');
+  control.focus();
+  control.onchange({ target: { value: '3' } });
+  assert.strictEqual(page.getCurrentAccountState().activeAccountId, 3);
+  assert.strictEqual(page.document.activeElement, page.document.getElementById('btn-account'));
+  page.commitAccountState(createRemovedAccountState(page.getCurrentAccountState(), 2));
+  page.injectFilterControls();
+  control = page.document.getElementById('btn-account');
+  assert.strictEqual(control.tagName, 'BUTTON');
+  control.onclick();
+  assert.strictEqual(page.getCurrentAccountState().activeAccountId, 1);
+  page.document.getElementById('btn-account').onclick();
+  assert.strictEqual(page.getCurrentAccountState().activeAccountId, 3);
+  page.commitAccountState(createRemovedAccountState(page.getCurrentAccountState(), 1));
+  page.refreshAccountStateUi();
+  assert.strictEqual(page.document.getElementById('btn-account').disabled, true);
+});
+
 test('account state serialization preserves the normalized unified schema', () => {
   const state = createAccountState({
     activeAccountId: 2,
@@ -2518,7 +2685,7 @@ test('account state serialization preserves the normalized unified schema', () =
   });
   const parsed = JSON.parse(serializeAccountState(state));
   assert.deepStrictEqual(hostObject(createAccountState(parsed)), hostObject(state));
-  assert.deepStrictEqual(Object.keys(parsed).sort(), ['accountMeta', 'accountsData', 'accountsTraining', 'activeAccountId']);
+  assert.deepStrictEqual(Object.keys(parsed).sort(), ['accountMeta', 'accountsData', 'accountsTraining', 'activeAccountId', 'nextAccountId']);
 });
 
 test('resolveStoredAccountState migrates missing metadata', () => {

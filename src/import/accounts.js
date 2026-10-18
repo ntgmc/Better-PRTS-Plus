@@ -3,12 +3,13 @@
     // =========================================================================
 
     function getCurrentAccountState() {
-        return createAccountState({ activeAccountId, accountsData, accountsTraining, accountMeta });
+        return createAccountState({ activeAccountId, nextAccountId, accountsData, accountsTraining, accountMeta });
     }
 
     function publishAccountState(value) {
         const state = createAccountState(value);
         activeAccountId = state.activeAccountId;
+        nextAccountId = state.nextAccountId;
         accountsData = state.accountsData;
         accountsTraining = state.accountsTraining;
         accountMeta = state.accountMeta;
@@ -24,7 +25,7 @@
 
     function readAccountStorageSnapshot() {
         const legacyAccounts = {};
-        ACCOUNT_IDS.forEach(id => {
+        LEGACY_ACCOUNT_IDS.forEach(id => {
             legacyAccounts[id] = GM_getValue(`prts_plus_user_ops_${id}`);
         });
         return {
@@ -60,41 +61,31 @@
      * 执行账号切换
      */
     function switchAccount(id) {
-        id = normalizeAccountId(id);
-        if (id === activeAccountId) return;
-
-        commitAccountState(createAccountSwitchState(getCurrentAccountState(), id));
-
-        // 1. 同步悬浮窗面板内的小按钮状态
-        const accBtns = document.querySelectorAll('.prts-acc-btn');
-        accBtns.forEach(btn => {
-            if (parseInt(btn.dataset.id) === activeAccountId) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-
-        // 2. 销毁并重建控制栏以刷新UI文案和导入数量
-        const bar = document.getElementById('prts-filter-bar');
-        if (bar) bar.remove();
-        injectFilterControls();
-        refreshAccountControls();
-
-        // 3. 立刻触发重新筛选运算
-        if (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) {
-            requestFilterUpdate();
+        const restoreFocus = document.activeElement?.id === 'btn-account';
+        try {
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            commitAccountState(createAccountSwitchState(latest, id));
+            refreshAccountStateUi();
+            if (restoreFocus) document.getElementById('btn-account')?.focus({ preventScroll: true });
+        } catch (error) {
+            showPrtsToast('切换账号失败', 'error', error.message);
         }
     }
 
     // 给主控制栏用的循环切换
     function cycleAccount() {
-        let nextId = activeAccountId + 1;
-        if (nextId > 3) nextId = 1;
-        switchAccount(nextId);
+        const ids = getAccountIds();
+        switchAccount(ids[(ids.indexOf(activeAccountId) + 1) % ids.length]);
     }
 
     function refreshAccountControls() {
+        const canRemove = getAccountIds().length > 1;
+        document.querySelectorAll('.prts-account-list').forEach(renderAccountList);
+        document.querySelectorAll('.prts-account-select').forEach(select => {
+            const previousId = Number(select.value);
+            createAccountSelect(select.id, select.id === 'btn-account' ? activeAccountId : previousId, select.onchange);
+            if (select.id !== 'btn-account' && Number(select.value) !== previousId && !select.disabled) select.onchange?.();
+        });
         document.querySelectorAll('.prts-acc-btn').forEach(btn => {
             const id = normalizeAccountId(btn.dataset.id);
             const label = getAccountLabel(id);
@@ -107,6 +98,10 @@
             const row = btn.closest('.prts-account-row');
             row.classList.toggle('is-active', id === activeAccountId);
             row.querySelector('.prts-account-rename').setAttribute('aria-label', `重命名 ${label}`);
+            const removeButton = row.querySelector('.prts-account-delete');
+            removeButton.setAttribute('aria-label', `删除 ${label}`);
+            removeButton.disabled = !canRemove;
+            removeButton.title = canRemove ? `删除 ${label}` : '至少需要保留一个账号';
 
             const syncMetaEl = btn.querySelector('.prts-account-sync-meta');
             if (syncMetaEl) {
@@ -144,6 +139,7 @@
             const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
             reportAccountStateDiagnostics(resolved.diagnostics);
             const state = resolved.state;
+            requireAccount(state, id);
             const diff = getOperatorImportDiff(state.accountsData[id], names, state.accountsTraining[id], training);
             const danger = diff.removed > 0 || diff.decreasedTrainingNames.length > 0 || diff.clearedTrainingNames.length > 0;
             const lines = [
@@ -192,9 +188,56 @@
         });
         if (rawLabel === null) return;
 
-        commitAccountState(createRenamedAccountState(getCurrentAccountState(), accountId, rawLabel));
-        refreshAccountStateUi();
-        showPrtsToast('账号名称已更新', 'success', `${getAccountLabel(accountId)} / ${getAccountOperatorCount(accountId)} 名干员`);
+        try {
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            commitAccountState(createRenamedAccountState(latest, accountId, rawLabel));
+            refreshAccountStateUi();
+            showPrtsToast('账号名称已更新', 'success', `${getAccountLabel(accountId)} / ${getAccountOperatorCount(accountId)} 名干员`);
+        } catch (error) {
+            showPrtsToast('重命名失败', 'error', error.message);
+        }
+    }
+
+    async function addAccount() {
+        const label = await showPrtsPrompt({
+            title: '添加账号', message: '填写账号昵称，留空使用默认名称。', inputLabel: '账号昵称',
+            maxLength: ACCOUNT_LABEL_MAX_LENGTH, confirmText: '添加', cancelText: '取消'
+        });
+        if (label === null) return;
+        try {
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            commitAccountState(createAddedAccountState(latest, label));
+            refreshAccountStateUi();
+            showPrtsToast('账号已添加', 'success', `已切换到 ${getAccountLabel(activeAccountId)}，可导入干员数据。`);
+        } catch (error) {
+            showPrtsToast('添加账号失败', 'error', error.message);
+        }
+    }
+
+    async function removeAccount(accountId) {
+        try {
+            while (true) {
+                const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+                const id = requireAccount(state, accountId);
+                if (getAccountIds(state.accountsData).length <= 1) throw new Error('至少需要保留一个账号。');
+                const confirmed = await showPrtsConfirm({
+                    title: '删除账号',
+                    message: `删除 ${state.accountMeta[id].label}（账号 ${id}）及其 ${state.accountsData[id].length} 名干员、练度和同步记录？此操作无法撤销。`,
+                    confirmText: '确认删除', cancelText: '取消', tone: 'danger'
+                });
+                if (!confirmed) return;
+                const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+                if (['accountsData', 'accountsTraining', 'accountMeta'].some(key =>
+                    JSON.stringify(state[key][id]) !== JSON.stringify(latest[key][id]))) continue;
+                commitAccountState(createRemovedAccountState(latest, id));
+                refreshAccountStateUi(true);
+                document.getElementById('prts-add-account')?.focus({ preventScroll: true });
+                showPrtsToast('账号已删除', 'success');
+                return;
+            }
+        } catch (error) {
+            showPrtsToast('删除账号失败', 'error', error.message);
+        }
     }
 
     function getAccountSklandSyncMeta(id) {
@@ -218,7 +261,7 @@
         const accountId = normalizeAccountId(id);
         const label = getAccountLabel(accountId);
         const lines = [
-            `切换到 ${label}`,
+            `切换到 ${label}（账号 ${accountId}）`,
             `${getAccountOperatorCount(accountId)} 名干员`
         ];
         const skland = getAccountSklandSyncMeta(accountId);
@@ -247,6 +290,7 @@
             version: ACCOUNT_BACKUP_VERSION,
             exportedAt: new Date().toISOString(),
             activeAccountId: state.activeAccountId,
+            nextAccountId: state.nextAccountId,
             accountsData: state.accountsData,
             accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta,
@@ -321,22 +365,19 @@
         }
 
         return {
-            activeAccountId: normalizeAccountId(value.activeAccountId),
-            accountsData: normalizeAccountsData(value.accountsData),
-            accountsTraining: normalizeAccountsTraining(value.accountsTraining, normalizeAccountsData(value.accountsData)),
-            accountMeta: normalizeAccountMeta(value.accountMeta),
+            ...createAccountState(value),
             preferences: normalizeBackupPreferences(value.preferences)
         };
     }
 
     function formatAccountsBackupSummary(backup) {
         const lines = [
-            '将覆盖当前 3 个账号、账号昵称和 UI 偏好。',
+            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号替换当前全部账号、账号昵称和 UI 偏好。`,
             `导入后当前账号: ${backup.accountMeta[backup.activeAccountId].label}`,
             ''
         ];
 
-        ACCOUNT_IDS.forEach(id => {
+        getAccountIds(backup.accountsData).forEach(id => {
             lines.push(`${backup.accountMeta[id].label}: ${backup.accountsData[id].length} 名干员`);
         });
         lines.push('');

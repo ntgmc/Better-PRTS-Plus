@@ -53,15 +53,21 @@
 
     function refreshOwnedOpsFromStorage() {
         loadOwnedOps();
+        if (isSklandHost()) {
+            refreshAccountControls();
+            return;
+        }
         const bar = document.getElementById('prts-filter-bar');
         if (bar) bar.remove();
         injectFilterControls();
         refreshAccountControls();
-        if (CONFIG.filterMode !== 'NONE') requestFilterUpdate();
+        updateFloatingLayout();
+        if (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
     }
 
     function initSklandImportPage() {
         loadOwnedOps();
+        registerAccountsDataChangeListener();
         if (document.body) {
             createSklandImportPanel();
             return;
@@ -72,7 +78,6 @@
     function createSklandImportPanel() {
         if (document.getElementById('prts-skland-import-panel')) return;
 
-        let targetAccountId = normalizeAccountId(activeAccountId);
         const panel = document.createElement('section');
         panel.id = 'prts-skland-import-panel';
 
@@ -107,26 +112,13 @@
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
-        accountLabel.textContent = '导入到账号档位';
+        accountLabel.textContent = '导入到账号';
         body.appendChild(accountLabel);
 
-        const accountRow = document.createElement('div');
-        accountRow.className = 'prts-skland-accounts';
-        const accountButtons = [];
-        ACCOUNT_IDS.forEach(id => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'prts-skland-account';
-            btn.textContent = getAccountLabel(id);
-            btn.onclick = () => {
-                targetAccountId = id;
-                renderSklandAccountButtons(accountButtons, targetAccountId);
-                renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
-            };
-            accountButtons.push(btn);
-            accountRow.appendChild(btn);
+        const accountSelect = createAccountSelect('prts-skland-target-account', activeAccountId, () => {
+            renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
         });
-        body.appendChild(accountRow);
+        body.appendChild(accountSelect);
 
         const importBtn = document.createElement('button');
         importBtn.type = 'button';
@@ -150,19 +142,18 @@
         body.appendChild(link);
 
         importBtn.onclick = async () => {
-            const accountId = targetAccountId;
+            const accountId = Number(accountSelect.value);
             const progressText = `正在读取森空岛数据，稍后请确认导入到 ${getAccountLabel(accountId)} 的变化。`;
             const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
             importBtn.disabled = true;
             importBtn.textContent = '同步中…';
-            accountButtons.forEach(button => { button.disabled = true; });
+            accountSelect.disabled = true;
             setSklandPanelStatus(status, progressText, 'loading');
             try {
                 const summary = await importSklandOperatorsToAccount(accountId, {
                     selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
                 });
-                targetAccountId = summary.accountId;
-                renderSklandAccountButtons(accountButtons, targetAccountId);
+                createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
                 const detail = formatSklandImportSummary(summary);
                 setSklandPanelStatus(status, detail, 'success');
                 updateToast('森空岛数据同步成功', 'success', detail);
@@ -179,12 +170,11 @@
             } finally {
                 importBtn.disabled = false;
                 importBtn.textContent = '读取并导入干员';
-                accountButtons.forEach(button => { button.disabled = false; });
+                accountSelect.disabled = false;
             }
         };
 
-        renderSklandAccountButtons(accountButtons, targetAccountId);
-        renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
+        renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
 
         panel.appendChild(body);
         document.body.appendChild(panel);
@@ -306,15 +296,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
         setSklandPanelStatus(status, fallbackText, '');
     }
 
-    function renderSklandAccountButtons(buttons, activeId) {
-        buttons.forEach((btn, index) => {
-            const id = ACCOUNT_IDS[index];
-            btn.textContent = getAccountLabel(id);
-            btn.title = formatAccountSklandTitle(id);
-            btn.classList.toggle('active', id === activeId);
-        });
-    }
-
     function setSklandPanelStatus(status, text, type) {
         status.className = 'prts-skland-status';
         if (type) status.classList.add(type);
@@ -402,6 +383,44 @@ ${formatSklandImportSummary(summary)}`, 'success');
             submenu.style.top = `${submenuTop - ballTop}px`;
             container.classList.toggle('prts-submenu-left', opensLeft);
         });
+    }
+
+    function renderAccountList(list) {
+        const ids = getAccountIds();
+        const signature = ids.join(',');
+        if (list.dataset.accounts === signature) return;
+        list.replaceChildren(...ids.map(id => {
+            const row = document.createElement('div');
+            row.className = 'prts-account-row';
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'prts-acc-btn';
+            button.dataset.id = id;
+            button.onclick = () => switchAccount(id);
+            const heading = document.createElement('span');
+            heading.className = 'prts-account-heading';
+            const name = document.createElement('span');
+            name.className = 'prts-account-name';
+            heading.appendChild(name);
+            heading.appendChild(createPrtsIcon('check'));
+            button.appendChild(heading);
+            const count = document.createElement('span');
+            count.className = 'prts-account-count';
+            button.appendChild(count);
+            const syncMeta = document.createElement('span');
+            syncMeta.className = 'prts-account-sync-meta';
+            button.appendChild(syncMeta);
+            row.appendChild(button);
+            const rename = createPrtsButton({ className: 'prts-account-rename', text: '改名', onClick: () => renameAccount(id) });
+            row.appendChild(rename);
+            const remove = createPrtsButton({
+                className: 'prts-account-rename prts-account-delete', text: '删除',
+                disabled: ids.length <= 1, onClick: () => removeAccount(id)
+            });
+            row.appendChild(remove);
+            return row;
+        }));
+        list.dataset.accounts = signature;
     }
 
     function createFloatingBall() {
@@ -651,7 +670,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             onClick: () => checkScriptUpdates(true)
         }));
 
-        //[V12.0/V3.1.0 优美的多账号悬浮面板]
+        // 账号管理
         const accRow = document.createElement('div');
         accRow.className = 'prts-panel-item';
         accRow.style.marginTop = '8px';
@@ -663,55 +682,18 @@ ${formatSklandImportSummary(summary)}`, 'success');
         accTitle.className = 'prts-panel-item-label';
         accTitle.appendChild(createPrtsIcon('account'));
         const accTitleText = document.createElement('span');
-        accTitleText.textContent = '切换账号';
+        accTitleText.textContent = '账号管理';
         accTitle.appendChild(accTitleText);
-        accRow.appendChild(accTitle);
+        const accountToolbar = document.createElement('div');
+        accountToolbar.className = 'prts-account-toolbar';
+        accountToolbar.appendChild(accTitle);
+        accountToolbar.appendChild(createPrtsButton({ id: 'prts-add-account', text: '添加账号', onClick: addAccount }));
+        accRow.appendChild(accountToolbar);
 
         const accBtnGroup = document.createElement('div');
         accBtnGroup.className = 'prts-account-list';
 
-        for (let i = 1; i <= 3; i++) {
-            const row = document.createElement('div');
-            row.className = 'prts-account-row';
-
-            const accBtn = document.createElement('button');
-            accBtn.type = 'button';
-            accBtn.className = 'prts-acc-btn';
-            accBtn.dataset.id = i;
-            accBtn.onclick = (e) => {
-                e.stopPropagation();
-                switchAccount(i);
-            };
-
-            const heading = document.createElement('span');
-            heading.className = 'prts-account-heading';
-            const name = document.createElement('span');
-            name.className = 'prts-account-name';
-            heading.appendChild(name);
-            heading.appendChild(createPrtsIcon('check'));
-
-            const count = document.createElement('span');
-            count.className = 'prts-account-count';
-            const syncMeta = document.createElement('span');
-            syncMeta.className = 'prts-account-sync-meta';
-            accBtn.appendChild(heading);
-            accBtn.appendChild(count);
-            accBtn.appendChild(syncMeta);
-
-            const renameBtn = document.createElement('button');
-            renameBtn.type = 'button';
-            renameBtn.className = 'prts-account-rename';
-            renameBtn.dataset.id = i;
-            renameBtn.textContent = '改名';
-            renameBtn.onclick = (e) => {
-                e.stopPropagation();
-                renameAccount(i);
-            };
-
-            row.appendChild(accBtn);
-            row.appendChild(renameBtn);
-            accBtnGroup.appendChild(row);
-        }
+        renderAccountList(accBtnGroup);
         accRow.appendChild(accBtnGroup);
         accounts.body.appendChild(accRow);
 

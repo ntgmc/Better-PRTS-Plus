@@ -51,7 +51,7 @@
     const ACCOUNT_BACKUP_MAX_BYTES = 2 * 1024 * 1024;
     const OPERATOR_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
     const ACCOUNT_LABEL_MAX_LENGTH = 20;
-    const ACCOUNT_IDS = [1, 2, 3];
+    const LEGACY_ACCOUNT_IDS = [1, 2, 3];
     const SKLAND_BASE_URL = 'https://zonai.skland.com';
     const SKLAND_HOME_URL = 'https://www.skland.com/index';
     const SKLAND_REQUEST_TIMEOUT_MS = 25000;
@@ -136,6 +136,7 @@
 
     // 全局状态变量
     let activeAccountId = 1;
+    let nextAccountId = 4;
     let accountsData = { 1:[], 2: [], 3:[] }; // 多账号数据缓存池
     let accountsTraining = { 1: {}, 2: {}, 3: {} };
     let accountMeta = createDefaultAccountMeta();
@@ -352,25 +353,31 @@ Object.entries({
         });
         return resourceUpdatePending;
     }
-    function createEmptyAccountsData() {
-        return { 1: [], 2: [], 3: [] };
+    function getAccountIds(value = accountsData) {
+        return Object.keys(value || {})
+            .filter(key => /^[1-9]\d*$/.test(key) && Number.isSafeInteger(Number(key)))
+            .map(Number).sort((a, b) => a - b);
+    }
+
+    function createEmptyAccountsData(ids = LEGACY_ACCOUNT_IDS) {
+        return Object.fromEntries(ids.map(id => [id, []]));
     }
 
     function getDefaultAccountLabel(id) {
         return `账号 ${normalizeAccountId(id)}`;
     }
 
-    function createDefaultAccountMeta() {
+    function createDefaultAccountMeta(ids = LEGACY_ACCOUNT_IDS) {
         const meta = {};
-        ACCOUNT_IDS.forEach(id => {
+        ids.forEach(id => {
             meta[id] = { label: getDefaultAccountLabel(id), labelSource: 'default' };
         });
         return meta;
     }
 
     function normalizeAccountId(id) {
-        const parsed = parseInt(id, 10);
-        return ACCOUNT_IDS.includes(parsed) ? parsed : 1;
+        const parsed = Number(id);
+        return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
     }
 
     function normalizeOperatorName(name) {
@@ -410,8 +417,9 @@ Object.entries({
     }
 
     function normalizeAccountsTraining(value, accounts) {
-        const result = { 1: {}, 2: {}, 3: {} };
-        ACCOUNT_IDS.forEach(id => {
+        const result = {};
+        getAccountIds(accounts).forEach(id => {
+            result[id] = {};
             (accounts[id] || []).forEach(name => {
                 if (!Object.prototype.hasOwnProperty.call(value?.[id] || {}, name)) return;
                 const training = normalizeOperatorTraining(value[id][name]);
@@ -424,10 +432,11 @@ Object.entries({
     }
 
     function normalizeAccountsData(value) {
-        const normalized = createEmptyAccountsData();
-        if (!value || typeof value !== 'object') return normalized;
+        const ids = isPlainRecord(value) ? getAccountIds(value) : [];
+        const normalized = createEmptyAccountsData(ids.length ? ids : LEGACY_ACCOUNT_IDS);
+        if (!isPlainRecord(value)) return normalized;
 
-        ACCOUNT_IDS.forEach(id => {
+        getAccountIds(normalized).forEach(id => {
             normalized[id] = sanitizeOperatorNames(value[id]);
         });
         return normalized;
@@ -494,11 +503,11 @@ Object.entries({
         return lines.join('\n');
     }
 
-    function normalizeAccountMeta(value) {
-        const normalized = createDefaultAccountMeta();
-        if (!value || typeof value !== 'object') return normalized;
+    function normalizeAccountMeta(value, ids = LEGACY_ACCOUNT_IDS) {
+        const normalized = createDefaultAccountMeta(ids);
+        if (!isPlainRecord(value)) return normalized;
 
-        ACCOUNT_IDS.forEach(id => {
+        ids.forEach(id => {
             const raw = value[id];
             if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return;
 
@@ -627,10 +636,15 @@ Object.entries({
 
     function createAccountState(value = {}) {
         const source = isPlainRecord(value) ? value : {};
+        const rawData = isPlainRecord(source.accountsData) ? source.accountsData : {};
+        const data = normalizeAccountsData(source.nextAccountId ? rawData : { ...createEmptyAccountsData(), ...rawData });
+        const ids = getAccountIds(data);
+        const activeId = normalizeAccountId(source.activeAccountId);
         const state = {
-            activeAccountId: normalizeAccountId(source.activeAccountId),
-            accountsData: normalizeAccountsData(source.accountsData),
-            accountMeta: normalizeAccountMeta(source.accountMeta)
+            activeAccountId: ids.includes(activeId) ? activeId : ids[0],
+            nextAccountId: Math.max(normalizeAccountId(source.nextAccountId), ids[ids.length - 1] + 1),
+            accountsData: data,
+            accountMeta: normalizeAccountMeta(source.accountMeta, ids)
         };
         state.accountsTraining = normalizeAccountsTraining(source.accountsTraining, state.accountsData);
         return state;
@@ -640,6 +654,7 @@ Object.entries({
         const state = createAccountState(value);
         return JSON.stringify({
             activeAccountId: state.activeAccountId,
+            nextAccountId: state.nextAccountId,
             accountsData: state.accountsData,
             accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta
@@ -671,9 +686,9 @@ Object.entries({
         if (!summary) return { state, migrated: false };
 
         const accountId = normalizeAccountId(summary.accountId);
-        if (state.accountMeta[accountId]?.skland) return { state, migrated: false };
+        if (!state.accountMeta[accountId] || state.accountMeta[accountId].skland) return { state, migrated: false };
 
-        const nextMeta = normalizeAccountMeta(state.accountMeta);
+        const nextMeta = normalizeAccountMeta(state.accountMeta, getAccountIds(state.accountsData));
         nextMeta[accountId] = {
             ...nextMeta[accountId],
             skland: normalizeSklandSyncMeta(summary)
@@ -703,7 +718,7 @@ Object.entries({
         } else {
             const legacyAccounts = isPlainRecord(source.legacyAccounts) ? source.legacyAccounts : {};
             const accounts = createEmptyAccountsData();
-            ACCOUNT_IDS.forEach(id => {
+            LEGACY_ACCOUNT_IDS.forEach(id => {
                 const rawValue = legacyAccounts[id];
                 if (!rawValue) return;
                 accounts[id] = parseLegacyOperatorStore(rawValue, diagnostics, `account-${id}`);
@@ -763,13 +778,43 @@ Object.entries({
         return diff;
     }
 
+    function requireAccount(state, accountId) {
+        const id = normalizeAccountId(accountId);
+        if (id !== Number(accountId) || !Object.prototype.hasOwnProperty.call(state.accountsData, id)) {
+            throw new Error('目标账号已删除，请重新选择账号。');
+        }
+        return id;
+    }
+
+    function createAddedAccountState(state, rawLabel) {
+        const next = createAccountState(state);
+        const id = next.nextAccountId;
+        if (!Number.isSafeInteger(id + 1)) throw new Error('无法继续添加账号。');
+        next.nextAccountId = id + 1;
+        next.accountsData[id] = [];
+        next.activeAccountId = id;
+        return createRenamedAccountState(next, id, rawLabel);
+    }
+
+    function createRemovedAccountState(state, accountId) {
+        const next = createAccountState(state);
+        const id = requireAccount(next, accountId);
+        if (getAccountIds(next.accountsData).length <= 1) throw new Error('至少需要保留一个账号。');
+        delete next.accountsData[id];
+        delete next.accountsTraining[id];
+        delete next.accountMeta[id];
+        return createAccountState(next);
+    }
+
     function createAccountSwitchState(state, accountId) {
-        return createAccountState({ ...createAccountState(state), activeAccountId: accountId });
+        const next = createAccountState(state);
+        next.activeAccountId = requireAccount(next, accountId);
+        return next;
     }
 
     function createRenamedAccountState(state, accountId, rawLabel) {
         const currentState = createAccountState(state);
-        const id = normalizeAccountId(accountId);
+        const id = requireAccount(currentState, accountId);
         const cleaned = stringValue(rawLabel).replace(/[\x00-\x1F\x7F]/g, '').trim();
         const currentMeta = currentState.accountMeta[id] || {};
         currentState.accountMeta[id] = {
@@ -782,7 +827,7 @@ Object.entries({
 
     function createSklandImportState(state, { accountId, names, training, binding, importedAt } = {}) {
         const currentState = createAccountState(state);
-        const targetAccountId = normalizeAccountId(accountId);
+        const targetAccountId = requireAccount(currentState, accountId);
         const operatorNames = sanitizeOperatorNames(names);
         if (operatorNames.length === 0) throw new Error('森空岛返回的干员数据为空。');
 
@@ -2152,7 +2197,7 @@ function createSklandImportCancelledError() {
         color: var(--prts-color-text) !important;
         text-decoration: none !important;
     }
-    .prts-btn:focus-visible, .prts-import-action:focus-visible, .prts-account-rename:focus-visible, .prts-skland-close:focus-visible, .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-float-btn:focus-visible {
+    .prts-btn:focus-visible, .prts-import-action:focus-visible, .prts-account-rename:focus-visible, .prts-skland-close:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-float-btn:focus-visible {
         outline: 2px solid var(--prts-color-primary) !important;
         outline-offset: 2px !important;
         box-shadow: 0 0 0 4px var(--prts-color-ring) !important;
@@ -2192,11 +2237,14 @@ function createSklandImportCancelledError() {
     }
     /* Hallmark · component: account switcher · theme: existing PRTS · states: default, hover, focus, pressed, selected
      * pre-emit critique: P4 H5 E4 S5 R5 V4 */
-    .prts-account-list { display: flex; flex-direction: column; gap: var(--prts-space-2); width: 100%; margin-top: var(--prts-space-2); }
+    .prts-account-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--prts-space-2); }
+    .prts-account-toolbar .prts-btn { min-height: 44px !important; white-space: nowrap; }
+    .prts-account-list { display: flex; flex-direction: column; gap: var(--prts-space-2); width: 100%; max-height: min(320px, 45vh); margin-top: var(--prts-space-2); overflow-y: auto; overscroll-behavior: contain; }
     .prts-account-row {
+        flex-shrink: 0;
         box-sizing: border-box;
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 44px;
+        grid-template-columns: minmax(0, 1fr) 44px 44px;
         align-items: center;
         width: 100%;
         border: 1px solid var(--prts-color-border-soft);
@@ -2251,6 +2299,8 @@ function createSklandImportCancelledError() {
         .prts-account-row:hover { border-color: var(--prts-color-primary); }
         .prts-account-rename:hover { background: var(--prts-color-surface-hover); color: var(--prts-color-primary); }
     }
+    #prts-float-container .prts-account-delete { color: var(--prts-color-danger); }
+    .prts-account-rename:disabled { opacity: 0.45; cursor: not-allowed; }
     .prts-acc-btn:active, .prts-account-rename:active { background: var(--prts-color-surface-hover); }
     .prts-acc-btn:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
     .prts-account-sync-chip {
@@ -2792,9 +2842,6 @@ function createSklandImportCancelledError() {
     .prts-skland-close:hover { background: #f1f5f9; color: #0f172a; }
     .prts-skland-body { padding: 12px 14px 14px; }
     .prts-skland-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #475569; }
-    .prts-skland-accounts { display: flex; gap: 6px; margin-bottom: 12px; }
-    .prts-skland-account { flex: 1; height: 30px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #475569; cursor: pointer; font-size: 13px; font-weight: 700; }
-    .prts-skland-account.active { border-color: #2563eb; background: #2563eb; color: #ffffff; }
     .prts-skland-primary { width: 100%; height: 36px; border: none; border-radius: 4px; background: #2563eb; color: #ffffff; cursor: pointer; font-size: 14px; font-weight: 700; }
     .prts-skland-primary:hover { background: #1d4ed8; }
     .prts-skland-primary:disabled { background: #94a3b8; cursor: wait; }
@@ -2949,18 +2996,6 @@ function createSklandImportCancelledError() {
         background: var(--prts-color-surface-hover) !important;
         color: var(--prts-color-text) !important;
     }
-    .prts-skland-account {
-        min-height: 44px;
-        border-color: var(--prts-color-border) !important;
-        border-radius: var(--prts-radius-md) !important;
-        background: var(--prts-color-surface) !important;
-        color: var(--prts-color-text-muted) !important;
-    }
-    .prts-skland-account.active {
-        border-color: var(--prts-color-primary) !important;
-        background: var(--prts-color-primary) !important;
-        color: #ffffff !important;
-    }
     .prts-skland-primary {
         min-height: 44px;
         border-radius: var(--prts-radius-md) !important;
@@ -3000,7 +3035,7 @@ function createSklandImportCancelledError() {
         background: var(--prts-color-primary-soft) !important;
         color: var(--prts-color-primary) !important;
     }
-    .prts-skland-account:focus-visible, .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-import-close:focus-visible, .prts-import-action:focus-visible {
+    .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-import-close:focus-visible, .prts-import-action:focus-visible {
         outline: 2px solid var(--prts-color-primary);
         outline-offset: 2px;
         box-shadow: 0 0 0 4px var(--prts-color-ring);
@@ -3018,6 +3053,33 @@ function createSklandImportCancelledError() {
     }
 `;
 
+    const accountSelectStyles = `
+    /* Hallmark · component: account select · theme: existing PRTS tokens
+     * pre-emit critique: P4 H4 E4 S5 R5 V4 · states: default, hover, focus, disabled */
+    .prts-account-select {
+        box-sizing: border-box;
+        min-width: 0;
+        max-width: 100%;
+        width: 220px;
+        min-height: 44px;
+        padding: 6px 10px;
+        border: 1px solid var(--prts-color-border);
+        border-radius: var(--prts-radius-md);
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text);
+        font: 600 13px var(--prts-font-sans);
+        text-overflow: ellipsis;
+        cursor: pointer;
+        touch-action: manipulation;
+    }
+    @media (hover: hover) {
+        .prts-account-select:hover { border-color: var(--prts-color-primary); }
+    }
+    .prts-account-select:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
+    .prts-account-select:disabled { opacity: 0.56; cursor: not-allowed; }
+    #prts-skland-target-account { width: 100%; margin-bottom: 12px; }
+`;
+
     const scriptUpdateStyles = `
     /* Hallmark · component: update modal · theme: existing PRTS tokens
      * pre-emit critique: P4 H4 E4 S5 R5 V3 · states: default, hover, focus, active */
@@ -3027,7 +3089,7 @@ function createSklandImportCancelledError() {
     .prts-modal-actions-extra .prts-import-action:active { transform: translateY(1px); }
 `;
 
-    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + scriptUpdateStyles);
+    GM_addStyle(toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles) + accountSelectStyles + scriptUpdateStyles);
     // =========================================================================
     //                            MODULE 3.5: DOM UI HELPERS
     // =========================================================================
@@ -3219,6 +3281,32 @@ function createSklandImportCancelledError() {
 
         btn.replaceChildren(...children);
         return btn;
+    }
+
+    function createAccountSelect(id, selectedId, onChange) {
+        let select = document.getElementById(id);
+        if (select?.tagName !== 'SELECT') {
+            select?.remove();
+            select = document.createElement('select');
+            select.id = id;
+            select.className = 'prts-account-select';
+            select.setAttribute('aria-label', id === 'btn-account' ? '切换当前账号' : '选择导入目标账号');
+        }
+        const ids = getAccountIds();
+        const signature = JSON.stringify(ids.map(accountId => [accountId, getAccountLabel(accountId)]));
+        if (select.dataset.accounts !== signature) {
+            select.replaceChildren(...ids.map(accountId => {
+                const option = document.createElement('option');
+                option.value = String(accountId);
+                const label = getAccountLabel(accountId);
+                option.textContent = label === getDefaultAccountLabel(accountId) ? label : `${label}（账号 ${accountId}）`;
+                return option;
+            }));
+            select.dataset.accounts = signature;
+        }
+        select.value = String(ids.includes(selectedId) ? selectedId : activeAccountId);
+        select.onchange = onChange;
+        return select;
     }
 
     function createPrtsSwitch({ label, checked, onChange, configKey, icon = null } = {}) {
@@ -3959,12 +4047,13 @@ function createSklandImportCancelledError() {
     // =========================================================================
 
     function getCurrentAccountState() {
-        return createAccountState({ activeAccountId, accountsData, accountsTraining, accountMeta });
+        return createAccountState({ activeAccountId, nextAccountId, accountsData, accountsTraining, accountMeta });
     }
 
     function publishAccountState(value) {
         const state = createAccountState(value);
         activeAccountId = state.activeAccountId;
+        nextAccountId = state.nextAccountId;
         accountsData = state.accountsData;
         accountsTraining = state.accountsTraining;
         accountMeta = state.accountMeta;
@@ -3980,7 +4069,7 @@ function createSklandImportCancelledError() {
 
     function readAccountStorageSnapshot() {
         const legacyAccounts = {};
-        ACCOUNT_IDS.forEach(id => {
+        LEGACY_ACCOUNT_IDS.forEach(id => {
             legacyAccounts[id] = GM_getValue(`prts_plus_user_ops_${id}`);
         });
         return {
@@ -4016,41 +4105,31 @@ function createSklandImportCancelledError() {
      * 执行账号切换
      */
     function switchAccount(id) {
-        id = normalizeAccountId(id);
-        if (id === activeAccountId) return;
-
-        commitAccountState(createAccountSwitchState(getCurrentAccountState(), id));
-
-        // 1. 同步悬浮窗面板内的小按钮状态
-        const accBtns = document.querySelectorAll('.prts-acc-btn');
-        accBtns.forEach(btn => {
-            if (parseInt(btn.dataset.id) === activeAccountId) {
-                btn.classList.add('active');
-            } else {
-                btn.classList.remove('active');
-            }
-        });
-
-        // 2. 销毁并重建控制栏以刷新UI文案和导入数量
-        const bar = document.getElementById('prts-filter-bar');
-        if (bar) bar.remove();
-        injectFilterControls();
-        refreshAccountControls();
-
-        // 3. 立刻触发重新筛选运算
-        if (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) {
-            requestFilterUpdate();
+        const restoreFocus = document.activeElement?.id === 'btn-account';
+        try {
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            commitAccountState(createAccountSwitchState(latest, id));
+            refreshAccountStateUi();
+            if (restoreFocus) document.getElementById('btn-account')?.focus({ preventScroll: true });
+        } catch (error) {
+            showPrtsToast('切换账号失败', 'error', error.message);
         }
     }
 
     // 给主控制栏用的循环切换
     function cycleAccount() {
-        let nextId = activeAccountId + 1;
-        if (nextId > 3) nextId = 1;
-        switchAccount(nextId);
+        const ids = getAccountIds();
+        switchAccount(ids[(ids.indexOf(activeAccountId) + 1) % ids.length]);
     }
 
     function refreshAccountControls() {
+        const canRemove = getAccountIds().length > 1;
+        document.querySelectorAll('.prts-account-list').forEach(renderAccountList);
+        document.querySelectorAll('.prts-account-select').forEach(select => {
+            const previousId = Number(select.value);
+            createAccountSelect(select.id, select.id === 'btn-account' ? activeAccountId : previousId, select.onchange);
+            if (select.id !== 'btn-account' && Number(select.value) !== previousId && !select.disabled) select.onchange?.();
+        });
         document.querySelectorAll('.prts-acc-btn').forEach(btn => {
             const id = normalizeAccountId(btn.dataset.id);
             const label = getAccountLabel(id);
@@ -4063,6 +4142,10 @@ function createSklandImportCancelledError() {
             const row = btn.closest('.prts-account-row');
             row.classList.toggle('is-active', id === activeAccountId);
             row.querySelector('.prts-account-rename').setAttribute('aria-label', `重命名 ${label}`);
+            const removeButton = row.querySelector('.prts-account-delete');
+            removeButton.setAttribute('aria-label', `删除 ${label}`);
+            removeButton.disabled = !canRemove;
+            removeButton.title = canRemove ? `删除 ${label}` : '至少需要保留一个账号';
 
             const syncMetaEl = btn.querySelector('.prts-account-sync-meta');
             if (syncMetaEl) {
@@ -4100,6 +4183,7 @@ function createSklandImportCancelledError() {
             const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
             reportAccountStateDiagnostics(resolved.diagnostics);
             const state = resolved.state;
+            requireAccount(state, id);
             const diff = getOperatorImportDiff(state.accountsData[id], names, state.accountsTraining[id], training);
             const danger = diff.removed > 0 || diff.decreasedTrainingNames.length > 0 || diff.clearedTrainingNames.length > 0;
             const lines = [
@@ -4148,9 +4232,56 @@ function createSklandImportCancelledError() {
         });
         if (rawLabel === null) return;
 
-        commitAccountState(createRenamedAccountState(getCurrentAccountState(), accountId, rawLabel));
-        refreshAccountStateUi();
-        showPrtsToast('账号名称已更新', 'success', `${getAccountLabel(accountId)} / ${getAccountOperatorCount(accountId)} 名干员`);
+        try {
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            commitAccountState(createRenamedAccountState(latest, accountId, rawLabel));
+            refreshAccountStateUi();
+            showPrtsToast('账号名称已更新', 'success', `${getAccountLabel(accountId)} / ${getAccountOperatorCount(accountId)} 名干员`);
+        } catch (error) {
+            showPrtsToast('重命名失败', 'error', error.message);
+        }
+    }
+
+    async function addAccount() {
+        const label = await showPrtsPrompt({
+            title: '添加账号', message: '填写账号昵称，留空使用默认名称。', inputLabel: '账号昵称',
+            maxLength: ACCOUNT_LABEL_MAX_LENGTH, confirmText: '添加', cancelText: '取消'
+        });
+        if (label === null) return;
+        try {
+            const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+            commitAccountState(createAddedAccountState(latest, label));
+            refreshAccountStateUi();
+            showPrtsToast('账号已添加', 'success', `已切换到 ${getAccountLabel(activeAccountId)}，可导入干员数据。`);
+        } catch (error) {
+            showPrtsToast('添加账号失败', 'error', error.message);
+        }
+    }
+
+    async function removeAccount(accountId) {
+        try {
+            while (true) {
+                const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+                const id = requireAccount(state, accountId);
+                if (getAccountIds(state.accountsData).length <= 1) throw new Error('至少需要保留一个账号。');
+                const confirmed = await showPrtsConfirm({
+                    title: '删除账号',
+                    message: `删除 ${state.accountMeta[id].label}（账号 ${id}）及其 ${state.accountsData[id].length} 名干员、练度和同步记录？此操作无法撤销。`,
+                    confirmText: '确认删除', cancelText: '取消', tone: 'danger'
+                });
+                if (!confirmed) return;
+                const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
+                if (['accountsData', 'accountsTraining', 'accountMeta'].some(key =>
+                    JSON.stringify(state[key][id]) !== JSON.stringify(latest[key][id]))) continue;
+                commitAccountState(createRemovedAccountState(latest, id));
+                refreshAccountStateUi(true);
+                document.getElementById('prts-add-account')?.focus({ preventScroll: true });
+                showPrtsToast('账号已删除', 'success');
+                return;
+            }
+        } catch (error) {
+            showPrtsToast('删除账号失败', 'error', error.message);
+        }
     }
 
     function getAccountSklandSyncMeta(id) {
@@ -4174,7 +4305,7 @@ function createSklandImportCancelledError() {
         const accountId = normalizeAccountId(id);
         const label = getAccountLabel(accountId);
         const lines = [
-            `切换到 ${label}`,
+            `切换到 ${label}（账号 ${accountId}）`,
             `${getAccountOperatorCount(accountId)} 名干员`
         ];
         const skland = getAccountSklandSyncMeta(accountId);
@@ -4203,6 +4334,7 @@ function createSklandImportCancelledError() {
             version: ACCOUNT_BACKUP_VERSION,
             exportedAt: new Date().toISOString(),
             activeAccountId: state.activeAccountId,
+            nextAccountId: state.nextAccountId,
             accountsData: state.accountsData,
             accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta,
@@ -4277,22 +4409,19 @@ function createSklandImportCancelledError() {
         }
 
         return {
-            activeAccountId: normalizeAccountId(value.activeAccountId),
-            accountsData: normalizeAccountsData(value.accountsData),
-            accountsTraining: normalizeAccountsTraining(value.accountsTraining, normalizeAccountsData(value.accountsData)),
-            accountMeta: normalizeAccountMeta(value.accountMeta),
+            ...createAccountState(value),
             preferences: normalizeBackupPreferences(value.preferences)
         };
     }
 
     function formatAccountsBackupSummary(backup) {
         const lines = [
-            '将覆盖当前 3 个账号、账号昵称和 UI 偏好。',
+            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号替换当前全部账号、账号昵称和 UI 偏好。`,
             `导入后当前账号: ${backup.accountMeta[backup.activeAccountId].label}`,
             ''
         ];
 
-        ACCOUNT_IDS.forEach(id => {
+        getAccountIds(backup.accountsData).forEach(id => {
             lines.push(`${backup.accountMeta[id].label}: ${backup.accountsData[id].length} 名干员`);
         });
         lines.push('');
@@ -4869,10 +4998,20 @@ function createSklandImportCancelledError() {
 
         // 顺序生成元素
 
-        // (1) 账号循环切换按钮
-        const btnAccountText = getAccountLabel(activeAccountId);
-        const btnAccount = createPrtsButton({ id: 'btn-account', text: btnAccountText, icon: 'account', ariaLabel: `当前账号 ${btnAccountText}，点击切换账号`, onClick: cycleAccount });
-        mainRow.appendChild(btnAccount);
+        // (1) 少量账号点击轮换，三个及以上直接选择。
+        let accountControl;
+        if (getAccountIds().length < 3) {
+            const existing = document.getElementById('btn-account');
+            if (existing && existing.tagName !== 'BUTTON') existing.remove();
+            const label = getAccountLabel(activeAccountId);
+            accountControl = createPrtsButton({
+                id: 'btn-account', text: label, icon: 'account', disabled: getAccountIds().length === 1,
+                ariaLabel: `当前账号 ${label}${getAccountIds().length === 1 ? '，仅有一个账号' : '，点击切换账号'}`, onClick: cycleAccount
+            });
+        } else {
+            accountControl = createAccountSelect('btn-account', activeAccountId, event => switchAccount(Number(event.target.value)));
+        }
+        mainRow.appendChild(accountControl);
 
         const activeSklandSync = getAccountSklandSyncMeta(activeAccountId);
         let accountSyncChip = document.getElementById('prts-account-sync-chip');
@@ -5835,15 +5974,21 @@ function createSklandImportCancelledError() {
 
     function refreshOwnedOpsFromStorage() {
         loadOwnedOps();
+        if (isSklandHost()) {
+            refreshAccountControls();
+            return;
+        }
         const bar = document.getElementById('prts-filter-bar');
         if (bar) bar.remove();
         injectFilterControls();
         refreshAccountControls();
-        if (CONFIG.filterMode !== 'NONE') requestFilterUpdate();
+        updateFloatingLayout();
+        if (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
     }
 
     function initSklandImportPage() {
         loadOwnedOps();
+        registerAccountsDataChangeListener();
         if (document.body) {
             createSklandImportPanel();
             return;
@@ -5854,7 +5999,6 @@ function createSklandImportCancelledError() {
     function createSklandImportPanel() {
         if (document.getElementById('prts-skland-import-panel')) return;
 
-        let targetAccountId = normalizeAccountId(activeAccountId);
         const panel = document.createElement('section');
         panel.id = 'prts-skland-import-panel';
 
@@ -5889,26 +6033,13 @@ function createSklandImportCancelledError() {
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
-        accountLabel.textContent = '导入到账号档位';
+        accountLabel.textContent = '导入到账号';
         body.appendChild(accountLabel);
 
-        const accountRow = document.createElement('div');
-        accountRow.className = 'prts-skland-accounts';
-        const accountButtons = [];
-        ACCOUNT_IDS.forEach(id => {
-            const btn = document.createElement('button');
-            btn.type = 'button';
-            btn.className = 'prts-skland-account';
-            btn.textContent = getAccountLabel(id);
-            btn.onclick = () => {
-                targetAccountId = id;
-                renderSklandAccountButtons(accountButtons, targetAccountId);
-                renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
-            };
-            accountButtons.push(btn);
-            accountRow.appendChild(btn);
+        const accountSelect = createAccountSelect('prts-skland-target-account', activeAccountId, () => {
+            renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
         });
-        body.appendChild(accountRow);
+        body.appendChild(accountSelect);
 
         const importBtn = document.createElement('button');
         importBtn.type = 'button';
@@ -5932,19 +6063,18 @@ function createSklandImportCancelledError() {
         body.appendChild(link);
 
         importBtn.onclick = async () => {
-            const accountId = targetAccountId;
+            const accountId = Number(accountSelect.value);
             const progressText = `正在读取森空岛数据，稍后请确认导入到 ${getAccountLabel(accountId)} 的变化。`;
             const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
             importBtn.disabled = true;
             importBtn.textContent = '同步中…';
-            accountButtons.forEach(button => { button.disabled = true; });
+            accountSelect.disabled = true;
             setSklandPanelStatus(status, progressText, 'loading');
             try {
                 const summary = await importSklandOperatorsToAccount(accountId, {
                     selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
                 });
-                targetAccountId = summary.accountId;
-                renderSklandAccountButtons(accountButtons, targetAccountId);
+                createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
                 const detail = formatSklandImportSummary(summary);
                 setSklandPanelStatus(status, detail, 'success');
                 updateToast('森空岛数据同步成功', 'success', detail);
@@ -5961,12 +6091,11 @@ function createSklandImportCancelledError() {
             } finally {
                 importBtn.disabled = false;
                 importBtn.textContent = '读取并导入干员';
-                accountButtons.forEach(button => { button.disabled = false; });
+                accountSelect.disabled = false;
             }
         };
 
-        renderSklandAccountButtons(accountButtons, targetAccountId);
-        renderSklandSelectedAccountStatus(status, targetAccountId, defaultStatusText);
+        renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
 
         panel.appendChild(body);
         document.body.appendChild(panel);
@@ -6088,15 +6217,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
         setSklandPanelStatus(status, fallbackText, '');
     }
 
-    function renderSklandAccountButtons(buttons, activeId) {
-        buttons.forEach((btn, index) => {
-            const id = ACCOUNT_IDS[index];
-            btn.textContent = getAccountLabel(id);
-            btn.title = formatAccountSklandTitle(id);
-            btn.classList.toggle('active', id === activeId);
-        });
-    }
-
     function setSklandPanelStatus(status, text, type) {
         status.className = 'prts-skland-status';
         if (type) status.classList.add(type);
@@ -6184,6 +6304,44 @@ ${formatSklandImportSummary(summary)}`, 'success');
             submenu.style.top = `${submenuTop - ballTop}px`;
             container.classList.toggle('prts-submenu-left', opensLeft);
         });
+    }
+
+    function renderAccountList(list) {
+        const ids = getAccountIds();
+        const signature = ids.join(',');
+        if (list.dataset.accounts === signature) return;
+        list.replaceChildren(...ids.map(id => {
+            const row = document.createElement('div');
+            row.className = 'prts-account-row';
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'prts-acc-btn';
+            button.dataset.id = id;
+            button.onclick = () => switchAccount(id);
+            const heading = document.createElement('span');
+            heading.className = 'prts-account-heading';
+            const name = document.createElement('span');
+            name.className = 'prts-account-name';
+            heading.appendChild(name);
+            heading.appendChild(createPrtsIcon('check'));
+            button.appendChild(heading);
+            const count = document.createElement('span');
+            count.className = 'prts-account-count';
+            button.appendChild(count);
+            const syncMeta = document.createElement('span');
+            syncMeta.className = 'prts-account-sync-meta';
+            button.appendChild(syncMeta);
+            row.appendChild(button);
+            const rename = createPrtsButton({ className: 'prts-account-rename', text: '改名', onClick: () => renameAccount(id) });
+            row.appendChild(rename);
+            const remove = createPrtsButton({
+                className: 'prts-account-rename prts-account-delete', text: '删除',
+                disabled: ids.length <= 1, onClick: () => removeAccount(id)
+            });
+            row.appendChild(remove);
+            return row;
+        }));
+        list.dataset.accounts = signature;
     }
 
     function createFloatingBall() {
@@ -6433,7 +6591,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             onClick: () => checkScriptUpdates(true)
         }));
 
-        //[V12.0/V3.1.0 优美的多账号悬浮面板]
+        // 账号管理
         const accRow = document.createElement('div');
         accRow.className = 'prts-panel-item';
         accRow.style.marginTop = '8px';
@@ -6445,55 +6603,18 @@ ${formatSklandImportSummary(summary)}`, 'success');
         accTitle.className = 'prts-panel-item-label';
         accTitle.appendChild(createPrtsIcon('account'));
         const accTitleText = document.createElement('span');
-        accTitleText.textContent = '切换账号';
+        accTitleText.textContent = '账号管理';
         accTitle.appendChild(accTitleText);
-        accRow.appendChild(accTitle);
+        const accountToolbar = document.createElement('div');
+        accountToolbar.className = 'prts-account-toolbar';
+        accountToolbar.appendChild(accTitle);
+        accountToolbar.appendChild(createPrtsButton({ id: 'prts-add-account', text: '添加账号', onClick: addAccount }));
+        accRow.appendChild(accountToolbar);
 
         const accBtnGroup = document.createElement('div');
         accBtnGroup.className = 'prts-account-list';
 
-        for (let i = 1; i <= 3; i++) {
-            const row = document.createElement('div');
-            row.className = 'prts-account-row';
-
-            const accBtn = document.createElement('button');
-            accBtn.type = 'button';
-            accBtn.className = 'prts-acc-btn';
-            accBtn.dataset.id = i;
-            accBtn.onclick = (e) => {
-                e.stopPropagation();
-                switchAccount(i);
-            };
-
-            const heading = document.createElement('span');
-            heading.className = 'prts-account-heading';
-            const name = document.createElement('span');
-            name.className = 'prts-account-name';
-            heading.appendChild(name);
-            heading.appendChild(createPrtsIcon('check'));
-
-            const count = document.createElement('span');
-            count.className = 'prts-account-count';
-            const syncMeta = document.createElement('span');
-            syncMeta.className = 'prts-account-sync-meta';
-            accBtn.appendChild(heading);
-            accBtn.appendChild(count);
-            accBtn.appendChild(syncMeta);
-
-            const renameBtn = document.createElement('button');
-            renameBtn.type = 'button';
-            renameBtn.className = 'prts-account-rename';
-            renameBtn.dataset.id = i;
-            renameBtn.textContent = '改名';
-            renameBtn.onclick = (e) => {
-                e.stopPropagation();
-                renameAccount(i);
-            };
-
-            row.appendChild(accBtn);
-            row.appendChild(renameBtn);
-            accBtnGroup.appendChild(row);
-        }
+        renderAccountList(accBtnGroup);
         accRow.appendChild(accBtnGroup);
         accounts.body.appendChild(accRow);
 

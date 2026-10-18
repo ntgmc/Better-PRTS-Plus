@@ -11,7 +11,7 @@
     const ACCOUNT_BACKUP_MAX_BYTES = 2 * 1024 * 1024;
     const OPERATOR_IMPORT_MAX_BYTES = 2 * 1024 * 1024;
     const ACCOUNT_LABEL_MAX_LENGTH = 20;
-    const ACCOUNT_IDS = [1, 2, 3];
+    const LEGACY_ACCOUNT_IDS = [1, 2, 3];
     const SKLAND_BASE_URL = 'https://zonai.skland.com';
     const SKLAND_HOME_URL = 'https://www.skland.com/index';
     const SKLAND_REQUEST_TIMEOUT_MS = 25000;
@@ -96,6 +96,7 @@
 
     // 全局状态变量
     let activeAccountId = 1;
+    let nextAccountId = 4;
     let accountsData = { 1:[], 2: [], 3:[] }; // 多账号数据缓存池
     let accountsTraining = { 1: {}, 2: {}, 3: {} };
     let accountMeta = createDefaultAccountMeta();

@@ -4,10 +4,15 @@
 
     function createAccountState(value = {}) {
         const source = isPlainRecord(value) ? value : {};
+        const rawData = isPlainRecord(source.accountsData) ? source.accountsData : {};
+        const data = normalizeAccountsData(source.nextAccountId ? rawData : { ...createEmptyAccountsData(), ...rawData });
+        const ids = getAccountIds(data);
+        const activeId = normalizeAccountId(source.activeAccountId);
         const state = {
-            activeAccountId: normalizeAccountId(source.activeAccountId),
-            accountsData: normalizeAccountsData(source.accountsData),
-            accountMeta: normalizeAccountMeta(source.accountMeta)
+            activeAccountId: ids.includes(activeId) ? activeId : ids[0],
+            nextAccountId: Math.max(normalizeAccountId(source.nextAccountId), ids[ids.length - 1] + 1),
+            accountsData: data,
+            accountMeta: normalizeAccountMeta(source.accountMeta, ids)
         };
         state.accountsTraining = normalizeAccountsTraining(source.accountsTraining, state.accountsData);
         return state;
@@ -17,6 +22,7 @@
         const state = createAccountState(value);
         return JSON.stringify({
             activeAccountId: state.activeAccountId,
+            nextAccountId: state.nextAccountId,
             accountsData: state.accountsData,
             accountsTraining: state.accountsTraining,
             accountMeta: state.accountMeta
@@ -48,9 +54,9 @@
         if (!summary) return { state, migrated: false };
 
         const accountId = normalizeAccountId(summary.accountId);
-        if (state.accountMeta[accountId]?.skland) return { state, migrated: false };
+        if (!state.accountMeta[accountId] || state.accountMeta[accountId].skland) return { state, migrated: false };
 
-        const nextMeta = normalizeAccountMeta(state.accountMeta);
+        const nextMeta = normalizeAccountMeta(state.accountMeta, getAccountIds(state.accountsData));
         nextMeta[accountId] = {
             ...nextMeta[accountId],
             skland: normalizeSklandSyncMeta(summary)
@@ -80,7 +86,7 @@
         } else {
             const legacyAccounts = isPlainRecord(source.legacyAccounts) ? source.legacyAccounts : {};
             const accounts = createEmptyAccountsData();
-            ACCOUNT_IDS.forEach(id => {
+            LEGACY_ACCOUNT_IDS.forEach(id => {
                 const rawValue = legacyAccounts[id];
                 if (!rawValue) return;
                 accounts[id] = parseLegacyOperatorStore(rawValue, diagnostics, `account-${id}`);
@@ -140,13 +146,43 @@
         return diff;
     }
 
+    function requireAccount(state, accountId) {
+        const id = normalizeAccountId(accountId);
+        if (id !== Number(accountId) || !Object.prototype.hasOwnProperty.call(state.accountsData, id)) {
+            throw new Error('目标账号已删除，请重新选择账号。');
+        }
+        return id;
+    }
+
+    function createAddedAccountState(state, rawLabel) {
+        const next = createAccountState(state);
+        const id = next.nextAccountId;
+        if (!Number.isSafeInteger(id + 1)) throw new Error('无法继续添加账号。');
+        next.nextAccountId = id + 1;
+        next.accountsData[id] = [];
+        next.activeAccountId = id;
+        return createRenamedAccountState(next, id, rawLabel);
+    }
+
+    function createRemovedAccountState(state, accountId) {
+        const next = createAccountState(state);
+        const id = requireAccount(next, accountId);
+        if (getAccountIds(next.accountsData).length <= 1) throw new Error('至少需要保留一个账号。');
+        delete next.accountsData[id];
+        delete next.accountsTraining[id];
+        delete next.accountMeta[id];
+        return createAccountState(next);
+    }
+
     function createAccountSwitchState(state, accountId) {
-        return createAccountState({ ...createAccountState(state), activeAccountId: accountId });
+        const next = createAccountState(state);
+        next.activeAccountId = requireAccount(next, accountId);
+        return next;
     }
 
     function createRenamedAccountState(state, accountId, rawLabel) {
         const currentState = createAccountState(state);
-        const id = normalizeAccountId(accountId);
+        const id = requireAccount(currentState, accountId);
         const cleaned = stringValue(rawLabel).replace(/[\x00-\x1F\x7F]/g, '').trim();
         const currentMeta = currentState.accountMeta[id] || {};
         currentState.accountMeta[id] = {
@@ -159,7 +195,7 @@
 
     function createSklandImportState(state, { accountId, names, training, binding, importedAt } = {}) {
         const currentState = createAccountState(state);
-        const targetAccountId = normalizeAccountId(accountId);
+        const targetAccountId = requireAccount(currentState, accountId);
         const operatorNames = sanitizeOperatorNames(names);
         if (operatorNames.length === 0) throw new Error('森空岛返回的干员数据为空。');
 
