@@ -1,5 +1,10 @@
     const SCRIPT_RELEASE_URL = 'https://github.com/ntgmc/Better-PRTS-Plus/releases';
     const SCRIPT_UPDATE_URL = `${SCRIPT_RELEASE_URL}/latest/download/update.json`;
+    const SCRIPT_UPDATE_URLS = [
+        SCRIPT_UPDATE_URL,
+        `https://gh-proxy.com/${SCRIPT_UPDATE_URL}`,
+        `https://ghfast.top/${SCRIPT_UPDATE_URL}`
+    ];
     const SCRIPT_IGNORED_VERSION_KEY = 'prts_plus_ignored_script_version';
     const SCRIPT_UPDATE_INTERVAL_MS = 60 * 60 * 1000;
     let scriptUpdatePending = null;
@@ -18,37 +23,16 @@
     }
 
     function downloadScriptUpdateManifest() {
-        return new Promise((resolve, reject) => {
-            let request;
-            const timeoutId = setTimeout(() => {
-                reject(new Error('检查更新超时'));
-                request?.abort();
-            }, 15000);
-            const finish = callback => value => {
-                clearTimeout(timeoutId);
-                callback(value);
-            };
-            try {
-                request = GM_xmlhttpRequest({
-                    method: 'GET', url: SCRIPT_UPDATE_URL, anonymous: true, timeout: 15000,
-                    onload: finish(response => {
-                        try {
-                            if (response.status !== 200) throw new Error(`检查更新失败：HTTP ${response.status}`);
-                            if (typeof response.responseText !== 'string' || response.responseText.length > 1024 * 1024) {
-                                throw new Error('更新说明文件无效或过大');
-                            }
-                            resolve(validateReleaseManifest(JSON.parse(response.responseText)));
-                        } catch (error) { reject(error); }
-                    }),
-                    onerror: finish(() => reject(new Error('无法连接更新服务器'))),
-                    ontimeout: finish(() => reject(new Error('检查更新超时'))),
-                    onabort: finish(() => reject(new Error('检查更新已取消')))
-                });
-            } catch (error) {
-                clearTimeout(timeoutId);
-                reject(error);
+        return downloadFirstValidJson(SCRIPT_UPDATE_URLS, data => {
+            const manifest = validateReleaseManifest(data);
+            const latest = manifest.releases.find(release => !parseScriptVersion(release.version).prerelease.length);
+            const knownLatest = scriptUpdateManifest?.releases.find(release => !parseScriptVersion(release.version).prerelease.length);
+            if ((latest && compareScriptVersions(latest.version, knownLatest?.version || GM_info.script.version) < 0) ||
+                (!latest && knownLatest)) {
+                throw new Error('更新说明早于当前已知版本');
             }
-        });
+            return manifest;
+        }, 1024 * 1024);
     }
 
     async function promptScriptUpdate(manifest, manual) {
@@ -136,7 +120,8 @@
                 return await promptScriptUpdate(scriptUpdateManifest, manual);
             } catch (error) {
                 console.warn('[Better PRTS] 检查脚本更新失败', error);
-                if (manual) showPrtsToast('检查脚本更新失败', 'error', error.message || '请稍后重试。');
+                if (manual) showPrtsToast('检查脚本更新失败', 'error',
+                    error instanceof AggregateError ? '所有更新下载源均不可用，请稍后重试。' : error.message || '请稍后重试。');
                 return false;
             }
         })().finally(() => { scriptUpdatePending = null; });

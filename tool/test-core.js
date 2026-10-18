@@ -469,17 +469,18 @@ const updateRelease = (version = '3.11.0', level = 'normal', notes = '更新测�
 const releaseManifest = (...releases) => ({ schemaVersion: 1, releases });
 
 function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
-  const requests = [], dialogs = [], toasts = [], opened = [], timers = new Map();
+  const requests = [], dialogs = [], toasts = [], opened = [], timers = new Map(), abortedUrls = [];
   let now = 1700000000000;
-  const h = { saved, requests, dialogs, toasts, opened, timers, choice: null, busy: false };
+  const h = { saved, requests, dialogs, toasts, opened, timers, abortedUrls, choice: null, busy: false };
   const sandbox = {
     console: { warn() {} },
     Date: { now: () => now },
+    BUILTIN_RESOURCE_VERSION: resourceSnapshot.resourceVersion,
     GM_info: { script: { version } }, CONFIG: { importantUpdatesOnly: false }, betterPrtsDebug: {},
     GM_getValue: (key, fallback) => saved.has(key) ? saved.get(key) : fallback,
     GM_setValue: (key, value) => saved.set(key, value),
     GM_openInTab: (...args) => opened.push(args),
-    GM_xmlhttpRequest: options => { requests.push(options); return { abort() {} }; },
+    GM_xmlhttpRequest: options => { requests.push(options); return { abort: () => { abortedUrls.push(options.url); options.onabort(); } }; },
     saveConfig: () => sandbox.GM_setValue('config', JSON.stringify(sandbox.CONFIG)),
     showPrtsToast: (...args) => toasts.push(args),
     showPrtsModal: options => { dialogs.push(options); return Promise.resolve(h.choice); },
@@ -487,13 +488,14 @@ function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
     setTimeout: callback => { const id = Symbol(); timers.set(id, () => { timers.delete(id); callback(); }); return id; },
     clearTimeout: id => timers.delete(id)
   };
-  vm.runInNewContext(releaseManifestSource + '\n' + fs.readFileSync(path.join(repoRoot, 'src/core/script-updates.js'), 'utf8') + `
-    globalThis.api = { checkScriptUpdates, compareScriptVersions, getAvailableScriptUpdate, validateReleaseManifest, SCRIPT_IGNORED_VERSION_KEY };
+  vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/data/resources.js'), 'utf8') + '\n' + releaseManifestSource + '\n' +
+    fs.readFileSync(path.join(repoRoot, 'src/core/script-updates.js'), 'utf8') + `
+    globalThis.api = { checkScriptUpdates, compareScriptVersions, getAvailableScriptUpdate, validateReleaseManifest, SCRIPT_IGNORED_VERSION_KEY, SCRIPT_UPDATE_URLS };
   `, sandbox);
   return Object.assign(h, {
     sandbox, api: sandbox.api,
     advance: (ms = 60 * 60 * 1000) => { now += ms; },
-    respond: (data = releaseManifest(updateRelease()), status = 200) => requests.at(-1).onload({ status, responseText: typeof data === 'string' ? data : JSON.stringify(data) })
+    respond: (data = releaseManifest(updateRelease()), status = 200, request = requests.at(-1)) => request.onload({ status, responseText: typeof data === 'string' ? data : JSON.stringify(data) })
   });
 }
 
@@ -534,7 +536,14 @@ test('script checks deduplicate requests, throttle downloads and prompt once per
   const h = createScriptUpdateHarness();
   const pending = h.api.checkScriptUpdates();
   assert.strictEqual(h.api.checkScriptUpdates(), pending);
-  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.requests.length, h.api.SCRIPT_UPDATE_URLS.length);
+  assert.deepStrictEqual(h.requests.map(request => request.url), hostObject(h.api.SCRIPT_UPDATE_URLS));
+  assert.strictEqual(h.requests[0].url, 'https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/update.json');
+  for (const request of h.requests) {
+    assert.strictEqual(request.anonymous, true);
+    assert.strictEqual(request.timeout, 15000);
+    assert(fs.readFileSync(path.join(repoRoot, 'src/meta/userscript-header.js'), 'utf8').includes(`// @connect      ${new URL(request.url).hostname}`));
+  }
   h.respond(releaseManifest(updateRelease('3.11.0', 'important', '<img src=x onerror=alert(1)>\n保留换行')));
   assert.strictEqual(await pending, true);
   assert.strictEqual(h.timers.size, 0);
@@ -544,13 +553,74 @@ test('script checks deduplicate requests, throttle downloads and prompt once per
   assert.strictEqual(h.dialogs[0].cancelText, '当前版本不再提示');
   assert.strictEqual(h.dialogs[0].confirmText, '立即更新');
   await h.api.checkScriptUpdates();
-  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.requests.length, h.api.SCRIPT_UPDATE_URLS.length);
   assert.strictEqual(h.dialogs.length, 1);
   h.advance();
   const next = h.api.checkScriptUpdates();
   h.respond(releaseManifest(updateRelease('3.12.0')));
   await next;
   assert.strictEqual(h.dialogs.length, 2);
+});
+
+test('script checks use the first valid origin or mirror and cancel slower requests', async () => {
+  for (const winner of [0, 1, 2]) {
+    const h = createScriptUpdateHarness();
+    const pending = h.api.checkScriptUpdates();
+    h.respond(releaseManifest(updateRelease('3.11.0', 'important')), 200, h.requests[winner]);
+    assert.strictEqual(await pending, true);
+    assert.deepStrictEqual(h.abortedUrls, h.requests.filter((_, index) => index !== winner).map(request => request.url));
+    assert.strictEqual(h.timers.size, 0);
+    h.respond(releaseManifest(updateRelease('99.0.0')), 200, h.requests[(winner + 1) % 3]);
+    assert.strictEqual(await h.api.checkScriptUpdates(), false);
+    assert.strictEqual(h.dialogs.length, 1);
+    assert(!h.dialogs[0].message.textContent.includes('99.0.0'));
+  }
+});
+
+test('script checks tolerate malformed responses and sources throwing before a valid mirror responds', async () => {
+  for (const winner of [0, 1, 2]) {
+    const h = createScriptUpdateHarness();
+    const pending = h.api.checkScriptUpdates();
+    const failures = h.requests.filter((_, index) => index !== winner);
+    h.respond(releaseManifest({ ...updateRelease(), humanWritten: false }), 200, failures[0]);
+    failures[1].onerror();
+    h.respond(releaseManifest(updateRelease()), 200, h.requests[winner]);
+    assert.strictEqual(await pending, true);
+    assert.strictEqual(h.dialogs.length, 1);
+    assert.strictEqual(h.timers.size, 0);
+  }
+  const h = createScriptUpdateHarness();
+  const request = h.sandbox.GM_xmlhttpRequest;
+  h.sandbox.GM_xmlhttpRequest = options => {
+    if (options.url === h.api.SCRIPT_UPDATE_URLS[0]) throw new Error('origin unavailable');
+    return request(options);
+  };
+  const pending = h.api.checkScriptUpdates();
+  h.respond();
+  assert.strictEqual(await pending, true);
+  assert.strictEqual(h.requests.length, 2);
+  assert.strictEqual(h.timers.size, 0);
+});
+
+test('stale update mirrors cannot mask newer installed or already detected versions', async () => {
+  for (const cached of [false, true]) {
+    const h = createScriptUpdateHarness();
+    if (cached) {
+      const initial = h.api.checkScriptUpdates();
+      h.respond(releaseManifest(updateRelease('3.12.0', 'important')));
+      await initial;
+    }
+    const pending = h.api.checkScriptUpdates(true);
+    const requests = h.requests.slice(-h.api.SCRIPT_UPDATE_URLS.length);
+    h.respond(releaseManifest(updateRelease(cached ? '3.11.0' : '3.9.0')), 200, requests[1]);
+    if (cached) h.respond(releaseManifest(), 200, requests[2]);
+    await new Promise(setImmediate);
+    assert.strictEqual(h.dialogs.length, cached ? 1 : 0);
+    h.respond(releaseManifest(updateRelease('3.13.0', 'urgent')), 200, requests[0]);
+    assert.strictEqual(await pending, true);
+    assert(h.dialogs.at(-1).message.textContent.includes('3.13.0'));
+    assert.strictEqual(h.timers.size, 0);
+  }
 });
 
 test('important-only preference hides ordinary updates and keeps important and urgent notifications', async () => {
@@ -625,7 +695,7 @@ test('automatic checks defer until an active import or confirmation closes', asy
   h.busy = false;
   await h.api.checkScriptUpdates();
   assert.strictEqual(h.dialogs.length, 1);
-  assert.strictEqual(h.requests.length, 1);
+  assert.strictEqual(h.requests.length, h.api.SCRIPT_UPDATE_URLS.length);
 });
 
 test('automatic updates wait for settings submenus while manual checks can open above them', async () => {
@@ -691,28 +761,35 @@ test('update style previews cover all levels and buttons without changing real u
 });
 
 test('failed script checks and timeouts stay silent automatically and can be retried manually', async () => {
-  for (const failure of ['invalid-json', 'http', 'timeout', 'error', 'oversized']) {
+  for (const failure of ['invalid-json', 'http', 'timeout', 'ontimeout', 'onerror', 'onabort', 'oversized', 'schema', 'startup']) {
     const h = createScriptUpdateHarness();
+    const request = h.sandbox.GM_xmlhttpRequest;
+    if (failure === 'startup') h.sandbox.GM_xmlhttpRequest = () => { throw new Error('source unavailable'); };
     const pending = h.api.checkScriptUpdates();
+    const requestCount = h.requests.length;
     if (failure === 'timeout') [...h.timers.values()].forEach(callback => callback());
-    else if (failure === 'error') h.requests[0].onerror();
-    else h.respond(failure === 'oversized' ? 'x'.repeat(1024 * 1024 + 1) : 'invalid', failure === 'http' ? 503 : 200);
+    else if (failure.startsWith('on')) h.requests.forEach(request => request[failure]());
+    else h.requests.forEach(request => h.respond(failure === 'oversized' ? 'x'.repeat(1024 * 1024 + 1)
+      : failure === 'schema' ? releaseManifest({ ...updateRelease(), humanWritten: false }) : 'invalid', failure === 'http' ? 503 : 200, request));
     assert.strictEqual(await pending, false);
     assert.strictEqual(h.timers.size, 0);
+    if (failure === 'timeout') assert.strictEqual(h.abortedUrls.length, h.api.SCRIPT_UPDATE_URLS.length);
     assert.strictEqual(h.toasts.length, 0);
     assert.strictEqual(h.dialogs.length, 0);
     await h.api.checkScriptUpdates();
-    assert.strictEqual(h.requests.length, 1);
+    assert.strictEqual(h.requests.length, requestCount);
+    h.sandbox.GM_xmlhttpRequest = request;
     const retry = h.api.checkScriptUpdates(true);
     h.respond();
     await retry;
     assert.strictEqual(h.dialogs.length, 1);
+    assert.strictEqual(h.timers.size, 0);
   }
   const h = createScriptUpdateHarness();
   const pending = h.api.checkScriptUpdates(true);
-  h.requests[0].onerror();
+  h.requests.forEach(request => request.onerror());
   await pending;
-  assert(h.toasts.some(toast => toast[1] === 'error'));
+  assert(h.toasts.some(toast => toast[1] === 'error' && toast[2].includes('所有更新下载源均不可用')));
 });
 
 test('release preparation refuses unconfirmed notes and publishes only the selected version and history', () => {

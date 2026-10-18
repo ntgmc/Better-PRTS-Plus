@@ -26,6 +26,8 @@
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
 // @connect      gcore.jsdelivr.net
+// @connect      gh-proxy.com
+// @connect      ghfast.top
 // @run-at       document-body
 // @license      GPL-3.0 License
 // ==/UserScript==
@@ -285,25 +287,22 @@ Object.entries({
         }
     }
 
-    function updateResources() {
-        if (resourceUpdatePending) return resourceUpdatePending;
-        if (Date.now() - resourceCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
-        const updateToast = showPrtsToast('资源数据同步中…', 'loading', '已开始同步干员与模组数据，请稍候。', 0);
+    function downloadFirstValidJson(urls, validate, maxBytes) {
         const cancellations = new Set();
         // 复用并发择优思路：https://github.com/kkocdko/user-scripts/blob/master/scripts/snippets/snippets.js (Unlicense)
-        resourceUpdatePending = Promise.any(RESOURCE_URLS.map(url => {
+        return Promise.any(urls.map(url => {
             let request;
             let timeoutId;
             let cancel;
             return new Promise((resolve, reject) => {
                 cancel = () => {
-                    reject(new Error('资源请求已取消'));
+                    reject(new Error('下载请求已取消'));
                     request?.abort();
                 };
                 cancellations.add(cancel);
                 // anonymous 请求在部分浏览器中忽略内置 timeout。
                 timeoutId = setTimeout(() => {
-                    reject(new Error('资源请求超时'));
+                    reject(new Error('下载请求超时'));
                     request?.abort();
                 }, 15000);
                 request = GM_xmlhttpRequest({
@@ -313,22 +312,31 @@ Object.entries({
                     timeout: 15000,
                     onload: response => {
                         try {
-                            if (response.status !== 200) throw new Error(`资源请求失败: HTTP ${response.status}`);
-                            if (typeof response.responseText !== 'string' || response.responseText.length > 2 * 1024 * 1024) {
-                                throw new Error('资源文件过大或为空');
+                            if (response.status !== 200) throw new Error(`下载请求失败: HTTP ${response.status}`);
+                            if (typeof response.responseText !== 'string' || response.responseText.length > maxBytes) {
+                                throw new Error('下载文件无效或过大');
                             }
-                            resolve(validateResourceData(JSON.parse(response.responseText)));
+                            resolve(validate(JSON.parse(response.responseText)));
                         } catch (error) { reject(error); }
                     },
-                    onerror: () => reject(new Error('资源请求失败')),
-                    ontimeout: () => reject(new Error('资源请求超时')),
-                    onabort: () => reject(new Error('资源请求已取消'))
+                    onerror: () => reject(new Error('下载请求失败')),
+                    ontimeout: () => reject(new Error('下载请求超时')),
+                    onabort: () => reject(new Error('下载请求已取消'))
                 });
             }).finally(() => {
                 clearTimeout(timeoutId);
                 cancellations.delete(cancel);
             });
-        })).then(data => {
+        })).finally(() => {
+            cancellations.forEach(cancel => cancel());
+        });
+    }
+
+    function updateResources() {
+        if (resourceUpdatePending) return resourceUpdatePending;
+        if (Date.now() - resourceCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
+        const updateToast = showPrtsToast('资源数据同步中…', 'loading', '已开始同步干员与模组数据，请稍候。', 0);
+        resourceUpdatePending = downloadFirstValidJson(RESOURCE_URLS, validateResourceData, 2 * 1024 * 1024).then(data => {
             applyResourceData(data);
             resourceCheckedAt = Date.now();
             let cacheSaved = true;
@@ -348,7 +356,6 @@ Object.entries({
             updateToast('资源数据同步失败', 'error', `${detail}\n继续使用已有数据。`);
             return false;
         }).finally(() => {
-            cancellations.forEach(cancel => cancel());
             resourceUpdatePending = null;
         });
         return resourceUpdatePending;
@@ -3594,6 +3601,11 @@ function createSklandImportCancelledError() {
     }
     const SCRIPT_RELEASE_URL = 'https://github.com/ntgmc/Better-PRTS-Plus/releases';
     const SCRIPT_UPDATE_URL = `${SCRIPT_RELEASE_URL}/latest/download/update.json`;
+    const SCRIPT_UPDATE_URLS = [
+        SCRIPT_UPDATE_URL,
+        `https://gh-proxy.com/${SCRIPT_UPDATE_URL}`,
+        `https://ghfast.top/${SCRIPT_UPDATE_URL}`
+    ];
     const SCRIPT_IGNORED_VERSION_KEY = 'prts_plus_ignored_script_version';
     const SCRIPT_UPDATE_INTERVAL_MS = 60 * 60 * 1000;
     let scriptUpdatePending = null;
@@ -3612,37 +3624,16 @@ function createSklandImportCancelledError() {
     }
 
     function downloadScriptUpdateManifest() {
-        return new Promise((resolve, reject) => {
-            let request;
-            const timeoutId = setTimeout(() => {
-                reject(new Error('检查更新超时'));
-                request?.abort();
-            }, 15000);
-            const finish = callback => value => {
-                clearTimeout(timeoutId);
-                callback(value);
-            };
-            try {
-                request = GM_xmlhttpRequest({
-                    method: 'GET', url: SCRIPT_UPDATE_URL, anonymous: true, timeout: 15000,
-                    onload: finish(response => {
-                        try {
-                            if (response.status !== 200) throw new Error(`检查更新失败：HTTP ${response.status}`);
-                            if (typeof response.responseText !== 'string' || response.responseText.length > 1024 * 1024) {
-                                throw new Error('更新说明文件无效或过大');
-                            }
-                            resolve(validateReleaseManifest(JSON.parse(response.responseText)));
-                        } catch (error) { reject(error); }
-                    }),
-                    onerror: finish(() => reject(new Error('无法连接更新服务器'))),
-                    ontimeout: finish(() => reject(new Error('检查更新超时'))),
-                    onabort: finish(() => reject(new Error('检查更新已取消')))
-                });
-            } catch (error) {
-                clearTimeout(timeoutId);
-                reject(error);
+        return downloadFirstValidJson(SCRIPT_UPDATE_URLS, data => {
+            const manifest = validateReleaseManifest(data);
+            const latest = manifest.releases.find(release => !parseScriptVersion(release.version).prerelease.length);
+            const knownLatest = scriptUpdateManifest?.releases.find(release => !parseScriptVersion(release.version).prerelease.length);
+            if ((latest && compareScriptVersions(latest.version, knownLatest?.version || GM_info.script.version) < 0) ||
+                (!latest && knownLatest)) {
+                throw new Error('更新说明早于当前已知版本');
             }
-        });
+            return manifest;
+        }, 1024 * 1024);
     }
 
     async function promptScriptUpdate(manifest, manual) {
@@ -3730,7 +3721,8 @@ function createSklandImportCancelledError() {
                 return await promptScriptUpdate(scriptUpdateManifest, manual);
             } catch (error) {
                 console.warn('[Better PRTS] 检查脚本更新失败', error);
-                if (manual) showPrtsToast('检查脚本更新失败', 'error', error.message || '请稍后重试。');
+                if (manual) showPrtsToast('检查脚本更新失败', 'error',
+                    error instanceof AggregateError ? '所有更新下载源均不可用，请稍后重试。' : error.message || '请稍后重试。');
                 return false;
             }
         })().finally(() => { scriptUpdatePending = null; });

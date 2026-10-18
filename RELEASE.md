@@ -95,7 +95,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/update-operator-data.ps
 
 ## 脚本内更新提示
 
-脚本在 PRTS Plus 和森空岛页面启动时检查正式 Release 的 `update.json`，之后每小时重新下载。请求使用 `GM_xmlhttpRequest`，需要允许 `github.com` 和 `release-assets.githubusercontent.com`。网络失败时不自动弹出错误，手动检查时会显示失败信息。
+脚本在 PRTS Plus 和森空岛页面启动时检查正式 Release 的 `update.json`，之后每小时重新下载。更新检查与干员资源复用同一个并发下载函数，同时请求 GitHub Release 原站、GH-Proxy（`gh-proxy.com`）和 GHFast（`ghfast.top`），采用首个返回 HTTP 200、文件不超过 1 MiB 且通过 JSON 与更新说明校验的响应，随后取消其余请求并清理计时器；各请求均有 15 秒原生超时和独立计时器。低于当前安装版本或本页已检测到的正式版本的说明不会被采用。Release 附件无法使用现有 jsDelivr 仓库文件节点代理，因此更新镜像代理同一个 `releases/latest/download/update.json`，不读取 main 分支上可能尚未发布的说明。
+
+请求使用 `GM_xmlhttpRequest`，需要允许 `github.com`、`release-assets.githubusercontent.com`、`gh-proxy.com` 和 `ghfast.top`。全部下载源失败时不自动弹出错误，手动检查时会显示失败信息。
 
 发现比当前 `GM_info.script.version` 更新的正式版时，弹窗展示所有中间版本说明，使用其中最高的更新级别；忽略预发布记录。同一页面每个新版本只自动提示一次，已有导入或确认窗口时延后显示，避免中断操作。
 
