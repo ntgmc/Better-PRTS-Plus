@@ -2677,6 +2677,32 @@ test('toolbar selects three or more accounts and cycles sparse IDs below three w
   assert.strictEqual(page.document.getElementById('btn-account').disabled, true);
 });
 
+test('periodic toolbar refresh preserves attached controls, account focus and unchanged select values', () => {
+  const { page } = createFilterPage('GRAY');
+  const control = page.document.getElementById('btn-account');
+  const mainRow = page.document.getElementById('prts-filter-main-row');
+  const bar = page.document.getElementById('prts-filter-bar');
+  const originalOrder = [...mainRow.children];
+  Object.defineProperty(bar.parentElement.firstChild, 'nextElementSibling', { get: () => bar });
+  let moves = 0, writes = 0, value = control.value;
+  // Keeping the same JS object is insufficient: reattaching it or an ancestor closes native menus.
+  [bar, mainRow, ...originalOrder].forEach(node => {
+    const remove = node.remove;
+    node.remove = function () { moves++; remove.call(this); };
+  });
+  Object.defineProperty(control, 'value', { get: () => value, set: next => { writes++; value = next; } });
+  control.focus();
+  page.injectFilterControls();
+  page.injectFilterControls();
+  assert.strictEqual(moves, 0);
+  assert.strictEqual(writes, 0);
+  assert.strictEqual(page.document.activeElement, control);
+  assert.deepStrictEqual(mainRow.children, originalOrder);
+  page.createAccountSelect('btn-account', 2, control.onchange);
+  assert.strictEqual(control.value, '2');
+  assert.strictEqual(writes, 1, 'an actual account change must still update the select');
+});
+
 test('account state serialization preserves the normalized unified schema', () => {
   const state = createAccountState({
     activeAccountId: 2,

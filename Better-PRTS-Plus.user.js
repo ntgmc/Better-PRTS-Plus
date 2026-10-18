@@ -3075,7 +3075,12 @@ function createSklandImportCancelledError() {
     @media (hover: hover) {
         .prts-account-select:hover { border-color: var(--prts-color-primary); }
     }
-    .prts-account-select:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
+    .prts-account-select:focus {
+        border-color: var(--prts-color-primary);
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px var(--prts-color-ring);
+    }
     .prts-account-select:disabled { opacity: 0.56; cursor: not-allowed; }
     #prts-skland-target-account { width: 100%; margin-bottom: 12px; }
 `;
@@ -3304,7 +3309,8 @@ function createSklandImportCancelledError() {
             }));
             select.dataset.accounts = signature;
         }
-        select.value = String(ids.includes(selectedId) ? selectedId : activeAccountId);
+        const value = String(ids.includes(selectedId) ? selectedId : activeAccountId);
+        if (select.value !== value) select.value = value;
         select.onchange = onChange;
         return select;
     }
@@ -4975,7 +4981,7 @@ function createSklandImportCancelledError() {
             mainRow.id = 'prts-filter-main-row';
         }
         mainRow.className = 'prts-filter-main-row';
-        controlBar.appendChild(mainRow);
+        if (mainRow.parentElement !== controlBar) controlBar.insertBefore(mainRow, controlBar.firstChild);
 
         let syncRow = document.getElementById('prts-filter-sync-row');
         if (!syncRow) {
@@ -4983,7 +4989,7 @@ function createSklandImportCancelledError() {
             syncRow.id = 'prts-filter-sync-row';
         }
         syncRow.className = 'prts-filter-sync-row';
-        controlBar.appendChild(syncRow);
+        if (syncRow.parentElement !== controlBar) controlBar.appendChild(syncRow);
 
         const paths = {
             import: 'M11 6h3l-6 6-6-6h3V1h6v5zm-9 8v2h12v-2h-2v1H4v-1H2z',
@@ -5011,7 +5017,6 @@ function createSklandImportCancelledError() {
         } else {
             accountControl = createAccountSelect('btn-account', activeAccountId, event => switchAccount(Number(event.target.value)));
         }
-        mainRow.appendChild(accountControl);
 
         const activeSklandSync = getAccountSklandSyncMeta(activeAccountId);
         let accountSyncChip = document.getElementById('prts-account-sync-chip');
@@ -5023,7 +5028,7 @@ function createSklandImportCancelledError() {
             }
             accountSyncChip.textContent = formatSklandSyncSummary(activeSklandSync, { compact: true });
             accountSyncChip.title = formatSklandSyncSummary(activeSklandSync, { includeDetail: true });
-            syncRow.appendChild(accountSyncChip);
+            if (accountSyncChip.parentElement !== syncRow) syncRow.appendChild(accountSyncChip);
         } else if (accountSyncChip) {
             accountSyncChip.remove();
         }
@@ -5031,16 +5036,13 @@ function createSklandImportCancelledError() {
         // (2) 导入按钮
         const importText = ownedOpsSet.size > 0 ? `导入干员 (${ownedOpsSet.size})` : '导入干员';
         const btnImport = createPrtsButton({ id: 'btn-import', text: importText, icon: 'import', ariaLabel: importText, onClick: handleImport });
-        mainRow.appendChild(btnImport);
 
         const btnSklandImport = createPrtsButton({ id: 'btn-skland-import', text: '森空岛导入', icon: 'skland', onClick: handleOpenSklandImport });
-        mainRow.appendChild(btnSklandImport);
 
         // (3) 模式切换
         const displayModeText = CONFIG.displayMode === 'GRAY' ? '置灰模式' : '隐藏模式';
         const displayModeIcon = CONFIG.displayMode === 'GRAY' ? 'eyeOn' : 'eyeOff';
         const btnSetting = createPrtsButton({ id: 'btn-setting', text: displayModeText, icon: displayModeIcon, pressed: CONFIG.displayMode === 'HIDE', ariaLabel: `当前为${displayModeText}，点击切换显示模式`, onClick: toggleDisplayMode });
-        mainRow.appendChild(btnSetting);
 
         // (4) 分割线
         let divider = document.getElementById('prts-divider-el');
@@ -5049,7 +5051,6 @@ function createSklandImportCancelledError() {
             divider.className = 'prts-divider';
             divider.id = 'prts-divider-el';
         }
-        mainRow.appendChild(divider);
 
         // (5) 完美阵容
         const btnPerfect = createPrtsButton({
@@ -5060,7 +5061,6 @@ function createSklandImportCancelledError() {
             active: CONFIG.filterMode === 'PERFECT',
             pressed: CONFIG.filterMode === 'PERFECT'
         });
-        mainRow.appendChild(btnPerfect);
 
         // (6) 允许助战
         const btnSupport = createPrtsButton({
@@ -5071,13 +5071,17 @@ function createSklandImportCancelledError() {
             active: CONFIG.filterMode === 'SUPPORT',
             pressed: CONFIG.filterMode === 'SUPPORT'
         });
-        mainRow.appendChild(btnSupport);
         const btnTraining = createPrtsButton({
             id: 'btn-training', text: '校验练度', icon: 'check',
             onClick: toggleTrainingCheck, active: CONFIG.trainingCheck, pressed: CONFIG.trainingCheck
         });
         btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
-        mainRow.appendChild(btnTraining);
+
+        // 原生下拉框展开时，移动它或父节点会关闭菜单并丢失焦点。
+        [accountControl, btnImport, btnSklandImport, btnSetting, divider, btnPerfect, btnSupport, btnTraining]
+            .forEach((control, index) => {
+                if (mainRow.children[index] !== control) mainRow.insertBefore(control, mainRow.children[index] || null);
+            });
 
         renderFilterResults();
         if (isNew) requestFilterUpdate();

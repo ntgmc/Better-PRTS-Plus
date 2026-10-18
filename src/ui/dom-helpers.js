@@ -212,7 +212,8 @@
             }));
             select.dataset.accounts = signature;
         }
-        select.value = String(ids.includes(selectedId) ? selectedId : activeAccountId);
+        const value = String(ids.includes(selectedId) ? selectedId : activeAccountId);
+        if (select.value !== value) select.value = value;
         select.onchange = onChange;
         return select;
     }
