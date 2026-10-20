@@ -2,7 +2,7 @@
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
 // @version      4.1.0
-// @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
+// @description  按持有干员和练度筛选 PRTS Plus 作业，支持干员组、多账号切换、干员头像展示和深色模式适配。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
 // @match        https://prts.plus/*

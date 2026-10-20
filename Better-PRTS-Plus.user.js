@@ -2,7 +2,7 @@
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
 // @version      4.1.0
-// @description  一款集成多账号无缝切换、智能作业筛选(支持干员组)、深度暗黑模式适配与干员头像可视化的 PRTS 全方位增强脚本。
+// @description  按持有干员和练度筛选 PRTS Plus 作业，支持干员组、多账号切换、干员头像展示和深色模式适配。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
 // @match        https://prts.plus/*
@@ -44,7 +44,7 @@
     //                            MODULE 1: 配置与常量
     // =========================================================================
 
-    // [V12.0/V3.1.0 数据重构] 单一集合存储提升性能，包含向下兼容
+    // [V12.0/V3.1.0 数据重构] 将账号数据统一存储以提升性能，并兼容旧版格式。
     const ACCOUNTS_DATA_KEY = 'prts_plus_accounts_data';
     const CONFIG_KEY = 'prts_plus_settings';
     const SKLAND_LAST_IMPORT_KEY = 'prts_plus_skland_last_import';
@@ -62,11 +62,11 @@
     const SKLAND_FAVICON_SVG = '<svg class="prts-btn-icon-svg" width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg"><path d="M0,15h1v1H0z" fill="#CCE519" opacity="0.039"/><path d="M2,15h1v1H2z" fill="#C8EE21" opacity="0.424"/><path d="M15,0h1v1H15z" fill="#D0D017" opacity="0.043"/><path d="M14,15h1v1H14z" fill="#D3F825" opacity="0.486"/><path d="M4,15h2v1H4z" fill="#C7EB21" opacity="0.502"/><path d="M11,15h3v1H11z" fill="#C9ED21" opacity="0.502"/><path d="M6,15h1v1H6z" fill="#C9EF1F" opacity="0.502"/><path d="M10,15h1v1H10z" fill="#C9F11F" opacity="0.502"/><path d="M3,15h1v1H3zM7,15h1v1H7z" fill="#CBEF21" opacity="0.502"/><path d="M8,15h2v1H8z" fill="#CDF321" opacity="0.502"/><path d="M14,0h1v1H14z" fill="#D1F323" opacity="0.502"/><path d="M15,1h1v1H15z" fill="#D0F321" opacity="0.6"/><path d="M0,13h1v1H0z" fill="#CFEF23" opacity="0.651"/><path d="M0,11h1v1H0z" fill="#D3B809" opacity="0.71"/><path d="M2,0h1v1H2z" fill="#D6F822" opacity="0.745"/><path d="M0,10h1v1H0z" fill="#DFC01A" opacity="0.757"/><path d="M0,12h1v1H0z" fill="#C9F718" opacity="0.769"/><path d="M0,2h1v1H0z" fill="#CDF222" opacity="0.773"/><path d="M13,0h1v1H13z" fill="#D2F723" opacity="0.792"/><path d="M0,5h1v1H0z" fill="#C0E51A" opacity="0.816"/><path d="M0,4h1v1H0z" fill="#C6EB17" opacity="0.816"/><path d="M0,6h1v1H0z" fill="#C9E618" opacity="0.816"/><path d="M15,14h1v1H15z" fill="#C9F127" opacity="0.816"/><path d="M4,0h2v1H4zM9,0h3v1H9z" fill="#CDF222" opacity="0.816"/><path d="M6,0h1v1H6z" fill="#CFF322" opacity="0.816"/><path d="M8,0h1v1H8z" fill="#D0F61F" opacity="0.816"/><path d="M7,0h1v1H7z" fill="#D4FB1D" opacity="0.816"/><path d="M0,8h1v1H0z" fill="#D5F022" opacity="0.816"/><path d="M0,7h1v1H0z" fill="#E0B61D" opacity="0.816"/><path d="M12,0h1v1H12z" fill="#CEF221" opacity="0.824"/><path d="M9,6h1v1H9z" fill="#9BB075" opacity="0.827"/><path d="M3,0h1v1H3z" fill="#CEF221" opacity="0.827"/><path d="M0,9h1v1H0z" fill="#D2FD21" opacity="0.827"/><path d="M0,3h1v1H0z" fill="#D0F522" opacity="0.831"/><path d="M8,10h1v1H8z" fill="#4B4848" opacity="0.859"/><path d="M10,6h1v1H10z" fill="#EBE6D6" opacity="0.89"/><path d="M1,14h1v1H1z" fill="#D0F421" opacity="0.922"/><path d="M15,8h1v1H15z" fill="#95DC0B" opacity="0.933"/><path d="M15,7h1v1H15z" fill="#9EBD4D" opacity="0.933"/><path d="M15,10h1v1H15z" fill="#A7B177" opacity="0.933"/><path d="M15,9h1v1H15z" fill="#ABB952" opacity="0.933"/><path d="M15,6h1v1H15z" fill="#BBCA71" opacity="0.933"/><path d="M15,11h1v1H15z" fill="#BBD01D" opacity="0.933"/><path d="M15,5h1v1H15z" fill="#C1E516" opacity="0.933"/><path d="M15,12h1v1H15z" fill="#D0F320" opacity="0.933"/><path d="M15,4h1v1H15z" fill="#D3F721" opacity="0.933"/><path d="M15,2h1v1H15z" fill="#CCF021" opacity="0.937"/><path d="M9,7h1v1H9z" fill="#4D5441" opacity="0.937"/><path d="M15,3h1v1H15z" fill="#CDF022" opacity="0.941"/><path d="M5,10h1v1H5z" fill="#E1F0D0" opacity="0.945"/><path d="M12,8h1v1H12z" fill="#4B4749" opacity="0.945"/><path d="M8,9h1v1H8z" fill="#FAF9FB" opacity="0.953"/><path d="M15,13h1v1H15z" fill="#CFF121" opacity="0.961"/><path d="M10,7h1v1H10z" fill="#2F2D28" opacity="0.961"/><path d="M9,10h1v1H9z" fill="#323031" opacity="0.976"/><path d="M13,8h1v1H13z" fill="#9E9693" opacity="0.98"/><path d="M5,9h1v1H5z" fill="#ABB09A" opacity="0.98"/><path d="M12,9h1v1H12z" fill="#1C1B19" opacity="0.98"/><path d="M6,10h1v1H6z" fill="#525650" opacity="0.984"/><path d="M11,6h1v1H11z" fill="#FCFDF6" opacity="0.992"/><path d="M12,6h1v1H12z" fill="#FEFEFE" opacity="0.992"/><path d="M13,9h1v1H13z" fill="#272429" opacity="0.992"/><path d="M9,9h1v1H9z" fill="#3D3D3D" opacity="0.992"/><path d="M7,10h1v1H7z" fill="#1F1F20" opacity="0.996"/><path d="M6,9h1v1H6z" fill="#282A06" opacity="0.996"/><path d="M11,7h1v1H11z" fill="#555653" opacity="0.996"/><path d="M7,12h1v1H7z" fill="#656379"/><path d="M8,6h1v1H8z" fill="#667D4D"/><path d="M7,9h1v1H7z" fill="#69696F"/><path d="M7,4h1v1H7z" fill="#6B687A"/><path d="M4,7h1v1H4z" fill="#6F6C80"/><path d="M14,8h1v1H14z" fill="#719246"/><path d="M4,8h1v1H4z" fill="#767574"/><path d="M3,7h1v1H3z" fill="#7C7778"/><path d="M8,12h1v1H8z" fill="#7C7967"/><path d="M9,12h1v1H9z" fill="#828073"/><path d="M7,8h1v1H7z" fill="#82827E"/><path d="M2,9h1v1H2z" fill="#82C10A"/><path d="M12,11h1v1H12z" fill="#848194"/><path d="M7,3h1v1H7z" fill="#8984A5"/><path d="M6,12h1v1H6z" fill="#8A8EA8"/><path d="M7,5h1v1H7z" fill="#8C8C86"/><path d="M3,9h1v1H3z" fill="#8CA753"/><path d="M2,5h1v1H2z" fill="#908AA8"/><path d="M3,6h1v1H3z" fill="#93948D"/><path d="M10,12h1v1H10z" fill="#94978F"/><path d="M2,7h1v1H2z" fill="#959994"/><path d="M14,10h1v1H14z" fill="#9692A3"/><path d="M5,7h1v1H5z" fill="#989892"/><path d="M8,3h1v1H8z" fill="#9EA675"/><path d="M14,5h1v1H14z" fill="#A1AF5D"/><path d="M3,8h1v1H3z" fill="#A2B173"/><path d="M13,4h1v1H13z" fill="#A3B357"/><path d="M8,8h1v1H8z" fill="#A5A4A7"/><path d="M6,7h1v1H6z" fill="#A5A6AD"/><path d="M6,13h1v1H6z" fill="#A5B030"/><path d="M6,6h1v1H6z" fill="#A5BF2C"/><path d="M7,2h1v1H7z" fill="#A6A4B0"/><path d="M1,5h1v1H1z" fill="#A6AA95"/><path d="M11,3h1v1H11z" fill="#A6B658"/><path d="M9,3h1v1H9z" fill="#A7C711"/><path d="M8,2h1v1H8z" fill="#A8B959"/><path d="M12,4h1v1H12z" fill="#A9AF8C"/><path d="M10,3h1v1H10z" fill="#A9B862"/><path d="M1,10h1v1H1z" fill="#A9CB31"/><path d="M11,12h1v1H11z" fill="#ABB288"/><path d="M2,4h1v1H2z" fill="#ABB86E"/><path d="M12,12h1v1H12z" fill="#ABBE4F"/><path d="M4,6h1v1H4z" fill="#ACBA68"/><path d="M9,13h1v1H9z" fill="#ADB95F"/><path d="M6,3h1v1H6z" fill="#ADC054"/><path d="M8,4h1v1H8z" fill="#AEAEAD"/><path d="M13,11h1v1H13z" fill="#AEB789"/><path d="M2,8h1v1H2z" fill="#AED330"/><path d="M1,6h1v1H1z" fill="#AFB97C"/><path d="M6,4h1v1H6z" fill="#B0C061"/><path d="M1,11h1v1H1z" fill="#B0C765"/><path d="M1,4h1v1H1z" fill="#B1BD74"/><path d="M3,5h1v1H3z" fill="#B1C64C"/><path d="M7,6h1v1H7z" fill="#B2B0B8"/><path d="M2,10h1v1H2z" fill="#B2B19B"/><path d="M7,13h1v1H7z" fill="#B2BE62"/><path d="M6,2h1v1H6z" fill="#B2CF29"/><path d="M12,3h1v1H12z" fill="#B4D70F"/><path d="M8,13h1v1H8z" fill="#B7C36A"/><path d="M14,11h1v1H14z" fill="#B7CE3E"/><path d="M10,13h1v1H10z" fill="#B9B938"/><path d="M9,4h1v1H9z" fill="#B9BAB2"/><path d="M13,7h1v1H13z" fill="#B9BCA2"/><path d="M14,7h1v1H14z" fill="#BAC981"/><path d="M2,12h1v1H2z" fill="#BBC39A"/><path d="M7,1h1v1H7z" fill="#BBDB28"/><path d="M5,13h1v1H5z" fill="#BBDF11"/><path d="M3,13h1v1H3z" fill="#BCDF15"/><path d="M13,12h1v1H13z" fill="#BCDF18"/><path d="M6,5h1v1H6z" fill="#BDDA2E"/><path d="M1,12h1v1H1z" fill="#BDDB2F"/><path d="M2,13h1v1H2z" fill="#BDE114"/><path d="M5,6h1v1H5z" fill="#BEDA35"/><path d="M4,13h1v1H4zM11,13h1v1H11z" fill="#C0E215"/><path d="M14,4h1v1H14z" fill="#C2E710"/><path d="M2,3h1v1H2z" fill="#C3E617"/><path d="M3,4h1v1H3z" fill="#C3E714"/><path d="M6,11h1v1H6z" fill="#C4C3C3"/><path d="M10,2h1v1H10z" fill="#C6EB12"/><path d="M3,2h1v1H3z" fill="#C7EA21"/><path d="M11,2h1v1H11z" fill="#C7EC14"/><path d="M4,5h1v1H4z" fill="#C7EF0A"/><path d="M4,2h1v1H4zM13,2h1v1H13zM4,3h1v1H4z" fill="#C8EB21"/><path d="M2,2h1v1H2z" fill="#C8EC21"/><path d="M13,3h1v1H13z" fill="#C8EE14"/><path d="M5,4h1v1H5z" fill="#C8EF15"/><path d="M3,12h1v1H3z" fill="#C9CEB2"/><path d="M5,12h1v1H5z" fill="#CACFAA"/><path d="M8,1h1v1H8z" fill="#CAEE22"/><path d="M1,3h1v1H1z" fill="#CAEF1A"/><path d="M5,3h1v1H5z" fill="#CAF016"/><path d="M4,12h1v1H4z" fill="#CBD0B0"/><path d="M3,3h1v1H3z" fill="#CBEE21"/><path d="M1,7h1v1H1z" fill="#CBF12D"/><path d="M12,13h1v1H12z" fill="#CBF216"/><path d="M4,9h1v1H4z" fill="#CCCACC"/><path d="M12,2h1v1H12z" fill="#CCEF21"/><path d="M4,4h1v1H4z" fill="#CCEF22"/><path d="M1,13h1v1H1z" fill="#CCF01E"/><path d="M5,2h1v1H5z" fill="#CCF11D"/><path d="M9,2h1v1H9z" fill="#CDF513"/><path d="M13,13h1v1H13z" fill="#CFF320"/><path d="M1,8h1v1H1z" fill="#CFF419"/><path d="M14,2h1v1H14z" fill="#CFF422"/><path d="M5,5h1v1H5z" fill="#CFF617"/><path d="M14,3h1v1H14z" fill="#D0F322"/><path d="M12,7h1v1H12z" fill="#D1D1D5"/><path d="M6,1h1v1H6z" fill="#D1F820"/><path d="M11,8h1v1H11z" fill="#151616"/><path d="M3,1h2v1H3zM12,1h1v1H12z" fill="#D2F723"/><path d="M5,1h1v1H5zM10,1h2v1H10z" fill="#D3F823"/><path d="M14,12h1v1H14z" fill="#D3F918"/><path d="M13,1h1v1H13z" fill="#D4F823"/><path d="M9,1h1v1H9z" fill="#D4F923"/><path d="M14,13h1v1H14z" fill="#D5FA22"/><path d="M1,9h1v1H1z" fill="#D6F621"/><path d="M9,14h1v1H9z" fill="#D6FA16"/><path d="M9,5h1v1H9z" fill="#D7D4E0"/><path d="M8,14h1v1H8z" fill="#D7F613"/><path d="M2,1h1v1H2z" fill="#D7FC24"/><path d="M1,2h1v1H1z" fill="#D9FF23"/><path d="M14,14h1v1H14z" fill="#D9FF24"/><path d="M1,1h1v1H1z" fill="#DAFF24"/><path d="M7,14h1v1H7z" fill="#DCFF17"/><path d="M4,14h2v1H4z" fill="#DDFF22"/><path d="M3,14h1v1H3z" fill="#DEFF22"/><path d="M2,14h1v1H2z" fill="#DEFF23"/><path d="M12,14h1v1H12z" fill="#E0FF23"/><path d="M13,5h1v1H13z" fill="#E1DEEF"/><path d="M11,14h1v1H11z" fill="#E1FF22"/><path d="M13,14h1v1H13z" fill="#E1FF23"/><path d="M14,1h1v1H14z" fill="#E1FF25"/><path d="M10,14h1v1H10z" fill="#E2FF1F"/><path d="M6,14h1v1H6z" fill="#E3FF21"/><path d="M11,4h1v1H11z" fill="#EAE7F7"/><path d="M3,10h1v1H3z" fill="#EEEAF3"/><path d="M14,6h1v1H14z" fill="#F2EDFF"/><path d="M10,4h1v1H10z" fill="#F5F2FF"/><path d="M2,11h1v1H2z" fill="#FFFEFF"/><path d="M10,5h3v1H10zM13,6h1v1H13zM4,10h1v1H4zM3,11h3v1H3z" fill="#FFFFFF"/><path d="M8,11h1v1H8z" fill="#1E1F1E"/><path d="M10,10h1v1H10z" fill="#1F1F23"/><path d="M10,9h1v1H10z" fill="#212121"/><path d="M9,11h1v1H9z" fill="#22221B"/><path d="M10,8h1v1H10z" fill="#272829"/><path d="M11,9h1v1H11z" fill="#292929"/><path d="M11,10h1v1H11z" fill="#292A2B"/><path d="M7,11h1v1H7z" fill="#2F2F2E"/><path d="M9,8h1v1H9z" fill="#302F32"/><path d="M12,10h1v1H12z" fill="#3A3B3A"/><path d="M2,6h1v1H2z" fill="#46435C"/><path d="M10,11h1v1H10z" fill="#48472B"/><path d="M13,10h1v1H13z" fill="#4B4A54"/><path d="M8,5h1v1H8z" fill="#4C4755"/><path d="M8,7h1v1H8z" fill="#4D553F"/><path d="M11,11h1v1H11z" fill="#4F4D4E"/><path d="M6,8h1v1H6z" fill="#5C5B54"/><path d="M14,9h1v1H14z" fill="#605D93"/><path d="M5,8h1v1H5z" fill="#615F60"/><path d="M7,7h1v1H7z" fill="#626084"/><path d="M0,14h1v1H0z" fill="#CEEC1E" opacity="0.165"/><path d="M1,15h1v1H1z" fill="#CCEF1E" opacity="0.259"/><path d="M15,15h1v1H15z" fill="#C9F225" opacity="0.318"/><path d="M0,1h1v1H0z" fill="#CEF122" opacity="0.373"/><path d="M1,0h1v1H1z" fill="#CAEF21" opacity="0.384"/></svg>';
 
     const CONFIG_DEFINITIONS = {
-        collapseDescription: { group: '作业卡片', label: '折叠描述文本', icon: 'collapseDescription', default: true, legacyKey: 'prts_cfg_link', alias: 'cleanLink', reloadOnDisable: true },
+        collapseDescription: { group: '作业卡片', label: '折叠作业描述', icon: 'collapseDescription', default: true, legacyKey: 'prts_cfg_link', alias: 'cleanLink', reloadOnDisable: true },
         operatorAvatars: { group: '作业卡片', label: '干员头像', icon: 'operatorAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
-        stageBadge: { group: '作业卡片', label: '关卡代号徽章', icon: 'stageBadge', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
-        showExactTime: { group: '作业卡片', label: '显示作业具体时间', icon: 'exactTime', default: false, legacyKey: 'prts_cfg_exact_time' },
-        cleanLink: { group: '作业卡片', label: '视频链接优化', icon: 'videoLink', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
+        stageBadge: { group: '作业卡片', label: '显示关卡代号', icon: 'stageBadge', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        showExactTime: { group: '作业卡片', label: '显示完整上传时间', icon: 'exactTime', default: false, legacyKey: 'prts_cfg_exact_time' },
+        cleanLink: { group: '作业卡片', label: '视频链接按钮', icon: 'videoLink', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
         hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'hidePrtsBadge', default: true, reloadOnDisable: true },
         trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'trainingPromptStyle', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
@@ -140,7 +140,7 @@
     // 全局状态变量
     let activeAccountId = 1;
     let nextAccountId = 4;
-    let accountsData = { 1:[], 2: [], 3:[] }; // 多账号数据缓存池
+    let accountsData = { 1:[], 2: [], 3:[] }; // 各账号的干员名单
     let accountsTraining = { 1: {}, 2: {}, 3: {} };
     let accountMeta = createDefaultAccountMeta();
 
@@ -313,7 +313,7 @@ Object.entries({
                     timeout: 15000,
                     onload: response => {
                         try {
-                            if (response.status !== 200) throw new Error(`下载请求失败: HTTP ${response.status}`);
+                            if (response.status !== 200) throw new Error(`下载请求失败：HTTP ${response.status}`);
                             if (typeof response.responseText !== 'string' || response.responseText.length > maxBytes) {
                                 throw new Error('下载文件无效或过大');
                             }
@@ -336,7 +336,7 @@ Object.entries({
     function updateResources() {
         if (resourceUpdatePending) return resourceUpdatePending;
         if (Date.now() - resourceCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
-        const updateToast = showPrtsToast('资源数据同步中…', 'loading', '已开始同步干员与模组数据，请稍候。', 0);
+        const updateToast = showPrtsToast('正在更新干员与模组数据…', 'loading', '正在下载数据，请稍候。', 0);
         resourceUpdatePending = downloadFirstValidJson(RESOURCE_URLS, validateResourceData, 2 * 1024 * 1024).then(data => {
             applyResourceData(data);
             resourceCheckedAt = Date.now();
@@ -348,13 +348,13 @@ Object.entries({
                 console.warn('[Better PRTS] 资源缓存保存失败，本页已更新', error);
             }
             if (isPrtsHost()) refreshResourceViews();
-            updateToast(cacheSaved ? '资源数据同步成功' : '资源数据已更新，缓存保存失败', cacheSaved ? 'success' : 'warning',
+            updateToast(cacheSaved ? '数据更新成功' : '数据已更新，缓存保存失败', cacheSaved ? 'success' : 'warning',
                 cacheSaved ? '干员与模组数据已更新。' : '本页已使用最新数据，下次打开页面将重新同步。');
             return true;
         }).catch(error => {
             console.warn('[Better PRTS] 资源更新失败，继续使用已有资源', error);
             const detail = error instanceof AggregateError ? '所有资源下载源均不可用，请稍后重试。' : error.message || '请稍后重试。';
-            updateToast('资源数据同步失败', 'error', `${detail}\n继续使用已有数据。`);
+            updateToast('干员与模组数据更新失败', 'error', `${detail}\n继续使用已有数据。`);
             return false;
         }).finally(() => {
             resourceUpdatePending = null;
@@ -989,7 +989,7 @@ function createSklandImportCancelledError() {
             const normalized = normalizeSklandCredentialCandidate(candidate);
             if (normalized) return normalized;
         }
-        throw new Error('未找到森空岛登录凭据，请先在当前森空岛页面完成登录。');
+        throw new Error('未找到森空岛登录凭据，请先在当前页面登录森空岛。');
     }
 
     function decodeSklandCredentialText(value) {
@@ -1047,7 +1047,7 @@ function createSklandImportCancelledError() {
         try {
             GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(result.summary));
         } catch (_error) {
-            console.warn('[Better PRTS] 森空岛兼容摘要保存失败，账户数据已成功保存');
+            console.warn('[Better PRTS] 森空岛兼容摘要保存失败，账号数据已保存');
         }
         return result.summary;
     }
@@ -1078,7 +1078,7 @@ function createSklandImportCancelledError() {
         const bindingOptions = getSklandArknightsBindingOptionsFromList(data.data.list);
         if (bindingOptions.bindings.length > 0) return bindingOptions;
 
-        throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
     }
 
     function getSklandArknightsBindingOptionsFromList(list) {
@@ -1155,12 +1155,12 @@ function createSklandImportCancelledError() {
 
     async function resolveSklandImportBinding(accountId, bindingOptions, options = {}) {
         const bindings = normalizeSklandArknightsBindings(bindingOptions?.bindings || [], bindingOptions?.defaultUid);
-        if (bindings.length === 0) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        if (bindings.length === 0) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
 
         const accountSyncMeta = getAccountSklandSyncMeta(accountId);
         const preferredUid = normalizeSklandSyncText(options.preferredUid ?? accountSyncMeta?.uid);
         const defaultBinding = selectSklandBindingOption(bindings, preferredUid, bindingOptions?.defaultUid);
-        if (!defaultBinding) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        if (!defaultBinding) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
         if (bindings.length === 1 || typeof options.selectBinding !== 'function') return defaultBinding;
 
         const selected = await options.selectBinding(bindings, defaultBinding, {
@@ -1235,7 +1235,7 @@ function createSklandImportCancelledError() {
                     signal: controller?.signal,
                     credentials: 'omit'
                 });
-                if (!response.ok) throw new Error(`森空岛接口请求失败: HTTP ${response.status}`);
+                if (!response.ok) throw new Error(`森空岛接口请求失败：HTTP ${response.status}`);
                 return await response.json();
             } catch (error) {
                 fetchError = error;
@@ -1258,7 +1258,7 @@ function createSklandImportCancelledError() {
                 responseType: 'json',
                 onload: response => {
                     if (response.status < 200 || response.status >= 300) {
-                        reject(new Error(`森空岛接口请求失败: HTTP ${response.status}`));
+                        reject(new Error(`森空岛接口请求失败：HTTP ${response.status}`));
                         return;
                     }
                     if (response.response && typeof response.response === 'object') {
@@ -4056,7 +4056,7 @@ function createSklandImportCancelledError() {
             message.appendChild(renderReleaseNotes(release.notes));
         }
         const hint = document.createElement('p');
-        hint.textContent = preview ? '这是样式预览，点击下方按钮仅显示操作反馈。'
+        hint.textContent = preview ? '当前为样式预览，下方按钮只显示点击反馈。'
             : '点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。';
         message.appendChild(hint);
         return showPrtsModal({
@@ -4074,7 +4074,7 @@ function createSklandImportCancelledError() {
         }
         const release = {
             version: '99.0.0', level,
-            notes: '以下内容为样式测试示例。\n\n### 新增\n\n- 展示新版本、**更新级别**和分类更新说明。\n\n### 优化\n\n- 可切换网站的浅色、深色或高对比主题，重复预览。\n\n### 修复\n\n- 检查较窄屏幕上的长文本换行，确认内容完整显示，底部操作按钮清晰可用。'
+            notes: '这是一份用于测试弹窗样式的示例说明。\n\n### 新增\n\n- 显示新版本号、**更新级别**和分类更新说明。\n\n### 优化\n\n- 可切换网站的浅色、深色或高对比度主题，多次预览。\n\n### 修复\n\n- 在窄屏下检查长文本换行，确认内容显示完整，底部操作按钮清晰可用。'
         };
         const choice = await showScriptUpdateModal({ ...release, releases: [release] }, true);
         if (choice !== null) {
@@ -4462,12 +4462,12 @@ function createSklandImportCancelledError() {
 
     function reportAccountStateDiagnostics(diagnostics) {
         diagnostics.forEach(diagnostic => {
-            console.warn('[Better PRTS] 账户数据兼容诊断', diagnostic.code, diagnostic.source);
+            console.warn('[Better PRTS] 账号数据兼容诊断', diagnostic.code, diagnostic.source);
         });
     }
 
     /**
-     * 加载干员数据：具备高级的向下兼容与数据迁移能力
+     * 加载干员数据，迁移旧版存储格式。
      */
     function loadOwnedOps() {
         const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
@@ -4477,7 +4477,7 @@ function createSklandImportCancelledError() {
         } else {
             publishAccountState(resolved.state);
         }
-        console.log(`[Better PRTS] 已加载账号 ${activeAccountId} 的 ${ownedOpsSet.size} 名持有干员`);
+        console.log(`[Better PRTS] 已加载账号 ${activeAccountId} 的 ${ownedOpsSet.size} 名干员`);
     }
 
     /**
@@ -4570,17 +4570,17 @@ function createSklandImportCancelledError() {
                 `来源：${sourceLabel || '导入内容'}`,
                 `当前 ${state.accountsData[id].length} 名 → 导入后 ${diff.total} 名`,
                 `新增 ${diff.added} 名 / 移除 ${diff.removed} 名`,
-                diff.trainingCount ? `包含练度：${diff.trainingCount} / ${diff.total} 名干员` : '不包含练度数据',
+                diff.trainingCount ? `含练度数据：${diff.trainingCount} / ${diff.total} 名干员` : '不包含练度数据',
                 '导入会替换此账号的干员名单和练度。'
             ];
             if (diff.removed) lines.push(`将移除 ${diff.removed} 名干员：${diff.removedNames.join('、')}`);
             if (diff.decreasedTrainingNames.length) {
-                lines.push(`练度将降低 ${diff.decreasedTrainingNames.length} 名：${diff.decreasedTrainingNames.join('、')}`);
+                lines.push(`练度将降低的干员（${diff.decreasedTrainingNames.length} 名）：${diff.decreasedTrainingNames.join('、')}`);
             }
             if (diff.clearedTrainingNames.length) {
-                lines.push(`部分或全部练度将被清空 ${diff.clearedTrainingNames.length} 名：${diff.clearedTrainingNames.join('、')}`);
+                lines.push(`将清空部分或全部练度的干员（${diff.clearedTrainingNames.length} 名）：${diff.clearedTrainingNames.join('、')}`);
             }
-            if (danger) lines.push('请核对账号和来源，确认要覆盖这些已有数据吗？');
+            if (danger) lines.push('请核对目标账号和数据来源，再确认是否覆盖已有数据。');
             const confirmed = await showPrtsConfirm({
                 title: danger ? '导入将覆盖已有数据' : '导入预览',
                 message: lines.join('\n'),
@@ -4602,7 +4602,7 @@ function createSklandImportCancelledError() {
         const currentLabel = getAccountLabel(accountId);
         const rawLabel = await showPrtsPrompt({
             title: `重命名账号 ${accountId}`,
-            message: '输入新的账号昵称，留空会恢复默认名称。',
+            message: '填写新的账号昵称，留空恢复默认名称。',
             inputLabel: '账号昵称',
             defaultValue: currentLabel,
             maxLength: ACCOUNT_LABEL_MAX_LENGTH,
@@ -4645,7 +4645,7 @@ function createSklandImportCancelledError() {
                 if (getAccountIds(state.accountsData).length <= 1) throw new Error('至少需要保留一个账号。');
                 const confirmed = await showPrtsConfirm({
                     title: '删除账号',
-                    message: `删除 ${state.accountMeta[id].label}（账号 ${id}）及其 ${state.accountsData[id].length} 名干员、练度和同步记录？此操作无法撤销。`,
+                    message: `确认删除 ${state.accountMeta[id].label}（账号 ${id}）？该账号的干员名单（${state.accountsData[id].length} 名）、练度和同步记录将一并删除，无法撤销。`,
                     confirmText: '确认删除', cancelText: '取消', tone: 'danger'
                 });
                 if (!confirmed) return;
@@ -4778,7 +4778,7 @@ function createSklandImportCancelledError() {
 
     function parseAccountsBackup(value) {
         if (Array.isArray(value)) {
-            throw new Error('这看起来是单账号干员列表，请使用“导入干员数据”。');
+            throw new Error('这看起来是单个账号的干员名单，请使用“导入干员数据”。');
         }
         if (!isPlainRecord(value)) {
             throw new Error('这不是有效的 Better-PRTS-Plus 全部配置备份。');
@@ -4795,13 +4795,13 @@ function createSklandImportCancelledError() {
 
     function formatAccountsBackupSummary(backup) {
         const lines = [
-            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号替换当前全部账号、账号昵称和 UI 偏好。`,
-            `导入后当前账号: ${backup.accountMeta[backup.activeAccountId].label}`,
+            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称和脚本设置。`,
+            `导入后将切换到：${backup.accountMeta[backup.activeAccountId].label}`,
             ''
         ];
 
         getAccountIds(backup.accountsData).forEach(id => {
-            lines.push(`${backup.accountMeta[id].label}: ${backup.accountsData[id].length} 名干员`);
+            lines.push(`${backup.accountMeta[id].label}：${backup.accountsData[id].length} 名干员`);
         });
         lines.push('');
         lines.push('确认继续导入？');
@@ -4849,7 +4849,7 @@ function createSklandImportCancelledError() {
                     if (!confirmed) return;
 
                     applyAccountsBackup(backup);
-                    showPrtsToast('全部配置导入成功', 'success', `${getAccountLabel(activeAccountId)} 已切换为当前账号。`);
+                    showPrtsToast('全部配置导入成功', 'success', `已切换到 ${getAccountLabel(activeAccountId)}。`);
                 } catch (error) {
                     console.error('[Better PRTS] 导入全部配置失败', error);
                     showPrtsToast('导入全部配置失败', 'error', error instanceof Error ? error.message : '未知错误');
@@ -4863,7 +4863,7 @@ function createSklandImportCancelledError() {
         input.click();
     }
     // =========================================================================
-    //                            MODULE 5: 业务逻辑 - 筛选、折叠与净化
+    //                            MODULE 5: 干员导入与筛选控件
     // =========================================================================
 
     function isFilterDisabledPage() {
@@ -4928,7 +4928,7 @@ function createSklandImportCancelledError() {
         refreshAccountStateUi();
 
         const type = unrecognizedNames.length ? 'warning' : 'success';
-        const message = unrecognizedNames.length ? `${accountLabel} 已导入，名称待核对` : `${accountLabel} 导入成功`;
+        const message = unrecognizedNames.length ? `${accountLabel} 导入完成，请核对未识别名称` : `${accountLabel} 导入成功`;
         const detail = [diffText, sourceText, recognitionText];
         if (unrecognizedNames.length) {
             detail.push(`未识别名称：${unrecognizedNames.join('、')}`, '这些名称已保留，请核对拼写；新干员可能尚未收录。');
@@ -4942,13 +4942,13 @@ function createSklandImportCancelledError() {
         if (!file) return Promise.resolve(false);
 
         if (file.size > OPERATOR_IMPORT_MAX_BYTES) {
-            const message = '文件过大，请上传标准格式的干员数据文件。';
+            const message = '文件过大，请选择较小的 JSON/TXT 干员数据文件。';
             setOperatorImportStatus(statusEl, message, 'error');
             showPrtsToast('导入失败', 'error', message);
             return Promise.resolve(false);
         }
 
-        setOperatorImportStatus(statusEl, `正在读取 ${file.name || '导入文件'}...`, 'loading');
+        setOperatorImportStatus(statusEl, `正在读取 ${file.name || '导入文件'}…`, 'loading');
         return new Promise(resolve => {
             const reader = new FileReader();
             reader.onload = async event => {
@@ -5002,7 +5002,7 @@ function createSklandImportCancelledError() {
         title.textContent = `导入到 ${getAccountLabel(targetAccountId)}`;
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-import-subtitle';
-        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，预览变化并确认后替换此账号的数据。';
+        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，核对预览并确认后，会替换此账号的干员名单和练度。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -5028,12 +5028,12 @@ function createSklandImportCancelledError() {
         textarea.id = 'prts-import-textarea';
         textarea.className = 'prts-import-textarea';
         textarea.spellcheck = false;
-        textarea.placeholder = '例如：每行一个干员名称，或粘贴 MAA 导出的 JSON 内容';
+        textarea.placeholder = '每行填写一个干员名称，或粘贴 MAA 导出的 JSON 内容';
 
         const help = document.createElement('p');
         help.id = 'prts-import-dialog-help';
         help.className = 'prts-import-help';
-        help.textContent = 'TXT 支持每行一个干员名，空行、# 和 // 开头的行会被忽略。';
+        help.textContent = 'TXT 每行填写一个干员名；空行及以 # 或 // 开头的行会被忽略。';
 
         const actions = document.createElement('div');
         actions.className = 'prts-import-actions';
@@ -5083,7 +5083,7 @@ function createSklandImportCancelledError() {
         pasteBtn.onclick = async () => {
             const rawText = textarea.value;
             if (!rawText.trim()) {
-                const message = '请先粘贴 JSON 或逐行干员名称。';
+                const message = '请先粘贴 JSON 内容，或每行填写一个干员名称。';
                 setOperatorImportStatus(status, message, 'error');
                 showPrtsToast('无法导入空内容', 'error', message);
                 textarea.focus();
@@ -5171,8 +5171,8 @@ function createSklandImportCancelledError() {
             opened ? '已打开森空岛页面' : '已尝试打开森空岛页面',
             opened ? 'success' : 'warning',
             opened
-                ? '请在森空岛网页登录后，使用页面右侧的 Better-PRTS-Plus 导入面板读取干员数据。'
-                : '如果没有看到新窗口，请手动打开 https://www.skland.com/index 登录后使用 Better-PRTS-Plus 导入面板。'
+                ? '请登录森空岛，然后在页面右侧的 Better-PRTS-Plus 导入面板中读取干员数据。'
+                : '如果没有看到新窗口，请手动打开 https://www.skland.com/index，登录后使用 Better-PRTS-Plus 导入面板。'
         );
     }
 
@@ -5266,7 +5266,7 @@ function createSklandImportCancelledError() {
             message.className = 'prts-filter-empty-message';
             empty.appendChild(message);
             empty.appendChild(createPrtsButton({
-                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'showAll',
+                id: 'btn-filter-show-all', text: '切换为置灰模式', icon: 'showAll',
                 onClick: () => {
                     toggleDisplayMode();
                     const activeRoot = getOperationListRoot();
@@ -5295,20 +5295,20 @@ function createSklandImportCancelledError() {
             } else if (stats.totalCards) {
                 summaryText += ownedOpsSet.size ? '，未开启筛选' : '，请先导入干员数据后筛选';
             }
-            if (stats.hiddenVideoCards) summaryText += `，视频已隐藏 ${stats.hiddenVideoCards} 份`;
+            if (stats.hiddenVideoCards) summaryText += `，已隐藏视频作业 ${stats.hiddenVideoCards} 份`;
             summaryText += '。';
 
             if (!stats.totalCards) {
-                messageText = list ? '本作业集暂无作业。' : '当前页面暂无作业。若正在加载，请稍候；也可调整搜索条件或翻页。';
+                messageText = list ? '本作业集暂无作业。' : '当前页面暂无作业。正在加载时请稍候，也可调整搜索条件或翻页。';
             } else if (stats.hiddenVideoCards === stats.totalCards) {
-                messageText = `${scope}作业均为视频，已被隐藏。可在悬浮球中关闭“隐藏视频作业”${list ? '' : '，或查看其他页'}。`;
+                messageText = `${scope}全部是视频作业，已隐藏。可在悬浮球 → 作业卡片中关闭“隐藏视频作业”${list ? '' : '，或查看其他页'}。`;
             } else if (filtering && !stats.availableCards && !stats.supportCards) {
                 if (stats.pendingCards) {
-                    messageText = `${scope}暂无已确认可用的作业，${stats.pendingCards} 份待核验作业已保留。请查看卡片提示或补充干员数据。`;
+                    messageText = `${scope}暂未找到已确认可用的作业，已保留 ${stats.pendingCards} 份待核验作业。请查看卡片提示或补充干员数据。`;
                 } else {
                     showAll = CONFIG.displayMode === 'HIDE' && !stats.visibleCards;
                     messageText = showAll
-                        ? `${scope}没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换置灰查看原因，或调整筛选条件、切换账号${list ? '' : '、查看其他页'}。`
+                        ? `${scope}没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换为置灰模式查看原因，或调整筛选条件、切换账号${list ? '' : '、查看其他页'}。`
                         : `${scope}没有符合当前筛选条件的作业。请调整筛选条件、切换账号${list ? '' : '，或查看其他页'}。`;
                 }
             }
@@ -5429,7 +5429,7 @@ function createSklandImportCancelledError() {
             id: 'btn-training', text: '校验练度', icon: 'trainingCheck',
             onClick: toggleTrainingCheck, active: CONFIG.trainingCheck, pressed: CONFIG.trainingCheck
         });
-        btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
+        btnTraining.title = '核对作业标注的练度要求；缺少数据时提示“待核验”';
 
         [
             ['prts-filter-accounts', '账号与数据', [accountControl, btnImport, btnSklandImport]],
@@ -5503,7 +5503,7 @@ function createSklandImportCancelledError() {
             content.appendChild(descContainer.firstChild);
         }
         if (content.textContent.trim() === '') {
-            content.textContent = '(无文字描述)';
+            content.textContent = '暂无文字描述';
         }
         descContainer.appendChild(content);
     }
@@ -5775,10 +5775,8 @@ function createSklandImportCancelledError() {
                 const regex = new RegExp(`^\\s*(?:\\[|【)?\\s*${escapedCode}\\s*(?:\\]|】)?\\s*(?:[-_=:：|]\\s*|\\s+)?`, 'i');
                 titleCleanText = currentText.replace(regex, '');
             } else {
-                // 完美匹配格式:
-                // [带横杠的标准格式] PA-1, PA-EX-1, 1-7, S4-1
-                // [用户偷懒的不带杠格式] PA5, LE10
-                // 以及匹配前置的各种括号 [PA-1], 【PA-1】
+                // 支持带横杠的 PA-1、PA-EX-1、1-7、S4-1，以及省略横杠的 PA5、LE10。
+                // 关卡号可带方括号，如 [PA-1]、【PA-1】。
                 const fallbackRegex = /^(?:\[|【)?(([A-Za-z0-9]{1,6}(?:-[A-Za-z0-9]{1,4})*-\d{1,3})|([A-Za-z]{2,5}\d{1,3}))(?:\]|】)?\s*(?:[-_=:：|]\s*|\s+(?!$))?(.*)$/i;
 
                 const match = currentText.match(fallbackRegex);
@@ -5978,7 +5976,7 @@ function createSklandImportCancelledError() {
     }
 
     /**
-     * [筛选逻辑的核心应用方法] - 包含最优算法注入
+     * 记录作业卡片的数据来源、筛选状态和可见状态。
      */
     function createCardDiagnostics(source = 'none') {
         return {
@@ -6203,12 +6201,12 @@ function createSklandImportCancelledError() {
             newClass += ' prts-label-support';
             const name = missingOps[0];
             iconText = 'support';
-            labelText = `需助战: ${name}`;
+            labelText = `需助战：${name}`;
         } else if (missingCount > 0 && CONFIG.filterMode !== 'NONE') {
             newClass += ' prts-label-missing';
-            const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
+            const listStr = missingOps.slice(0, 3).join('、') + (missingCount > 3 ? '…' : '');
             iconText = lowTraining.length ? 'lowTraining' : 'missingOperators';
-            labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+            labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? '：' + listStr : ''}`;
         }
         if (CONFIG.trainingCheck) {
             if (!labelText && lowTraining.length) labelText = `练度不足 · ${lowTraining.length} 个位置`;
@@ -6387,7 +6385,7 @@ function createSklandImportCancelledError() {
         title.textContent = 'Better-PRTS-Plus';
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-skland-subtitle';
-        subtitle.textContent = '从当前森空岛登录态读取明日方舟干员。';
+        subtitle.textContent = '通过当前登录的森空岛账号读取明日方舟干员。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -6405,11 +6403,11 @@ function createSklandImportCancelledError() {
 
         const body = document.createElement('div');
         body.className = 'prts-skland-body';
-        const defaultStatusText = '请先确认当前页面已经登录森空岛。读取后将预览干员名单和练度变化，确认后导入。';
+        const defaultStatusText = '请确认当前页面已登录森空岛。读取后可预览干员名单和练度变化，确认后再导入。';
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
-        accountLabel.textContent = '导入到账号';
+        accountLabel.textContent = '目标账号';
         body.appendChild(accountLabel);
 
         const accountSelect = createAccountSelect('prts-skland-target-account', activeAccountId, () => {
@@ -6440,10 +6438,10 @@ function createSklandImportCancelledError() {
 
         importBtn.onclick = async () => {
             const accountId = Number(accountSelect.value);
-            const progressText = `正在读取森空岛数据，稍后请确认导入到 ${getAccountLabel(accountId)} 的变化。`;
-            const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
+            const progressText = `正在读取森空岛数据，完成后请核对 ${getAccountLabel(accountId)} 的导入预览。`;
+            const updateToast = showPrtsToast('正在读取森空岛干员…', 'loading', progressText, 0);
             importBtn.disabled = true;
-            importBtn.textContent = '同步中…';
+            importBtn.textContent = '读取中…';
             accountSelect.disabled = true;
             setSklandPanelStatus(status, progressText, 'loading');
             try {
@@ -6453,17 +6451,17 @@ function createSklandImportCancelledError() {
                 createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
                 const detail = formatSklandImportSummary(summary);
                 setSklandPanelStatus(status, detail, 'success');
-                updateToast('森空岛数据同步成功', 'success', detail);
+                updateToast('森空岛干员导入成功', 'success', detail);
             } catch (error) {
                 if (isSklandImportCancelledError(error)) {
                     setSklandPanelStatus(status, '已取消导入，未修改账号数据。', '');
-                    updateToast('已取消森空岛数据同步', 'info', '未修改账号数据。');
+                    updateToast('已取消森空岛导入', 'info', '未修改账号数据。');
                     return;
                 }
                 console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
                 const detail = error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。';
                 setSklandPanelStatus(status, detail, 'error');
-                updateToast('森空岛数据同步失败', 'error', detail);
+                updateToast('森空岛干员导入失败', 'error', detail);
             } finally {
                 importBtn.disabled = false;
                 importBtn.textContent = '读取并导入干员';
@@ -6729,7 +6727,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'prts-float-btn';
-        btn.title = "脚本设置 (可拖拽)";
+        btn.title = "脚本设置（可拖拽）";
         btn.setAttribute('aria-label', '打开脚本设置面板，可拖拽');
         btn.setAttribute('aria-expanded', 'false');
         btn.setAttribute('aria-controls', 'prts-settings-panel');
@@ -6836,7 +6834,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         aboutVersion.textContent = `当前版本 ${GM_info.script.version}`;
         const aboutDescription = document.createElement('p');
         aboutDescription.className = 'prts-about-description';
-        aboutDescription.textContent = 'PRTS Plus 增强脚本，支持持有干员与练度筛选、多账号管理和页面显示优化。';
+        aboutDescription.textContent = '按持有干员和练度筛选 PRTS Plus 作业，支持多账号管理和页面显示调整。';
         const aboutCredits = document.createElement('p');
         aboutCredits.className = 'prts-about-credits';
         aboutCredits.textContent = '作者：一只摆烂的42（ntgmc）\n开源协议：GPL-3.0\n感谢 PRTS Plus 提供作业平台。';

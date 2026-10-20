@@ -145,7 +145,7 @@
             message.appendChild(renderReleaseNotes(release.notes));
         }
         const hint = document.createElement('p');
-        hint.textContent = preview ? '这是样式预览，点击下方按钮仅显示操作反馈。'
+        hint.textContent = preview ? '当前为样式预览，下方按钮只显示点击反馈。'
             : '点击“立即更新”后，请在油猴页面确认安装，再刷新当前页面。';
         message.appendChild(hint);
         return showPrtsModal({
@@ -163,7 +163,7 @@
         }
         const release = {
             version: '99.0.0', level,
-            notes: '以下内容为样式测试示例。\n\n### 新增\n\n- 展示新版本、**更新级别**和分类更新说明。\n\n### 优化\n\n- 可切换网站的浅色、深色或高对比主题，重复预览。\n\n### 修复\n\n- 检查较窄屏幕上的长文本换行，确认内容完整显示，底部操作按钮清晰可用。'
+            notes: '这是一份用于测试弹窗样式的示例说明。\n\n### 新增\n\n- 显示新版本号、**更新级别**和分类更新说明。\n\n### 优化\n\n- 可切换网站的浅色、深色或高对比度主题，多次预览。\n\n### 修复\n\n- 在窄屏下检查长文本换行，确认内容显示完整，底部操作按钮清晰可用。'
         };
         const choice = await showScriptUpdateModal({ ...release, releases: [release] }, true);
         if (choice !== null) {

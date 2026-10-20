@@ -83,7 +83,7 @@
                     timeout: 15000,
                     onload: response => {
                         try {
-                            if (response.status !== 200) throw new Error(`下载请求失败: HTTP ${response.status}`);
+                            if (response.status !== 200) throw new Error(`下载请求失败：HTTP ${response.status}`);
                             if (typeof response.responseText !== 'string' || response.responseText.length > maxBytes) {
                                 throw new Error('下载文件无效或过大');
                             }
@@ -106,7 +106,7 @@
     function updateResources() {
         if (resourceUpdatePending) return resourceUpdatePending;
         if (Date.now() - resourceCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
-        const updateToast = showPrtsToast('资源数据同步中…', 'loading', '已开始同步干员与模组数据，请稍候。', 0);
+        const updateToast = showPrtsToast('正在更新干员与模组数据…', 'loading', '正在下载数据，请稍候。', 0);
         resourceUpdatePending = downloadFirstValidJson(RESOURCE_URLS, validateResourceData, 2 * 1024 * 1024).then(data => {
             applyResourceData(data);
             resourceCheckedAt = Date.now();
@@ -118,13 +118,13 @@
                 console.warn('[Better PRTS] 资源缓存保存失败，本页已更新', error);
             }
             if (isPrtsHost()) refreshResourceViews();
-            updateToast(cacheSaved ? '资源数据同步成功' : '资源数据已更新，缓存保存失败', cacheSaved ? 'success' : 'warning',
+            updateToast(cacheSaved ? '数据更新成功' : '数据已更新，缓存保存失败', cacheSaved ? 'success' : 'warning',
                 cacheSaved ? '干员与模组数据已更新。' : '本页已使用最新数据，下次打开页面将重新同步。');
             return true;
         }).catch(error => {
             console.warn('[Better PRTS] 资源更新失败，继续使用已有资源', error);
             const detail = error instanceof AggregateError ? '所有资源下载源均不可用，请稍后重试。' : error.message || '请稍后重试。';
-            updateToast('资源数据同步失败', 'error', `${detail}\n继续使用已有数据。`);
+            updateToast('干员与模组数据更新失败', 'error', `${detail}\n继续使用已有数据。`);
             return false;
         }).finally(() => {
             resourceUpdatePending = null;

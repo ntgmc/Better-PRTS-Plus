@@ -765,7 +765,7 @@ test('update style previews cover all levels and buttons without changing real u
       assert.strictEqual(await preview(level), choice);
       assert(h.dialogs[0].title.includes('预览'));
       assert(h.dialogs[0].message.textContent.includes(`99.0.0 · ${{ normal: '普通更新', important: '重要更新', urgent: '紧急更新' }[level]}`));
-      assert(h.dialogs[0].message.textContent.includes('样式测试示例'));
+      assert(h.dialogs[0].message.textContent.includes('用于测试弹窗样式的示例说明'));
       assert.deepStrictEqual([...saved], [['existing', 'preserved']]);
       assert.strictEqual(h.sandbox.CONFIG.importantUpdatesOnly, true);
       assert.strictEqual(h.requests.length, 0);
@@ -2440,7 +2440,7 @@ test('matchOperatorGroups skips empty fallback groups', () => {
 });
 
 test('parseAccountsBackup rejects single-account operator lists', () => {
-  assert.throws(() => parseAccountsBackup(['Amiya']), /单账号/);
+  assert.throws(() => parseAccountsBackup(['Amiya']), /单个账号/);
 });
 
 test('normalizeAccountMeta keeps legacy account metadata valid', () => {
@@ -3243,7 +3243,7 @@ test('file and paste imports preview destructive changes before writing and pres
     assert.strictEqual(preview.confirmText, '确认覆盖并导入');
     for (const text of ['大号（账号 2）', method === 'file' ? 'ops.txt' : '粘贴内容',
       '当前 2 名 → 导入后 2 名', '新增 1 名 / 移除 1 名', '不包含练度数据', '将移除 1 名干员：W',
-      '部分或全部练度将被清空 1 名：阿米娅']) assert(preview.message.includes(text), text);
+      '将清空部分或全部练度的干员（1 名）：阿米娅']) assert(preview.message.includes(text), text);
     answer(confirmed);
     await pending;
     assert.strictEqual(paste.disabled, false);
@@ -3272,7 +3272,7 @@ test('import preview repeats when the target changes and preserves other account
       previews.push(options);
       if (previews.length === 1) {
         assert.strictEqual(options.tone, '');
-        assert(options.message.includes('包含练度：1 / 1 名干员'));
+        assert(options.message.includes('含练度数据：1 / 1 名干员'));
         const latest = remote.getCurrentAccountState();
         latest.activeAccountId = 3;
         latest.accountsData[3] = ['W'];
@@ -3280,7 +3280,7 @@ test('import preview repeats when the target changes and preserves other account
         remote.commitAccountState(latest);
       } else {
         assert.strictEqual(options.tone, 'danger');
-        assert(options.message.includes('练度将降低 1 名：阿米娅'));
+        assert(options.message.includes('练度将降低的干员（1 名）：阿米娅'));
         return false;
       }
       return true;
@@ -3458,7 +3458,7 @@ test('filter statistics partition cards using the same availability results as r
     assert.strictEqual(stats.visibleCards, displayMode === 'HIDE' ? 4 : 5);
     const results = page.document.getElementById('prts-filter-results');
     assert.strictEqual(results.querySelector('.prts-filter-summary').textContent,
-      '本页 6 份作业，可用 1 份，需助战 1 份，待核验 2 份，不符合 1 份，视频已隐藏 1 份。');
+      '本页 6 份作业，可用 1 份，需助战 1 份，待核验 2 份，不符合 1 份，已隐藏视频作业 1 份。');
     assert.strictEqual(results.querySelector('.prts-filter-empty').hidden, true);
     assert.strictEqual(results.attributes.get('aria-live'), 'polite');
     page.injectFilterControls();
@@ -3579,7 +3579,7 @@ test('filter statistics distinguish uncertain training and standalone training f
   page.applyFilterLogic();
   assert.strictEqual(page.aggregateCardDiagnostics(cards).pendingCards, 2);
   const results = page.document.getElementById('prts-filter-results');
-  assert(results.querySelector('.prts-filter-empty-message').textContent.includes('2 份待核验作业已保留'));
+  assert(results.querySelector('.prts-filter-empty-message').textContent.includes('已保留 2 份待核验作业'));
   assert(cards.every(card => card.style.display !== 'none'));
   page.__testExports.CONFIG.filterMode = 'NONE';
   const state = page.getCurrentAccountState();
@@ -3636,7 +3636,7 @@ test('statistics reset for empty pages, disabled routes, inactive filters and ac
   cards.length = 0;
   page.applyFilterLogic();
   assert.strictEqual(results.querySelector('.prts-filter-summary').textContent, '本页 0 份作业。');
-  assert(results.querySelector('.prts-filter-empty-message').textContent.includes('若正在加载，请稍候'));
+  assert(results.querySelector('.prts-filter-empty-message').textContent.includes('正在加载时请稍候'));
   page.renderFilterResults(null);
   assert.strictEqual(results.querySelector('.prts-filter-summary').textContent, '正在统计本页作业…');
   page.isFilterDisabledPage = () => true;
@@ -3650,7 +3650,7 @@ test('video-only pages explain video hiding instead of offering an ineffective g
   page.__testExports.CONFIG.hideVideo = true;
   addCard({ type: 'VIDEO', opers: [null] });
   page.applyFilterLogic();
-  assert(page.document.getElementById('prts-filter-results').textContent.includes('本页作业均为视频，已被隐藏'));
+  assert(page.document.getElementById('prts-filter-results').textContent.includes('本页全部是视频作业，已隐藏'));
   assert.strictEqual(page.document.getElementById('btn-filter-show-all').hidden, true);
 });
 
@@ -3713,7 +3713,7 @@ test('pending cards preserve video hiding and support-mode filtering', () => {
   assert.doesNotThrow(() => page.applyFilterLogic());
   assert.strictEqual(video.card.style.display, 'none');
   assert.notStrictEqual(support.card.style.display, 'none');
-  assert.strictEqual(support.inner.querySelector('.prts-status-label')?.attributes.get('aria-label'), '需助战: W');
+  assert.strictEqual(support.inner.querySelector('.prts-status-label')?.attributes.get('aria-label'), '需助战：W');
   assert.strictEqual(missing.card.style.display, 'none');
 });
 

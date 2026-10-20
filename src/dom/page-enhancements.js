@@ -48,7 +48,7 @@
             content.appendChild(descContainer.firstChild);
         }
         if (content.textContent.trim() === '') {
-            content.textContent = '(无文字描述)';
+            content.textContent = '暂无文字描述';
         }
         descContainer.appendChild(content);
     }
@@ -320,10 +320,8 @@
                 const regex = new RegExp(`^\\s*(?:\\[|【)?\\s*${escapedCode}\\s*(?:\\]|】)?\\s*(?:[-_=:：|]\\s*|\\s+)?`, 'i');
                 titleCleanText = currentText.replace(regex, '');
             } else {
-                // 完美匹配格式:
-                // [带横杠的标准格式] PA-1, PA-EX-1, 1-7, S4-1
-                // [用户偷懒的不带杠格式] PA5, LE10
-                // 以及匹配前置的各种括号 [PA-1], 【PA-1】
+                // 支持带横杠的 PA-1、PA-EX-1、1-7、S4-1，以及省略横杠的 PA5、LE10。
+                // 关卡号可带方括号，如 [PA-1]、【PA-1】。
                 const fallbackRegex = /^(?:\[|【)?(([A-Za-z0-9]{1,6}(?:-[A-Za-z0-9]{1,4})*-\d{1,3})|([A-Za-z]{2,5}\d{1,3}))(?:\]|】)?\s*(?:[-_=:：|]\s*|\s+(?!$))?(.*)$/i;
 
                 const match = currentText.match(fallbackRegex);
@@ -523,7 +521,7 @@
     }
 
     /**
-     * [筛选逻辑的核心应用方法] - 包含最优算法注入
+     * 记录作业卡片的数据来源、筛选状态和可见状态。
      */
     function createCardDiagnostics(source = 'none') {
         return {
@@ -748,12 +746,12 @@
             newClass += ' prts-label-support';
             const name = missingOps[0];
             iconText = 'support';
-            labelText = `需助战: ${name}`;
+            labelText = `需助战：${name}`;
         } else if (missingCount > 0 && CONFIG.filterMode !== 'NONE') {
             newClass += ' prts-label-missing';
-            const listStr = missingOps.slice(0, 3).join(', ') + (missingCount > 3 ? '...' : '');
+            const listStr = missingOps.slice(0, 3).join('、') + (missingCount > 3 ? '…' : '');
             iconText = lowTraining.length ? 'lowTraining' : 'missingOperators';
-            labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? ': ' + listStr : ''}`;
+            labelText = `${lowTraining.length ? '未达要求' : '缺'} ${missingCount} 人${missingCount > 0 ? '：' + listStr : ''}`;
         }
         if (CONFIG.trainingCheck) {
             if (!labelText && lowTraining.length) labelText = `练度不足 · ${lowTraining.length} 个位置`;

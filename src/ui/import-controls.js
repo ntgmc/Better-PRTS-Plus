@@ -1,5 +1,5 @@
     // =========================================================================
-    //                            MODULE 5: 业务逻辑 - 筛选、折叠与净化
+    //                            MODULE 5: 干员导入与筛选控件
     // =========================================================================
 
     function isFilterDisabledPage() {
@@ -64,7 +64,7 @@
         refreshAccountStateUi();
 
         const type = unrecognizedNames.length ? 'warning' : 'success';
-        const message = unrecognizedNames.length ? `${accountLabel} 已导入，名称待核对` : `${accountLabel} 导入成功`;
+        const message = unrecognizedNames.length ? `${accountLabel} 导入完成，请核对未识别名称` : `${accountLabel} 导入成功`;
         const detail = [diffText, sourceText, recognitionText];
         if (unrecognizedNames.length) {
             detail.push(`未识别名称：${unrecognizedNames.join('、')}`, '这些名称已保留，请核对拼写；新干员可能尚未收录。');
@@ -78,13 +78,13 @@
         if (!file) return Promise.resolve(false);
 
         if (file.size > OPERATOR_IMPORT_MAX_BYTES) {
-            const message = '文件过大，请上传标准格式的干员数据文件。';
+            const message = '文件过大，请选择较小的 JSON/TXT 干员数据文件。';
             setOperatorImportStatus(statusEl, message, 'error');
             showPrtsToast('导入失败', 'error', message);
             return Promise.resolve(false);
         }
 
-        setOperatorImportStatus(statusEl, `正在读取 ${file.name || '导入文件'}...`, 'loading');
+        setOperatorImportStatus(statusEl, `正在读取 ${file.name || '导入文件'}…`, 'loading');
         return new Promise(resolve => {
             const reader = new FileReader();
             reader.onload = async event => {
@@ -138,7 +138,7 @@
         title.textContent = `导入到 ${getAccountLabel(targetAccountId)}`;
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-import-subtitle';
-        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，预览变化并确认后替换此账号的数据。';
+        subtitle.textContent = '选择文件或粘贴 JSON/TXT 文本，核对预览并确认后，会替换此账号的干员名单和练度。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -164,12 +164,12 @@
         textarea.id = 'prts-import-textarea';
         textarea.className = 'prts-import-textarea';
         textarea.spellcheck = false;
-        textarea.placeholder = '例如：每行一个干员名称，或粘贴 MAA 导出的 JSON 内容';
+        textarea.placeholder = '每行填写一个干员名称，或粘贴 MAA 导出的 JSON 内容';
 
         const help = document.createElement('p');
         help.id = 'prts-import-dialog-help';
         help.className = 'prts-import-help';
-        help.textContent = 'TXT 支持每行一个干员名，空行、# 和 // 开头的行会被忽略。';
+        help.textContent = 'TXT 每行填写一个干员名；空行及以 # 或 // 开头的行会被忽略。';
 
         const actions = document.createElement('div');
         actions.className = 'prts-import-actions';
@@ -219,7 +219,7 @@
         pasteBtn.onclick = async () => {
             const rawText = textarea.value;
             if (!rawText.trim()) {
-                const message = '请先粘贴 JSON 或逐行干员名称。';
+                const message = '请先粘贴 JSON 内容，或每行填写一个干员名称。';
                 setOperatorImportStatus(status, message, 'error');
                 showPrtsToast('无法导入空内容', 'error', message);
                 textarea.focus();
@@ -307,8 +307,8 @@
             opened ? '已打开森空岛页面' : '已尝试打开森空岛页面',
             opened ? 'success' : 'warning',
             opened
-                ? '请在森空岛网页登录后，使用页面右侧的 Better-PRTS-Plus 导入面板读取干员数据。'
-                : '如果没有看到新窗口，请手动打开 https://www.skland.com/index 登录后使用 Better-PRTS-Plus 导入面板。'
+                ? '请登录森空岛，然后在页面右侧的 Better-PRTS-Plus 导入面板中读取干员数据。'
+                : '如果没有看到新窗口，请手动打开 https://www.skland.com/index，登录后使用 Better-PRTS-Plus 导入面板。'
         );
     }
 
@@ -402,7 +402,7 @@
             message.className = 'prts-filter-empty-message';
             empty.appendChild(message);
             empty.appendChild(createPrtsButton({
-                id: 'btn-filter-show-all', text: '切换置灰，查看作业', icon: 'showAll',
+                id: 'btn-filter-show-all', text: '切换为置灰模式', icon: 'showAll',
                 onClick: () => {
                     toggleDisplayMode();
                     const activeRoot = getOperationListRoot();
@@ -431,20 +431,20 @@
             } else if (stats.totalCards) {
                 summaryText += ownedOpsSet.size ? '，未开启筛选' : '，请先导入干员数据后筛选';
             }
-            if (stats.hiddenVideoCards) summaryText += `，视频已隐藏 ${stats.hiddenVideoCards} 份`;
+            if (stats.hiddenVideoCards) summaryText += `，已隐藏视频作业 ${stats.hiddenVideoCards} 份`;
             summaryText += '。';
 
             if (!stats.totalCards) {
-                messageText = list ? '本作业集暂无作业。' : '当前页面暂无作业。若正在加载，请稍候；也可调整搜索条件或翻页。';
+                messageText = list ? '本作业集暂无作业。' : '当前页面暂无作业。正在加载时请稍候，也可调整搜索条件或翻页。';
             } else if (stats.hiddenVideoCards === stats.totalCards) {
-                messageText = `${scope}作业均为视频，已被隐藏。可在悬浮球中关闭“隐藏视频作业”${list ? '' : '，或查看其他页'}。`;
+                messageText = `${scope}全部是视频作业，已隐藏。可在悬浮球 → 作业卡片中关闭“隐藏视频作业”${list ? '' : '，或查看其他页'}。`;
             } else if (filtering && !stats.availableCards && !stats.supportCards) {
                 if (stats.pendingCards) {
-                    messageText = `${scope}暂无已确认可用的作业，${stats.pendingCards} 份待核验作业已保留。请查看卡片提示或补充干员数据。`;
+                    messageText = `${scope}暂未找到已确认可用的作业，已保留 ${stats.pendingCards} 份待核验作业。请查看卡片提示或补充干员数据。`;
                 } else {
                     showAll = CONFIG.displayMode === 'HIDE' && !stats.visibleCards;
                     messageText = showAll
-                        ? `${scope}没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换置灰查看原因，或调整筛选条件、切换账号${list ? '' : '、查看其他页'}。`
+                        ? `${scope}没有符合当前筛选条件的作业，已隐藏 ${stats.unavailableCards} 份。可切换为置灰模式查看原因，或调整筛选条件、切换账号${list ? '' : '、查看其他页'}。`
                         : `${scope}没有符合当前筛选条件的作业。请调整筛选条件、切换账号${list ? '' : '，或查看其他页'}。`;
                 }
             }
@@ -565,7 +565,7 @@
             id: 'btn-training', text: '校验练度', icon: 'trainingCheck',
             onClick: toggleTrainingCheck, active: CONFIG.trainingCheck, pressed: CONFIG.trainingCheck
         });
-        btnTraining.title = '按作业标注的练度要求校验；数据不足时提示待核验';
+        btnTraining.title = '核对作业标注的练度要求；缺少数据时提示“待核验”';
 
         [
             ['prts-filter-accounts', '账号与数据', [accountControl, btnImport, btnSklandImport]],

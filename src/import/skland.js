@@ -45,7 +45,7 @@ function createSklandImportCancelledError() {
             const normalized = normalizeSklandCredentialCandidate(candidate);
             if (normalized) return normalized;
         }
-        throw new Error('未找到森空岛登录凭据，请先在当前森空岛页面完成登录。');
+        throw new Error('未找到森空岛登录凭据，请先在当前页面登录森空岛。');
     }
 
     function decodeSklandCredentialText(value) {
@@ -103,7 +103,7 @@ function createSklandImportCancelledError() {
         try {
             GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(result.summary));
         } catch (_error) {
-            console.warn('[Better PRTS] 森空岛兼容摘要保存失败，账户数据已成功保存');
+            console.warn('[Better PRTS] 森空岛兼容摘要保存失败，账号数据已保存');
         }
         return result.summary;
     }
@@ -134,7 +134,7 @@ function createSklandImportCancelledError() {
         const bindingOptions = getSklandArknightsBindingOptionsFromList(data.data.list);
         if (bindingOptions.bindings.length > 0) return bindingOptions;
 
-        throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
     }
 
     function getSklandArknightsBindingOptionsFromList(list) {
@@ -211,12 +211,12 @@ function createSklandImportCancelledError() {
 
     async function resolveSklandImportBinding(accountId, bindingOptions, options = {}) {
         const bindings = normalizeSklandArknightsBindings(bindingOptions?.bindings || [], bindingOptions?.defaultUid);
-        if (bindings.length === 0) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        if (bindings.length === 0) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
 
         const accountSyncMeta = getAccountSklandSyncMeta(accountId);
         const preferredUid = normalizeSklandSyncText(options.preferredUid ?? accountSyncMeta?.uid);
         const defaultBinding = selectSklandBindingOption(bindings, preferredUid, bindingOptions?.defaultUid);
-        if (!defaultBinding) throw new Error('森空岛账号未找到已绑定的明日方舟角色。');
+        if (!defaultBinding) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
         if (bindings.length === 1 || typeof options.selectBinding !== 'function') return defaultBinding;
 
         const selected = await options.selectBinding(bindings, defaultBinding, {
@@ -291,7 +291,7 @@ function createSklandImportCancelledError() {
                     signal: controller?.signal,
                     credentials: 'omit'
                 });
-                if (!response.ok) throw new Error(`森空岛接口请求失败: HTTP ${response.status}`);
+                if (!response.ok) throw new Error(`森空岛接口请求失败：HTTP ${response.status}`);
                 return await response.json();
             } catch (error) {
                 fetchError = error;
@@ -314,7 +314,7 @@ function createSklandImportCancelledError() {
                 responseType: 'json',
                 onload: response => {
                     if (response.status < 200 || response.status >= 300) {
-                        reject(new Error(`森空岛接口请求失败: HTTP ${response.status}`));
+                        reject(new Error(`森空岛接口请求失败：HTTP ${response.status}`));
                         return;
                     }
                     if (response.response && typeof response.response === 'object') {

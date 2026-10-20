@@ -90,7 +90,7 @@
         title.textContent = 'Better-PRTS-Plus';
         const subtitle = document.createElement('p');
         subtitle.className = 'prts-skland-subtitle';
-        subtitle.textContent = '从当前森空岛登录态读取明日方舟干员。';
+        subtitle.textContent = '通过当前登录的森空岛账号读取明日方舟干员。';
         headingWrap.appendChild(title);
         headingWrap.appendChild(subtitle);
 
@@ -108,11 +108,11 @@
 
         const body = document.createElement('div');
         body.className = 'prts-skland-body';
-        const defaultStatusText = '请先确认当前页面已经登录森空岛。读取后将预览干员名单和练度变化，确认后导入。';
+        const defaultStatusText = '请确认当前页面已登录森空岛。读取后可预览干员名单和练度变化，确认后再导入。';
 
         const accountLabel = document.createElement('span');
         accountLabel.className = 'prts-skland-label';
-        accountLabel.textContent = '导入到账号';
+        accountLabel.textContent = '目标账号';
         body.appendChild(accountLabel);
 
         const accountSelect = createAccountSelect('prts-skland-target-account', activeAccountId, () => {
@@ -143,10 +143,10 @@
 
         importBtn.onclick = async () => {
             const accountId = Number(accountSelect.value);
-            const progressText = `正在读取森空岛数据，稍后请确认导入到 ${getAccountLabel(accountId)} 的变化。`;
-            const updateToast = showPrtsToast('森空岛数据同步中…', 'loading', progressText, 0);
+            const progressText = `正在读取森空岛数据，完成后请核对 ${getAccountLabel(accountId)} 的导入预览。`;
+            const updateToast = showPrtsToast('正在读取森空岛干员…', 'loading', progressText, 0);
             importBtn.disabled = true;
-            importBtn.textContent = '同步中…';
+            importBtn.textContent = '读取中…';
             accountSelect.disabled = true;
             setSklandPanelStatus(status, progressText, 'loading');
             try {
@@ -156,17 +156,17 @@
                 createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
                 const detail = formatSklandImportSummary(summary);
                 setSklandPanelStatus(status, detail, 'success');
-                updateToast('森空岛数据同步成功', 'success', detail);
+                updateToast('森空岛干员导入成功', 'success', detail);
             } catch (error) {
                 if (isSklandImportCancelledError(error)) {
                     setSklandPanelStatus(status, '已取消导入，未修改账号数据。', '');
-                    updateToast('已取消森空岛数据同步', 'info', '未修改账号数据。');
+                    updateToast('已取消森空岛导入', 'info', '未修改账号数据。');
                     return;
                 }
                 console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
                 const detail = error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。';
                 setSklandPanelStatus(status, detail, 'error');
-                updateToast('森空岛数据同步失败', 'error', detail);
+                updateToast('森空岛干员导入失败', 'error', detail);
             } finally {
                 importBtn.disabled = false;
                 importBtn.textContent = '读取并导入干员';
@@ -432,7 +432,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'prts-float-btn';
-        btn.title = "脚本设置 (可拖拽)";
+        btn.title = "脚本设置（可拖拽）";
         btn.setAttribute('aria-label', '打开脚本设置面板，可拖拽');
         btn.setAttribute('aria-expanded', 'false');
         btn.setAttribute('aria-controls', 'prts-settings-panel');
@@ -539,7 +539,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         aboutVersion.textContent = `当前版本 ${GM_info.script.version}`;
         const aboutDescription = document.createElement('p');
         aboutDescription.className = 'prts-about-description';
-        aboutDescription.textContent = 'PRTS Plus 增强脚本，支持持有干员与练度筛选、多账号管理和页面显示优化。';
+        aboutDescription.textContent = '按持有干员和练度筛选 PRTS Plus 作业，支持多账号管理和页面显示调整。';
         const aboutCredits = document.createElement('p');
         aboutCredits.className = 'prts-about-credits';
         aboutCredits.textContent = '作者：一只摆烂的42（ntgmc）\n开源协议：GPL-3.0\n感谢 PRTS Plus 提供作业平台。';

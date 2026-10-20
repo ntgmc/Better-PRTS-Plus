@@ -39,12 +39,12 @@
 
     function reportAccountStateDiagnostics(diagnostics) {
         diagnostics.forEach(diagnostic => {
-            console.warn('[Better PRTS] 账户数据兼容诊断', diagnostic.code, diagnostic.source);
+            console.warn('[Better PRTS] 账号数据兼容诊断', diagnostic.code, diagnostic.source);
         });
     }
 
     /**
-     * 加载干员数据：具备高级的向下兼容与数据迁移能力
+     * 加载干员数据，迁移旧版存储格式。
      */
     function loadOwnedOps() {
         const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
@@ -54,7 +54,7 @@
         } else {
             publishAccountState(resolved.state);
         }
-        console.log(`[Better PRTS] 已加载账号 ${activeAccountId} 的 ${ownedOpsSet.size} 名持有干员`);
+        console.log(`[Better PRTS] 已加载账号 ${activeAccountId} 的 ${ownedOpsSet.size} 名干员`);
     }
 
     /**
@@ -147,17 +147,17 @@
                 `来源：${sourceLabel || '导入内容'}`,
                 `当前 ${state.accountsData[id].length} 名 → 导入后 ${diff.total} 名`,
                 `新增 ${diff.added} 名 / 移除 ${diff.removed} 名`,
-                diff.trainingCount ? `包含练度：${diff.trainingCount} / ${diff.total} 名干员` : '不包含练度数据',
+                diff.trainingCount ? `含练度数据：${diff.trainingCount} / ${diff.total} 名干员` : '不包含练度数据',
                 '导入会替换此账号的干员名单和练度。'
             ];
             if (diff.removed) lines.push(`将移除 ${diff.removed} 名干员：${diff.removedNames.join('、')}`);
             if (diff.decreasedTrainingNames.length) {
-                lines.push(`练度将降低 ${diff.decreasedTrainingNames.length} 名：${diff.decreasedTrainingNames.join('、')}`);
+                lines.push(`练度将降低的干员（${diff.decreasedTrainingNames.length} 名）：${diff.decreasedTrainingNames.join('、')}`);
             }
             if (diff.clearedTrainingNames.length) {
-                lines.push(`部分或全部练度将被清空 ${diff.clearedTrainingNames.length} 名：${diff.clearedTrainingNames.join('、')}`);
+                lines.push(`将清空部分或全部练度的干员（${diff.clearedTrainingNames.length} 名）：${diff.clearedTrainingNames.join('、')}`);
             }
-            if (danger) lines.push('请核对账号和来源，确认要覆盖这些已有数据吗？');
+            if (danger) lines.push('请核对目标账号和数据来源，再确认是否覆盖已有数据。');
             const confirmed = await showPrtsConfirm({
                 title: danger ? '导入将覆盖已有数据' : '导入预览',
                 message: lines.join('\n'),
@@ -179,7 +179,7 @@
         const currentLabel = getAccountLabel(accountId);
         const rawLabel = await showPrtsPrompt({
             title: `重命名账号 ${accountId}`,
-            message: '输入新的账号昵称，留空会恢复默认名称。',
+            message: '填写新的账号昵称，留空恢复默认名称。',
             inputLabel: '账号昵称',
             defaultValue: currentLabel,
             maxLength: ACCOUNT_LABEL_MAX_LENGTH,
@@ -222,7 +222,7 @@
                 if (getAccountIds(state.accountsData).length <= 1) throw new Error('至少需要保留一个账号。');
                 const confirmed = await showPrtsConfirm({
                     title: '删除账号',
-                    message: `删除 ${state.accountMeta[id].label}（账号 ${id}）及其 ${state.accountsData[id].length} 名干员、练度和同步记录？此操作无法撤销。`,
+                    message: `确认删除 ${state.accountMeta[id].label}（账号 ${id}）？该账号的干员名单（${state.accountsData[id].length} 名）、练度和同步记录将一并删除，无法撤销。`,
                     confirmText: '确认删除', cancelText: '取消', tone: 'danger'
                 });
                 if (!confirmed) return;
@@ -355,7 +355,7 @@
 
     function parseAccountsBackup(value) {
         if (Array.isArray(value)) {
-            throw new Error('这看起来是单账号干员列表，请使用“导入干员数据”。');
+            throw new Error('这看起来是单个账号的干员名单，请使用“导入干员数据”。');
         }
         if (!isPlainRecord(value)) {
             throw new Error('这不是有效的 Better-PRTS-Plus 全部配置备份。');
@@ -372,13 +372,13 @@
 
     function formatAccountsBackupSummary(backup) {
         const lines = [
-            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号替换当前全部账号、账号昵称和 UI 偏好。`,
-            `导入后当前账号: ${backup.accountMeta[backup.activeAccountId].label}`,
+            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称和脚本设置。`,
+            `导入后将切换到：${backup.accountMeta[backup.activeAccountId].label}`,
             ''
         ];
 
         getAccountIds(backup.accountsData).forEach(id => {
-            lines.push(`${backup.accountMeta[id].label}: ${backup.accountsData[id].length} 名干员`);
+            lines.push(`${backup.accountMeta[id].label}：${backup.accountsData[id].length} 名干员`);
         });
         lines.push('');
         lines.push('确认继续导入？');
@@ -426,7 +426,7 @@
                     if (!confirmed) return;
 
                     applyAccountsBackup(backup);
-                    showPrtsToast('全部配置导入成功', 'success', `${getAccountLabel(activeAccountId)} 已切换为当前账号。`);
+                    showPrtsToast('全部配置导入成功', 'success', `已切换到 ${getAccountLabel(activeAccountId)}。`);
                 } catch (error) {
                     console.error('[Better PRTS] 导入全部配置失败', error);
                     showPrtsToast('导入全部配置失败', 'error', error instanceof Error ? error.message : '未知错误');
