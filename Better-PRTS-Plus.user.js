@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Better-PRTS-Plus
 // @namespace    https://github.com/ntgmc/Better-PRTS-Plus
-// @version      4.1.0
+// @version      4.1.1
 // @description  按持有干员和练度筛选 PRTS Plus 作业，支持干员组、多账号切换、干员头像展示和深色模式适配。
 // @author       一只摆烂的42
 // @match        https://zoot.plus/*
