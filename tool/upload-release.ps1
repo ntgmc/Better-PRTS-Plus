@@ -150,20 +150,18 @@ try {
     if ($PublishRelease) {
         $headCommit = Get-GitOutput rev-parse HEAD
         $localTagExists = Test-GitRefExists -Ref "refs/tags/$tagName"
-        if ($localTagExists) {
-            $tagCommit = Get-GitOutput rev-parse "refs/tags/$tagName^{commit}"
-            if ($tagCommit -ne $headCommit) {
-                throw "Local tag '$tagName' already exists but does not point to HEAD. Use a new version."
-            }
+        $remoteTagCommit = Get-RemoteTagCommit -TagName $tagName
+        if ($remoteTagCommit -and $remoteTagCommit -ne $headCommit) {
+            throw "Remote tag '$tagName' already exists on '$Remote' but does not point to HEAD. Use a new version."
         }
-        if (-not $DryRun) {
-            $remoteTagCommit = Get-RemoteTagCommit -TagName $tagName
-            if ($remoteTagCommit -and $remoteTagCommit -ne $headCommit) {
-                throw "Remote tag '$tagName' already exists on '$Remote' but does not point to HEAD. Use a new version."
+        if ($remoteTagCommit -and $localTagExists) {
+            $tagCommit = Get-GitOutput rev-parse "refs/tags/$tagName^{commit}"
+            if ($tagCommit -ne $remoteTagCommit) {
+                throw "Local tag '$tagName' differs from the published tag on '$Remote'. Align the local tag with the remote tag before retrying."
             }
         }
     }
-    $reuseReleaseTag = $localTagExists -or [bool]$remoteTagCommit
+    $reuseReleaseTag = [bool]$remoteTagCommit
     if ($reuseReleaseTag -and (Get-GitOutput status --porcelain --untracked-files=all -- @releasePaths)) {
         throw "Release files have changes but tag '$tagName' already exists. Use a new version or restore the release files before retrying."
     }
@@ -204,7 +202,10 @@ try {
     }
 
     if ($PublishRelease -and -not $reuseReleaseTag) {
-        Invoke-Git tag -a $tagName -m $tagName
+        if ($localTagExists) {
+            Write-Host "Recreating unpublished local tag '$tagName' at HEAD."
+        }
+        Invoke-Git tag --force -a $tagName -m $tagName
     }
 
     Invoke-Git push $Remote "HEAD:refs/heads/$Branch"

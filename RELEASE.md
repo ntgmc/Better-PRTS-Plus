@@ -104,7 +104,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/upload-release.ps1 -Ver
 - `-Branch main`：将当前 HEAD 推送到指定的远端分支，默认使用当前分支名。
 - `-Remote origin`：指定远端，默认为 `origin`。
 - `-CommitMessage "chore(release): vX.Y.Z"`：指定提交信息，替换默认值。
-- `-DryRun`：执行构建、同步和检查，不执行 `git add`、提交、tag 或 push。
+- `-DryRun`：执行构建、同步和检查，不执行 `git add`、提交、tag 或 push。正式发布的演练也会查询远端 tag，确认该版本能否发布。
 
 推送完成后，等待 GitHub Actions 创建 Release，确认发布附件中包含 `Better-PRTS-Plus.user.js` 和 `update.json`，再将 GreasyFork 同步或手动更新到对应版本。README 继续推荐从 GreasyFork 安装。
 
@@ -130,7 +130,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/update-operator-data.ps
 
 - `tool/check.ps1` 检查 `src/` 拼接产物与 `Better-PRTS-Plus.user.js` 是否一致，并检查 userscript 语法、README 版本徽章、干员生成物与内嵌数据是否同步，以及已有安全约束。干员组匹配由 `tool/test-core.js` 直接调用实际 JS 验证，覆盖候选重分配、固定干员占用和助战放行；检查脚本不再维护另一份匹配算法。
 - `tool/check-release.ps1 -Tag vX.Y.Z` 检查 tag 格式，要求 tag 版本与 userscript `@version` 完全一致，并检查对应版本的说明文件可读、正文非空、级别有效，以及版本记录无重复。缺少任一项都会停止发布。
-- `tool/publish-release.ps1` 在本地调用 `tool/check-release.ps1`，并在提交前检查已有 tag。只有 tag 指向当前 HEAD 且发布文件没有改动时，脚本才会复用该 tag；否则需要使用新版本号。
+- `tool/publish-release.ps1` 在本地调用 `tool/check-release.ps1`，并在提交前查询远端 tag。远端尚无该 tag 时，允许使用同一版本号重新准备发布；检查和提交成功后会将已有本地 tag 重建到当前 HEAD。远端已有 tag 时，只允许继续上传同一提交，且发布文件不能有改动。
 - GitHub Release workflow 会在全部检查通过后创建 Release。tag 与 `@version` 不一致或更新说明校验失败时，发布流程会在创建 Release 前停止。`update.json` 只包含不高于目标发布版本的记录。
 - 带有预发布后缀的版本会在 GitHub Release 中标记为 prerelease。例如，`2.15.0-beta.1` 对应的 tag 是 `v2.15.0-beta.1`。
 
@@ -188,10 +188,10 @@ GitHub Actions 会检查 PR 或推送到 main 时新增的提交，不检查旧�
 
 ## 失败处理
 
-- push 因网络问题或远端拒绝而失败时，解决问题后重跑相同命令，保持 `-Version` 不变。脚本会复用已有提交和匹配的 tag，继续推送尚未上传的分支或 tag；已上传的匹配 tag 会视为成功。
+- push 因网络问题或远端拒绝而失败时，解决问题后重跑相同命令，保持 `-Version` 不变。远端还没有该 tag 时，可以继续修改后重试，脚本会自动重建本地 tag，无需手动删除。检查或提交失败时会保留原本地 tag；远端查询失败时也不会重建。已上传且指向当前提交的远端 tag 会视为成功。
 - 干员数据没有变化时，资源更新脚本会保留原审计记录，避免因时间戳变化而重复提交。发布和重试均使用仓库中的已有数据。
 - 提交失败时，脚本会撤回本次暂存，保留工作区改动。解决提交错误后即可重跑。若进程被强制终止并留下暂存内容，请先检查并取消暂存，再重试。
-- 已有 tag 指向其他提交，或发布文件发生改动时，脚本会在创建提交前停止。发布新内容需要使用新版本号。
+- 远端 tag 指向其他提交，或已推送 tag 后又修改了发布文件时，脚本会在创建提交前停止。此时发布新内容需要使用新版本号，脚本不会删除或强制覆盖远端 tag。
 - tag 写错且 Release 尚未生成时，删除本地和远端的错误 tag，再创建正确的 tag。
 - Release 已经生成时，先在 GitHub 上确认错误 Release 和发布附件的状态，再删除错误 Release/tag 并重新发布。
 - 手工上传 `Better-PRTS-Plus.user.js` 作为正式发布附件前，也必须通过本地检查。
