@@ -870,6 +870,9 @@
         vertical-align: middle;
     }
     body.high-contrast-theme .prts-level-badge { border-color: var(--prts-color-primary); }
+    .prts-stage-filter { cursor: pointer; }
+    .prts-stage-filter:hover { box-shadow: 0 0 0 2px var(--prts-color-ring); }
+    .prts-stage-filter:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
     [data-prts-tooltip]:hover::after, [data-prts-tooltip]:focus-visible::after {
         background: var(--prts-color-text) !important;
         color: var(--prts-color-surface) !important;

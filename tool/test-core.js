@@ -1071,6 +1071,9 @@ test('unified settings migrate legacy values, validate types and prefer saved in
     assert.strictEqual(migrated.displayMode, 'HIDE');
     assert.strictEqual(migrated.trainingCheck, true);
     assert.strictEqual(migrated.trainingPromptStyle, 'COMPACT');
+    assert.strictEqual(migrated.clickStageFilter, false);
+    assert.strictEqual(normalizeConfig({ clickStageFilter: true, stageBadge: false }).clickStageFilter, true);
+    assert.strictEqual(normalizeConfig({ clickStageFilter: 'true' }).clickStageFilter, false);
     assert.strictEqual(migrated.hideOperatorMatchingSettings, true);
     assert.strictEqual(normalizeConfig({ hideOperatorMatchingSettings: false }).hideOperatorMatchingSettings, false);
     assert.strictEqual(normalizeConfig({ trainingPromptStyle: 'DETAILED' }).trainingPromptStyle, 'DETAILED');
@@ -1600,6 +1603,124 @@ test('stage badges retry delayed metadata and recover after a heading rerender',
   } finally {
     CONFIG.stageBadge = savedStageBadge;
     context.document = savedDocument;
+  }
+});
+
+test('optional stage clicks apply the canonical level through the live site filter and restore on disable', () => {
+  const savedConfig = { ...CONFIG };
+  const savedDocument = context.document;
+  const savedToast = context.showPrtsToast;
+  const badge = createTestElement('span', '灰石剧场');
+  badge.className = 'prts-level-badge';
+  badge.title = '灰石剧场';
+  const stageCode = createTestElement('span', '灰石剧场');
+  stageCode.className = 'inline-block font-bold my-auto';
+  const levelTag = createTestElement('span');
+  levelTag.className = 'bp6-tag';
+  levelTag.appendChild(stageCode);
+  levelTag.appendChild(createTestElement('span', ' | 米诺斯 | 剿灭作战'));
+  levelTag.querySelector = selector => selector === '.inline-block.font-bold.my-auto' ? stageCode : null;
+  const level = { stageId: 'camp_r_42', catThree: '灰石剧场' };
+  levelTag.__reactFiber$test = { memoizedProps: {}, return: { memoizedProps: { level } } };
+  const card = createTestElement();
+  card.appendChild(badge);
+  card.appendChild(levelTag);
+  card.__reactFiber$test = { memoizedProps: { operation: { parsedContent: { stageName: '旧关卡名' } } } };
+  card.querySelector = selector => card.children.find(child => child.classList.contains(selector.slice(1))) || null;
+  card.querySelectorAll = selector => selector === '.bp4-tag, .bp6-tag' ? card.children.filter(child => child.classList.contains('bp6-tag'))
+    : selector === '.prts-stage-filter' ? card.children.filter(child => child.classList.contains('prts-stage-filter')) : [];
+  const calls = [];
+  let query = { keyword: '低配', orderBy: 'hot', uploaderId: 123, levelKeyword: '' };
+  const filterFiber = { memoizedProps: { value: '', onChange: value => {
+    calls.push(value);
+    query = { ...query, levelKeyword: value };
+  } } };
+  const icon = { __reactFiber$test: { memoizedProps: { items: [
+    { stageId: 'camp_r_42', catThree: '灰石剧场' },
+    { stageId: 'act1bossrush_01', catThree: 'TN-1' }
+  ] }, return: filterFiber } };
+  let filterPresent = true;
+  const filterCard = { querySelector: () => filterPresent ? icon : null };
+  context.document = { querySelector: () => ({ closest: () => filterCard }) };
+  const toasts = [];
+  context.showPrtsToast = (...args) => toasts.push(args);
+  let prevented = 0;
+  let stopped = 0;
+  const event = key => ({ key, preventDefault: () => prevented++, stopPropagation: () => stopped++ });
+  try {
+    CONFIG.clickStageFilter = false;
+    context.syncCardStageFilters(card);
+    assert.strictEqual(badge.onclick, undefined);
+    assert.strictEqual(levelTag.onclick, undefined);
+
+    CONFIG.clickStageFilter = true;
+    context.syncCardStageFilters(card);
+    for (const target of [badge, levelTag]) {
+      assert.strictEqual(target.attributes.get('role'), 'button');
+      assert.strictEqual(target.attributes.get('tabindex'), '0');
+      assert.strictEqual(target.attributes.get('aria-label'), '筛选关卡：灰石剧场');
+      target.onclick(event());
+      target.onkeydown(event('Enter'));
+      target.onkeydown(event(' '));
+      target.onkeydown(event('Escape'));
+    }
+    assert.deepStrictEqual(calls, Array(6).fill('camp_r_42'));
+    assert.strictEqual(prevented, 6);
+    assert.strictEqual(stopped, 6);
+    assert.deepStrictEqual(query, { keyword: '低配', orderBy: 'hot', uploaderId: 123, levelKeyword: 'camp_r_42' });
+    for (const [stageId, expected] of [['camp_r_42#f#', 'camp_r_42'], ['act1bossrush_tm01', 'act1bossrush_01']]) {
+      level.stageId = stageId;
+      context.syncCardStageFilters(card);
+      badge.onclick(event());
+      assert.strictEqual(calls.at(-1), expected);
+    }
+    level.stageId = 'camp_r_42';
+    context.syncCardStageFilters(card);
+
+    filterFiber.memoizedProps = { value: 'camp_r_42', onChange: value => calls.push(`new:${value}`) };
+    badge.onclick(event());
+    assert.strictEqual(calls.at(-1), 'new:camp_r_42');
+    filterPresent = false;
+    levelTag.onclick(event());
+    assert.strictEqual(calls.length, 9);
+    assert.strictEqual(toasts[0][0], '无法应用关卡筛选');
+    context.syncCardStageFilters(card);
+    assert.strictEqual(badge.onclick, null);
+    filterPresent = true;
+
+    CONFIG.stageBadge = false;
+    badge.remove();
+    context.syncCardStageFilters(card);
+    levelTag.onclick(event());
+    assert.strictEqual(calls.at(-1), 'new:camp_r_42');
+    CONFIG.clickStageFilter = false;
+    context.syncCardStageFilters(card);
+    assert.strictEqual(levelTag.onclick, null);
+    assert.strictEqual(levelTag.onkeydown, null);
+    assert(!levelTag.classList.contains('prts-stage-filter'));
+    assert.strictEqual(levelTag.attributes.size, 0);
+    assert.strictEqual(levelTag.textContent, '灰石剧场 | 米诺斯 | 剿灭作战');
+    assert.strictEqual(badge.title, '灰石剧场');
+
+    CONFIG.clickStageFilter = true;
+    delete levelTag.__reactFiber$test;
+    card.__reactFiber$test.memoizedProps.operation.parsedContent.stageName = '自定义关卡#f#';
+    context.syncCardStageFilters(card);
+    levelTag.onclick(event());
+    assert.strictEqual(calls.at(-1), 'new:自定义关卡#f#');
+    delete card.__reactFiber$test;
+    context.syncCardStageFilters(card);
+    levelTag.onclick(event());
+    assert.strictEqual(calls.at(-1), 'new:camp_r_42');
+    levelTag.remove();
+    card.appendChild(badge);
+    context.syncCardStageFilters(card);
+    badge.onclick(event());
+    assert.strictEqual(calls.at(-1), 'new:camp_r_42');
+  } finally {
+    Object.assign(CONFIG, savedConfig);
+    context.document = savedDocument;
+    context.showPrtsToast = savedToast;
   }
 });
 

@@ -65,6 +65,7 @@
         collapseDescription: { group: '作业卡片', label: '折叠作业描述', icon: 'collapseDescription', default: true, legacyKey: 'prts_cfg_link', alias: 'cleanLink', reloadOnDisable: true },
         operatorAvatars: { group: '作业卡片', label: '干员头像', icon: 'operatorAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         stageBadge: { group: '作业卡片', label: '显示关卡代号', icon: 'stageBadge', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        clickStageFilter: { group: '作业卡片', label: '点击关卡筛选', icon: 'clickStageFilter', default: false },
         showExactTime: { group: '作业卡片', label: '显示完整上传时间', icon: 'exactTime', default: false, legacyKey: 'prts_cfg_exact_time' },
         cleanLink: { group: '作业卡片', label: '视频链接按钮', icon: 'videoLink', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
@@ -2536,6 +2537,9 @@ function createSklandImportCancelledError() {
         vertical-align: middle;
     }
     body.high-contrast-theme .prts-level-badge { border-color: var(--prts-color-primary); }
+    .prts-stage-filter { cursor: pointer; }
+    .prts-stage-filter:hover { box-shadow: 0 0 0 2px var(--prts-color-ring); }
+    .prts-stage-filter:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
     [data-prts-tooltip]:hover::after, [data-prts-tooltip]:focus-visible::after {
         background: var(--prts-color-text) !important;
         color: var(--prts-color-surface) !important;
@@ -3419,6 +3423,7 @@ function createSklandImportCancelledError() {
         collapseDescription: 'M2 1h12v1.5H2Zm0 3h12v1.5H2Zm0 3h8v1.5H2Zm2 6 4-4 4 4-1.1 1.1L8 11.2l-2.9 2.9Z',
         operatorAvatars: 'M1 1h14v14H1Zm1.5 1.5v11h11v-11ZM10.5 6a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0ZM4 12c0-2 1.5-3 4-3s4 1 4 3Z',
         stageBadge: 'M8 1a5 5 0 0 1 5 5c0 3.5-5 9-5 9S3 9.5 3 6a5 5 0 0 1 5-5Zm0 1.5A3.5 3.5 0 0 0 4.5 6c0 2.1 2.2 5.2 3.5 6.7 1.3-1.5 3.5-4.6 3.5-6.7A3.5 3.5 0 0 0 8 2.5ZM10 6a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z',
+        clickStageFilter: 'M1 2h14v1.5L9 9v5l-2 1V9L1 3.5Zm2.7 1.5L8 7.4l4.3-3.9Z',
         exactTime: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM7 4h1.5v3.6l2.8 1.6-.8 1.3L7 8.4Z',
         videoLink: 'M1 2h8v6H7.5V3.5h-5v7H6V12H1ZM4 5l3 2-3 2Zm5 4h4v1.5H9Zm-1-2h2v1.5H8a2 2 0 0 0 0 4h2V14H8a3.5 3.5 0 0 1 0-7Zm4 0h.5a3.5 3.5 0 0 1 0 7H12v-1.5h.5a2 2 0 0 0 0-4H12Z',
         hideVideo: 'M1 1.5 14.5 15l1-1L2 0ZM1 5h1.5v6.5h6V10L10 11.5V13H1ZM6 3h4v2.5L15 3v9l-3-1.5v-2L13.5 10V5.5L10 7.3V4.5H7.5Z',
@@ -5798,6 +5803,74 @@ function createSklandImportCancelledError() {
         }
     }
 
+    function getStageFilter() {
+        const filterCard = findSearchInputGroup()?.closest(BP_SELECTORS.card);
+        const icon = filterCard?.querySelector('[data-icon="area-of-interest"], .bp4-icon-area-of-interest, .bp6-icon-area-of-interest');
+        let fiber = getFiberNode(icon);
+        let levels = [];
+        for (let depth = 0; fiber && depth < 30; depth++, fiber = fiber.return) {
+            const props = fiber.memoizedProps;
+            if (Array.isArray(props?.items)) levels = props.items;
+            if (typeof props?.value === 'string' && typeof props.onChange === 'function') return { onChange: props.onChange, levels };
+        }
+        return null;
+    }
+
+    function syncCardStageFilters(cardInner) {
+        if (!CONFIG.clickStageFilter && !cardInner.querySelector('.prts-stage-filter')) return;
+
+        const badge = cardInner.querySelector('.prts-level-badge');
+        const levelTag = Array.from(cardInner.querySelectorAll(BP_SELECTORS.tag))
+            .find(tag => tag.querySelector('.inline-block.font-bold.my-auto'));
+        let stageName = extractOperationFromFiber(cardInner)?.parsedContent?.stageName;
+        let fiber = getFiberNode(levelTag);
+        for (let depth = 0; fiber && depth < 15; depth++, fiber = fiber.return) {
+            if (typeof fiber.memoizedProps?.level?.stageId === 'string') {
+                stageName = fiber.memoizedProps.level.stageId;
+                break;
+            }
+        }
+        if (typeof stageName !== 'string' || !stageName.trim()) {
+            stageName = levelTag?.querySelector('.inline-block.font-bold.my-auto')?.textContent || badge?.textContent || '';
+        }
+        stageName = stageName.trim();
+        const enabled = CONFIG.clickStageFilter && stageName && Boolean(getStageFilter());
+        const targets = new Set([badge, levelTag, ...cardInner.querySelectorAll('.prts-stage-filter')].filter(Boolean));
+        targets.forEach(target => {
+            if (!enabled) {
+                if (!target.classList.contains('prts-stage-filter')) return;
+                target.classList.remove('prts-stage-filter');
+                ['role', 'tabindex', 'aria-label'].forEach(name => target.removeAttribute(name));
+                target.onclick = null;
+                target.onkeydown = null;
+                return;
+            }
+            target.classList.add('prts-stage-filter');
+            target.setAttribute('role', 'button');
+            target.setAttribute('tabindex', '0');
+            const label = badge?.textContent || levelTag?.querySelector('.inline-block.font-bold.my-auto')?.textContent || stageName;
+            target.setAttribute('aria-label', `筛选关卡：${label}`);
+            target.onclick = event => {
+                if (!CONFIG.clickStageFilter) return;
+                event.preventDefault();
+                event.stopPropagation();
+                const filter = getStageFilter();
+                if (!filter) {
+                    showPrtsToast('无法应用关卡筛选', 'error', '请刷新页面后重试');
+                    return;
+                }
+                // 原站筛选器只列出普通关卡，突袭和磨难作业也应选中对应的普通关卡。
+                const normalStageName = stageName.replace(/#f#$/, '').replace('bossrush_tm', 'bossrush_');
+                const level = filter.levels.find(item => item.stageId === stageName || item.stageId === normalStageName ||
+                    item.levelId === stageName || item.name === stageName || item.catThree === stageName);
+                filter.onChange(level?.stageId || stageName);
+            };
+            target.onkeydown = event => {
+                if (event.key === 'Enter' || event.key === ' ') target.onclick(event);
+            };
+        });
+    }
+
     function replaceCardOperatorAvatars(cardInner) {
         if (!CONFIG.operatorAvatars) return;
         const allDivs = Array.from(cardInner.querySelectorAll('div'));
@@ -6138,6 +6211,7 @@ function createSklandImportCancelledError() {
         if (CONFIG.hidePrtsBadge) getCardTypeTag(cardInner, 'PRTS')?.remove();
         syncOperationCardTime(cardInner);
         addStageBadge(cardInner);
+        syncCardStageFilters(cardInner);
         replaceCardOperatorAvatars(cardInner);
         cleanBilibiliLinks(cardInner);
         collapseCardDescription(cardInner);

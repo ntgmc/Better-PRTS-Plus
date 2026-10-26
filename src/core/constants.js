@@ -23,6 +23,7 @@
         collapseDescription: { group: '作业卡片', label: '折叠作业描述', icon: 'collapseDescription', default: true, legacyKey: 'prts_cfg_link', alias: 'cleanLink', reloadOnDisable: true },
         operatorAvatars: { group: '作业卡片', label: '干员头像', icon: 'operatorAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         stageBadge: { group: '作业卡片', label: '显示关卡代号', icon: 'stageBadge', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
+        clickStageFilter: { group: '作业卡片', label: '点击关卡筛选', icon: 'clickStageFilter', default: false },
         showExactTime: { group: '作业卡片', label: '显示完整上传时间', icon: 'exactTime', default: false, legacyKey: 'prts_cfg_exact_time' },
         cleanLink: { group: '作业卡片', label: '视频链接按钮', icon: 'videoLink', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
