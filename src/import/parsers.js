@@ -182,14 +182,6 @@
         return (accountsData[normalizeAccountId(id)] || []).length;
     }
 
-    function safeJsonParse(rawValue, fallback) {
-        try {
-            return JSON.parse(typeof rawValue === 'string' ? rawValue.replace(/^\uFEFF/, '') : rawValue);
-        } catch (e) {
-            return fallback;
-        }
-    }
-
     function isOwnedOperatorRecord(op) {
         if (!op || typeof op !== 'object') return false;
         if (!Object.prototype.hasOwnProperty.call(op, 'own')) return true;
@@ -230,48 +222,28 @@
     }
 
     function parseImportedOperatorNames(rawText, fileName = '') {
-        const text = String(rawText || '');
-
-        const parsed = safeJsonParse(text, undefined);
-        if (parsed !== undefined) return parseOperatorNamesFromJson(parsed);
-        if (/^[\[{]/.test(text.trimStart()) || /\.json$/i.test(fileName)) {
-            throw new Error('JSON 格式错误，请检查内容是否完整、语法是否正确。');
-        }
-
-        return parseOperatorNamesFromText(text);
+        return parseImportedOperators(rawText, fileName).names;
     }
 
     function parseImportedOperators(rawText, fileName = '') {
-        const names = parseImportedOperatorNames(rawText, fileName);
-        const records = safeJsonParse(String(rawText || ''), null);
-        const training = {};
-        if (Array.isArray(records)) {
-            records.forEach(op => {
-                if (!isOwnedOperatorRecord(op)) return;
-                const name = normalizeOperatorName(op?.name);
-                if (!names.includes(name)) return;
-                Object.defineProperty(training, name, {
-                    value: normalizeOperatorTraining(op), enumerable: true, configurable: true
-                });
-            });
+        const text = String(rawText || '');
+        const records = safeJsonParse(text, undefined);
+        if (records === undefined) {
+            if (/^[\[{]/.test(text.replace(/^\uFEFF/, '').trimStart()) || /\.json$/i.test(fileName)) {
+                throw new Error('JSON 格式错误，请检查内容是否完整、语法是否正确。');
+            }
+            return { names: parseOperatorNamesFromText(text), training: {} };
         }
+        const names = parseOperatorNamesFromJson(records);
+        const importedNames = new Set(names);
+        const training = {};
+        records.forEach(op => {
+            if (!isOwnedOperatorRecord(op)) return;
+            const name = normalizeOperatorName(op?.name);
+            if (!importedNames.has(name)) return;
+            Object.defineProperty(training, name, {
+                value: normalizeOperatorTraining(op), enumerable: true, configurable: true
+            });
+        });
         return { names, training };
-    }
-
-    function isSklandHost() {
-        return /(^|\.)skland\.com$/i.test(window.location.hostname);
-    }
-
-    function isPrtsHost() {
-        return /(^|\.)prts\.plus$/i.test(window.location.hostname) || /(^|\.)zoot\.plus$/i.test(window.location.hostname);
-    }
-
-    function isPlainRecord(value) {
-        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-    }
-
-    function stringValue(value) {
-        if (typeof value === 'string') return value.trim();
-        if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-        return '';
     }

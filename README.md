@@ -126,6 +126,10 @@
 
 备份不包含森空岛登录凭据。
 
+## 开发与验证
+
+源码结构、构建命令和回归验证见 [开发说明](docs/development.md)。
+
 ## 发布版本
 
 发布前运行 `node tool/prepare-release.js --init X.Y.Z [normal|important|urgent]`，自动创建更新说明文件并登记版本；省略级别时默认为普通更新。编辑 `release-notes/X.Y.Z.md` 后运行发布脚本即可。直接发布尚未登记的版本时，也会自动生成文件并提示填写，重复运行会保留已有正文。

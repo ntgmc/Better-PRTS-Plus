@@ -19,7 +19,9 @@
 
         function request(options = {}) {
             collect(options);
-            if (frameId !== null) cancelFrame(frameId);
+            if (delayId !== null) clearDelay(delayId);
+            delayId = null;
+            if (frameId !== null) return;
             frameId = requestFrame(() => {
                 frameId = null;
                 run();
@@ -28,6 +30,7 @@
 
         function schedule(delay = 80, options = {}) {
             collect(options);
+            if (frameId !== null) return;
             if (delayId !== null) clearDelay(delayId);
             delayId = setDelay(() => {
                 delayId = null;
@@ -39,8 +42,8 @@
             const dirtyCards = pendingCards
                 ? Array.from(pendingCards).filter(card => card.isConnected !== false)
                 : [];
+            const processAll = forceFull || pendingCards === null;
             pendingCards = null;
-            const processAll = forceFull || dirtyCards.length === 0;
             forceFull = false;
             return { cards: processAll ? allCards : dirtyCards, processAll };
         }

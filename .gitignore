@@ -3,6 +3,7 @@ tool/*
 !tool/check-release.ps1
 !tool/sync-readme-version.ps1
 !tool/build-userscript.ps1
+!tool/userscript-sources.json
 !tool/update-operator-data.ps1
 !tool/test-core.js
 !tool/operator-data-update-summary.json

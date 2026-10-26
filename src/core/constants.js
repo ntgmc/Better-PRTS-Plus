@@ -95,18 +95,3 @@
         portal: '.bp4-portal, .bp6-portal',
         dialog: '.bp4-dialog, .bp6-dialog'
     };
-
-    // 全局状态变量
-    let activeAccountId = 1;
-    let nextAccountId = 4;
-    let accountsData = { 1:[], 2: [], 3:[] }; // 各账号的干员名单
-    let accountsTraining = { 1: {}, 2: {}, 3: {} };
-    let accountMeta = createDefaultAccountMeta();
-
-    let ownedOpsSet = new Set();
-    const operationCache = new WeakMap();
-    const cardDiagnosticsCache = new WeakMap();
-
-    let isProcessingFilter = false;
-    let lastRouteKey = `${window.location.pathname}${window.location.search}`;
-    let operatorImportDialogCleanup = null;

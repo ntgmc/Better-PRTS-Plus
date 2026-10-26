@@ -4,21 +4,13 @@ const path = require('path');
 const vm = require('vm');
 
 const repoRoot = path.resolve(__dirname, '..');
-const sourceFiles = [
-  'src/core/constants.js',
-  'src/data/operators.generated.js',
-  'src/data/module-types.generated.js',
-  'src/data/resources.js',
-  'src/import/parsers.js',
-  'src/core/account-state.js',
-  'src/core/filter-scheduler.js',
-  'src/import/skland.js',
-  'src/dom/card-resolution.js',
-  'src/filter/operation-matching.js',
-  'src/import/accounts.js',
-  'src/dom/page-enhancements.js',
-  'src/ui/panels.js'
-];
+const sourceFiles = require('./userscript-sources.json').filter(file => ![
+  'src/meta/userscript-header.js', 'src/styles/styles.js', 'src/styles/skland.js',
+  'src/styles/site-redesign.js', 'src/ui/dom-helpers.js',
+  'src/core/release-manifest.js', 'src/core/script-updates.js',
+  'src/ui/import-controls.js', 'src/ui/filter-controls.js', 'src/main.js'
+].includes(file));
+const httpSource = fs.readFileSync(path.join(repoRoot, 'src/core/http.js'), 'utf8');
 
 const source = sourceFiles
   .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8'))
@@ -235,7 +227,7 @@ function createResourceHarness(cache = null, builtinVersion = resourceSnapshot.r
     }
   };
   if (cache !== null) saved.set(RESOURCE_CACHE_KEY, cache);
-  vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/data/resources.js'), 'utf8') + `
+  vm.runInNewContext(httpSource + '\n' + fs.readFileSync(path.join(repoRoot, 'src/data/resources.js'), 'utf8') + `
     globalThis.api = { RESOURCE_URLS, loadCachedResources, updateResources, applyResourceData };
   `, sandbox);
   return {
@@ -489,7 +481,7 @@ function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
     setTimeout: callback => { const id = Symbol(); timers.set(id, () => { timers.delete(id); callback(); }); return id; },
     clearTimeout: id => timers.delete(id)
   };
-  vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/data/resources.js'), 'utf8') + '\n' + releaseManifestSource + '\n' +
+  vm.runInNewContext(httpSource + '\n' + fs.readFileSync(path.join(repoRoot, 'src/data/resources.js'), 'utf8') + '\n' + releaseManifestSource + '\n' +
     fs.readFileSync(path.join(repoRoot, 'src/core/script-updates.js'), 'utf8') + `
     globalThis.api = { checkScriptUpdates, compareScriptVersions, getAvailableScriptUpdate, validateReleaseManifest, SCRIPT_IGNORED_VERSION_KEY, SCRIPT_UPDATE_URLS };
   `, sandbox);
@@ -1012,7 +1004,7 @@ test('script icons cover semantic uses with distinct paths and accessible 16px S
   assert.strictEqual(new Set(entries.map(([, path]) => path)).size, entries.length);
   const settingIcons = Object.values(CONFIG_DEFINITIONS).filter(definition => definition.icon).map(definition => definition.icon);
   assert.strictEqual(new Set(settingIcons).size, settingIcons.length, 'different settings need different symbols');
-  for (const file of ['src/ui/panels.js', 'src/ui/import-controls.js', 'src/dom/page-enhancements.js']) {
+  for (const file of sourceFiles.concat('src/ui/import-controls.js', 'src/ui/filter-controls.js')) {
     const source = fs.readFileSync(path.join(repoRoot, file), 'utf8');
     for (const [, , name] of source.matchAll(/(?:icon:\s*|createPrtsIcon\(\s*)(['"])(\w+)\1/g)) {
       assert(name === 'skland' || sandbox.iconPaths[name], `${file}: unregistered icon ${name}`);
@@ -1261,7 +1253,8 @@ test('site redesign defaults off, persists and restores immediately without touc
 test('both host branches inject icon, toast layout, state and reduced-motion styles', () => {
   for (const skland of [false, true]) {
     let css = '';
-    vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/styles/styles.js'), 'utf8'), {
+    vm.runInNewContext(['src/styles/skland.js', 'src/styles/site-redesign.js', 'src/styles/styles.js']
+      .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), {
       isSklandHost: () => skland,
       GM_addStyle: styles => { css += styles; }
     });
@@ -1340,7 +1333,7 @@ test('Skland sync reports success, failure and cancellation and restores control
       isSklandImportCancelledError: error => error.message === 'cancel',
       console: { error() {} }
     };
-    vm.runInNewContext(['src/ui/dom-helpers.js', 'src/ui/panels.js'].map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), sandbox);
+    vm.runInNewContext(['src/ui/dom-helpers.js', 'src/ui/skland-panel.js'].map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), sandbox);
     sandbox.showPrtsToast = (...args) => { messages.push(args); return (...next) => messages.push(next); };
     sandbox.formatSklandImportSummary = () => '账号 1 已导入 2 名干员。';
     sandbox.createSklandImportPanel();
@@ -3344,7 +3337,7 @@ function createFilterPage(displayMode) {
   };
   page.requestAnimationFrame = callback => { const id = Symbol(); frames.set(id, callback); return id; };
   page.cancelAnimationFrame = id => frames.delete(id);
-  vm.runInContext(['src/ui/dom-helpers.js', 'src/ui/import-controls.js']
+  vm.runInContext(['src/ui/dom-helpers.js', 'src/ui/import-controls.js', 'src/ui/filter-controls.js']
     .map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), page);
   page.isFilterDisabledPage = () => false;
   page.findSearchInputGroup = () => searchGroup;
@@ -3490,8 +3483,8 @@ test('card text mutations retry delayed stage badges while script result text is
 
   stage.innerText = 'YW-8';
   const mutations = [{ type: 'characterData', target: { nodeType: 3, parentElement: stage } }];
-  assert.strictEqual(page.hasRelevantDomMutation(mutations), true);
-  const dirtyCards = page.collectDirtyCardsFromMutations(mutations);
+  const { dirtyCards, scaffoldChanged } = page.collectPageMutations(mutations);
+  assert.strictEqual(scaffoldChanged, false);
   assert.strictEqual(dirtyCards.size, 1);
   assert(dirtyCards.has(card));
   page.requestFilterUpdate({ forceFull: false, dirtyCards });
@@ -3501,10 +3494,9 @@ test('card text mutations retry delayed stage badges while script result text is
   const results = page.document.getElementById('prts-filter-results');
   results.closest = selector => selector.includes('#prts-filter-results') ? results : null;
   const scriptText = [{ type: 'characterData', target: { nodeType: 3, parentElement: results } }];
-  assert.strictEqual(page.hasRelevantDomMutation(scriptText), false);
-  assert.strictEqual(page.collectDirtyCardsFromMutations(scriptText).size, 0);
+  assert.strictEqual(page.collectPageMutations(scriptText).dirtyCards.size, 0);
   const unrelatedText = [{ type: 'characterData', target: { nodeType: 3, parentElement: createTestElement() } }];
-  assert.strictEqual(page.hasRelevantDomMutation(unrelatedText), false);
+  assert.strictEqual(page.collectPageMutations(unrelatedText).scaffoldChanged, false);
 });
 
 test('an empty filtered page explains hiding and can reveal cards without clearing the filter', () => {
@@ -3939,6 +3931,150 @@ test('filter coordinator can schedule again after a run throws', () => {
   shouldThrow = false;
   harness.coordinator.request();
   assert.doesNotThrow(() => runOnlyCallback(harness.frames));
+});
+
+test('source manifest covers every runtime fragment once and produces a complete script', () => {
+  const files = require('./userscript-sources.json');
+  const actual = fs.readdirSync(path.join(repoRoot, 'src'), { recursive: true })
+    .filter(file => file.endsWith('.js')).map(file => `src/${file.split(path.sep).join('/')}`).sort();
+  assert.strictEqual(new Set(files).size, files.length);
+  assert.deepStrictEqual([...files].sort(), actual);
+  new vm.Script(files.map(file => fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'));
+});
+
+test('initialization waits for a body and initializes only the active host interface', () => {
+  const main = fs.readFileSync(path.join(repoRoot, 'src/main.js'), 'utf8');
+  for (const skland of [false, true]) {
+    const calls = [];
+    let ready;
+    const page = {
+      document: { body: null, addEventListener: (name, callback) => { assert.strictEqual(name, 'DOMContentLoaded'); ready = callback; } },
+      isSklandHost: () => skland, isPrtsHost: () => !skland,
+      RESOURCE_CHECK_INTERVAL_MS: 3600000, setInterval() {},
+      ...Object.fromEntries(['loadCachedResources', 'updateResources', 'checkScriptUpdates', 'loadOwnedOps',
+        'registerAccountsDataChangeListener', 'createSklandImportPanel', 'initPrtsPage']
+        .map(name => [name, () => calls.push(name)]))
+    };
+    vm.runInNewContext('(function() {\n' + main, page);
+    assert.deepStrictEqual(calls, []);
+    page.document.body = {};
+    ready();
+    assert.deepStrictEqual(calls, ['loadCachedResources', 'updateResources', 'checkScriptUpdates', 'loadOwnedOps',
+      'registerAccountsDataChangeListener', skland ? 'createSklandImportPanel' : 'initPrtsPage']);
+  }
+});
+
+test('Fiber updates refresh training and video status even when card text stays unchanged', () => {
+  const { page, addCard } = createFilterPage('HIDE');
+  const { card, inner } = addCard({ opers: [{ name: '阿米娅' }] });
+  page.getCardSignature = () => { throw new Error('Fiber cards should not scan all card text'); };
+  const config = page.__testExports.CONFIG;
+  Object.assign(config, { trainingCheck: true, hideVideo: true });
+  page.applyFilterLogic();
+  assert.notStrictEqual(card.style.display, 'none');
+  inner.__reactFiber$test.memoizedProps.operation = { opers: [{ name: '阿米娅', requirements: { elite: 2 } }] };
+  page.applyFilterLogic();
+  assert(inner.querySelector('.prts-status-label').textContent.includes('待核验'));
+  inner.__reactFiber$test.memoizedProps.operation = { type: 'VIDEO', opers: [{ name: '阿米娅' }] };
+  page.applyFilterLogic();
+  assert.strictEqual(card.style.display, 'none');
+  assert.strictEqual(page.getCompatibilityDiagnostics().fiberCards, 1);
+});
+
+test('card resolution caches DOM fallbacks but follows late Fiber data and detachment', () => {
+  const { page, addCard } = createFilterPage('GRAY');
+  const { card, inner } = addCard({ opers: [{ name: '阿米娅' }] });
+  const fiber = inner.__reactFiber$test;
+  delete inner.__reactFiber$test;
+  let fallbacks = 0, signature = 'first';
+  page.getCardSignature = () => signature;
+  page.buildFallbackOperation = () => { fallbacks++; return { opers: [{ name: 'W' }], _isFallback: true }; };
+  const first = page.getOperationResolutionForCard(card, inner);
+  assert.strictEqual(first.source, 'fallback');
+  assert.strictEqual(page.getOperationResolutionForCard(card, inner), first);
+  assert.strictEqual(fallbacks, 1);
+  inner.__reactFiber$test = fiber;
+  assert.strictEqual(page.getOperationResolutionForCard(card, inner).operation, fiber.memoizedProps.operation);
+  delete inner.__reactFiber$test;
+  assert.strictEqual(page.getOperationResolutionForCard(card, inner).source, 'fallback');
+  assert.strictEqual(fallbacks, 2);
+  signature = 'changed';
+  page.getOperationResolutionForCard(card, inner);
+  assert.strictEqual(fallbacks, 3);
+});
+
+test('overlapping groups evaluate training once for each requirement entry', () => {
+  const page = createAccountPage(new Map(), 'prts.plus');
+  const original = page.checkOperatorTraining;
+  const evaluated = new Set();
+  page.checkOperatorTraining = (op, training) => {
+    assert(!evaluated.has(op), 'the same requirement should not be evaluated again during matching');
+    evaluated.add(op);
+    return original(op, training);
+  };
+  const operation = { groups: [
+    { name: 'A', opers: [{ name: '阿米娅', requirements: { elite: 2 } }, { name: 'W', requirements: { elite: 1 } }] },
+    { name: 'B', opers: [{ name: '阿米娅', requirements: { elite: 1 } }] }
+  ] };
+  const result = page.checkOperationAvailability(operation, new Set(['阿米娅', 'W']), 'PERFECT',
+    { 阿米娅: { elite: 2 }, W: { elite: 1 } }, true);
+  assert.strictEqual(result.isAvailable, true);
+  assert.strictEqual(evaluated.size, 3);
+});
+
+test('page observation enhances nested and delayed portals without rescanning the scaffold for card text', () => {
+  const { page, addCard } = createFilterPage('GRAY');
+  const { card, inner } = addCard({ opers: [{ name: '阿米娅' }] });
+  let callback, observed = 0, disconnected = false, scaffoldRuns = 0, enhancements = 0;
+  const timers = new Map();
+  page.Node = { ELEMENT_NODE: 1 };
+  page.MutationObserver = class {
+    constructor(fn) { callback = fn; }
+    observe() { observed++; }
+    disconnect() { disconnected = true; }
+  };
+  page.setInterval = fn => { timers.set(1, fn); return 1; };
+  page.clearInterval = id => timers.delete(id);
+  page.syncPageScaffold = () => { scaffoldRuns++; };
+  page.document.querySelectorAll = () => [];
+  page.enhancePopover = () => { enhancements++; };
+  card.matches = selector => selector.includes('ul > li');
+  inner.closest = selector => selector.includes('ul > li') ? card : null;
+  const stop = page.initPrtsPage();
+  assert.strictEqual(observed, 1);
+  callback([{ type: 'characterData', target: { nodeType: 3, parentElement: inner } }]);
+  assert.strictEqual(scaffoldRuns, 1);
+  const portal = { nodeType: 1, isConnected: true, closest: () => null, matches: () => true, querySelectorAll: () => [] };
+  const container = { nodeType: 1, closest: () => null, matches: () => false,
+    querySelectorAll: selector => selector.includes('portal') ? [portal] : [] };
+  callback([{ type: 'childList', target: page.document.body, addedNodes: [container], removedNodes: [] }]);
+  assert.strictEqual(enhancements, 1);
+  const text = { nodeType: 3, parentElement: { closest: selector => selector.includes('portal') ? portal : null } };
+  callback([{ type: 'characterData', target: text }]);
+  assert.strictEqual(enhancements, 2);
+  stop();
+  assert(disconnected);
+  assert.strictEqual(timers.size, 0);
+});
+
+test('immediate filtering keeps the pending frame, absorbs delays and avoids redundant runs', () => {
+  const h = createSchedulerHarness();
+  h.coordinator.takeWork([]);
+  const first = { isConnected: true }, second = { isConnected: true };
+  h.coordinator.schedule(80, { forceFull: false, dirtyCards: [first] });
+  h.coordinator.request({ forceFull: false, dirtyCards: [second] });
+  const frame = [...h.frames.keys()][0];
+  h.coordinator.request({ forceFull: false, dirtyCards: [] });
+  h.coordinator.schedule(80, { forceFull: false, dirtyCards: [] });
+  assert.strictEqual(h.delays.size, 0);
+  assert.strictEqual([...h.frames.keys()][0], frame);
+  runOnlyCallback(h.frames);
+  assert.deepStrictEqual(hostArray(h.coordinator.takeWork([]).cards), [first, second]);
+  h.coordinator.request({ forceFull: false, dirtyCards: [] });
+  runOnlyCallback(h.frames);
+  const work = h.coordinator.takeWork([first, second]);
+  assert.strictEqual(work.processAll, false);
+  assert.strictEqual(work.cards.length, 0);
 });
 
 (async () => {

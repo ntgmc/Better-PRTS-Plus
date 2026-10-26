@@ -40,6 +40,49 @@
 (function() {
     'use strict';
 
+    function safeJsonParse(rawValue, fallback) {
+        try {
+            return JSON.parse(typeof rawValue === 'string' ? rawValue.replace(/^\uFEFF/, '') : rawValue);
+        } catch (e) {
+            return fallback;
+        }
+    }
+
+    function isSklandHost() {
+        return /(^|\.)skland\.com$/i.test(window.location.hostname);
+    }
+
+    function isPrtsHost() {
+        return /(^|\.)prts\.plus$/i.test(window.location.hostname) || /(^|\.)zoot\.plus$/i.test(window.location.hostname);
+    }
+
+    function isPlainRecord(value) {
+        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+    }
+
+    function stringValue(value) {
+        if (typeof value === 'string') return value.trim();
+        if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+        return '';
+    }
+    function parseFloatingPosition(rawValue) {
+        const fallback = { top: '40%', isRight: true };
+        const parsed = typeof rawValue === 'string' ? safeJsonParse(rawValue, fallback) : rawValue;
+        const topValue = typeof parsed?.top === 'string' ? parsed.top : fallback.top;
+        const topNumber = /^-?\d+(?:\.\d+)?%$/.test(topValue) ? parseFloat(topValue) : parseFloat(fallback.top);
+        const clampedTop = Math.min(95, Math.max(0, topNumber));
+
+        return {
+            top: `${Number(clampedTop.toFixed(1))}%`,
+            isRight: parsed?.isRight !== false
+        };
+    }
+
+    function normalizeFilterMode(mode) {
+        return ['NONE', 'PERFECT', 'SUPPORT'].includes(mode) ? mode : 'NONE';
+    }
+
+
     // =========================================================================
     //                            MODULE 1: 配置与常量
     // =========================================================================
@@ -137,21 +180,6 @@
         portal: '.bp4-portal, .bp6-portal',
         dialog: '.bp4-dialog, .bp6-dialog'
     };
-
-    // 全局状态变量
-    let activeAccountId = 1;
-    let nextAccountId = 4;
-    let accountsData = { 1:[], 2: [], 3:[] }; // 各账号的干员名单
-    let accountsTraining = { 1: {}, 2: {}, 3: {} };
-    let accountMeta = createDefaultAccountMeta();
-
-    let ownedOpsSet = new Set();
-    const operationCache = new WeakMap();
-    const cardDiagnosticsCache = new WeakMap();
-
-    let isProcessingFilter = false;
-    let lastRouteKey = `${window.location.pathname}${window.location.search}`;
-    let operatorImportDialogCleanup = null;
     // =========================================================================
     //                            MODULE 2: 数据与样式
     // =========================================================================
@@ -229,6 +257,51 @@ Object.entries({
     AB: `4195_radian`,
     A: `4230_mcnist`
 }).forEach(([types, ids]) => ids.split(' ').forEach(id => { OP_MODULE_TYPES[`char_${id}`] = types; }));
+    function downloadFirstValidJson(urls, validate, maxBytes) {
+        const cancellations = new Set();
+        // 复用并发择优思路：https://github.com/kkocdko/user-scripts/blob/master/scripts/snippets/snippets.js (Unlicense)
+        return Promise.any(urls.map(url => {
+            let request;
+            let timeoutId;
+            let cancel;
+            return new Promise((resolve, reject) => {
+                cancel = () => {
+                    reject(new Error('下载请求已取消'));
+                    request?.abort();
+                };
+                cancellations.add(cancel);
+                // anonymous 请求在部分浏览器中忽略内置 timeout。
+                timeoutId = setTimeout(() => {
+                    reject(new Error('下载请求超时'));
+                    request?.abort();
+                }, 15000);
+                request = GM_xmlhttpRequest({
+                    method: 'GET',
+                    url,
+                    anonymous: true,
+                    timeout: 15000,
+                    onload: response => {
+                        try {
+                            if (response.status !== 200) throw new Error(`下载请求失败：HTTP ${response.status}`);
+                            if (typeof response.responseText !== 'string' || response.responseText.length > maxBytes) {
+                                throw new Error('下载文件无效或过大');
+                            }
+                            resolve(validate(JSON.parse(response.responseText)));
+                        } catch (error) { reject(error); }
+                    },
+                    onerror: () => reject(new Error('下载请求失败')),
+                    ontimeout: () => reject(new Error('下载请求超时')),
+                    onabort: () => reject(new Error('下载请求已取消'))
+                });
+            }).finally(() => {
+                clearTimeout(timeoutId);
+                cancellations.delete(cancel);
+            });
+        })).finally(() => {
+            cancellations.forEach(cancel => cancel());
+        });
+    }
+
     const RESOURCE_URL = 'https://raw.githubusercontent.com/ntgmc/Better-PRTS-Plus/main/resources/data.json';
     const RESOURCE_URLS = [
         RESOURCE_URL,
@@ -287,51 +360,6 @@ Object.entries({
         } catch (error) {
             console.warn('[Better PRTS] 资源缓存读取失败，使用内置资源', error);
         }
-    }
-
-    function downloadFirstValidJson(urls, validate, maxBytes) {
-        const cancellations = new Set();
-        // 复用并发择优思路：https://github.com/kkocdko/user-scripts/blob/master/scripts/snippets/snippets.js (Unlicense)
-        return Promise.any(urls.map(url => {
-            let request;
-            let timeoutId;
-            let cancel;
-            return new Promise((resolve, reject) => {
-                cancel = () => {
-                    reject(new Error('下载请求已取消'));
-                    request?.abort();
-                };
-                cancellations.add(cancel);
-                // anonymous 请求在部分浏览器中忽略内置 timeout。
-                timeoutId = setTimeout(() => {
-                    reject(new Error('下载请求超时'));
-                    request?.abort();
-                }, 15000);
-                request = GM_xmlhttpRequest({
-                    method: 'GET',
-                    url,
-                    anonymous: true,
-                    timeout: 15000,
-                    onload: response => {
-                        try {
-                            if (response.status !== 200) throw new Error(`下载请求失败：HTTP ${response.status}`);
-                            if (typeof response.responseText !== 'string' || response.responseText.length > maxBytes) {
-                                throw new Error('下载文件无效或过大');
-                            }
-                            resolve(validate(JSON.parse(response.responseText)));
-                        } catch (error) { reject(error); }
-                    },
-                    onerror: () => reject(new Error('下载请求失败')),
-                    ontimeout: () => reject(new Error('下载请求超时')),
-                    onabort: () => reject(new Error('下载请求已取消'))
-                });
-            }).finally(() => {
-                clearTimeout(timeoutId);
-                cancellations.delete(cancel);
-            });
-        })).finally(() => {
-            cancellations.forEach(cancel => cancel());
-        });
     }
 
     function updateResources() {
@@ -546,14 +574,6 @@ Object.entries({
         return (accountsData[normalizeAccountId(id)] || []).length;
     }
 
-    function safeJsonParse(rawValue, fallback) {
-        try {
-            return JSON.parse(typeof rawValue === 'string' ? rawValue.replace(/^\uFEFF/, '') : rawValue);
-        } catch (e) {
-            return fallback;
-        }
-    }
-
     function isOwnedOperatorRecord(op) {
         if (!op || typeof op !== 'object') return false;
         if (!Object.prototype.hasOwnProperty.call(op, 'own')) return true;
@@ -594,50 +614,30 @@ Object.entries({
     }
 
     function parseImportedOperatorNames(rawText, fileName = '') {
-        const text = String(rawText || '');
-
-        const parsed = safeJsonParse(text, undefined);
-        if (parsed !== undefined) return parseOperatorNamesFromJson(parsed);
-        if (/^[\[{]/.test(text.trimStart()) || /\.json$/i.test(fileName)) {
-            throw new Error('JSON 格式错误，请检查内容是否完整、语法是否正确。');
-        }
-
-        return parseOperatorNamesFromText(text);
+        return parseImportedOperators(rawText, fileName).names;
     }
 
     function parseImportedOperators(rawText, fileName = '') {
-        const names = parseImportedOperatorNames(rawText, fileName);
-        const records = safeJsonParse(String(rawText || ''), null);
-        const training = {};
-        if (Array.isArray(records)) {
-            records.forEach(op => {
-                if (!isOwnedOperatorRecord(op)) return;
-                const name = normalizeOperatorName(op?.name);
-                if (!names.includes(name)) return;
-                Object.defineProperty(training, name, {
-                    value: normalizeOperatorTraining(op), enumerable: true, configurable: true
-                });
-            });
+        const text = String(rawText || '');
+        const records = safeJsonParse(text, undefined);
+        if (records === undefined) {
+            if (/^[\[{]/.test(text.replace(/^\uFEFF/, '').trimStart()) || /\.json$/i.test(fileName)) {
+                throw new Error('JSON 格式错误，请检查内容是否完整、语法是否正确。');
+            }
+            return { names: parseOperatorNamesFromText(text), training: {} };
         }
+        const names = parseOperatorNamesFromJson(records);
+        const importedNames = new Set(names);
+        const training = {};
+        records.forEach(op => {
+            if (!isOwnedOperatorRecord(op)) return;
+            const name = normalizeOperatorName(op?.name);
+            if (!importedNames.has(name)) return;
+            Object.defineProperty(training, name, {
+                value: normalizeOperatorTraining(op), enumerable: true, configurable: true
+            });
+        });
         return { names, training };
-    }
-
-    function isSklandHost() {
-        return /(^|\.)skland\.com$/i.test(window.location.hostname);
-    }
-
-    function isPrtsHost() {
-        return /(^|\.)prts\.plus$/i.test(window.location.hostname) || /(^|\.)zoot\.plus$/i.test(window.location.hostname);
-    }
-
-    function isPlainRecord(value) {
-        return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-    }
-
-    function stringValue(value) {
-        if (typeof value === 'string') return value.trim();
-        if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-        return '';
     }
     // =========================================================================
     //                       MODULE 2: 账户状态与迁移
@@ -902,7 +902,9 @@ Object.entries({
 
         function request(options = {}) {
             collect(options);
-            if (frameId !== null) cancelFrame(frameId);
+            if (delayId !== null) clearDelay(delayId);
+            delayId = null;
+            if (frameId !== null) return;
             frameId = requestFrame(() => {
                 frameId = null;
                 run();
@@ -911,6 +913,7 @@ Object.entries({
 
         function schedule(delay = 80, options = {}) {
             collect(options);
+            if (frameId !== null) return;
             if (delayId !== null) clearDelay(delayId);
             delayId = setDelay(() => {
                 delayId = null;
@@ -922,8 +925,8 @@ Object.entries({
             const dirtyCards = pendingCards
                 ? Array.from(pendingCards).filter(card => card.isConnected !== false)
                 : [];
+            const processAll = forceFull || pendingCards === null;
             pendingCards = null;
-            const processAll = forceFull || dirtyCards.length === 0;
             forceFull = false;
             return { cards: processAll ? allCards : dirtyCards, processAll };
         }
@@ -943,9 +946,249 @@ Object.entries({
 
         return { request, schedule, takeWork, reset, dispose };
     }
-const SKLAND_IMPORT_CANCELLED_CODE = 'SKLAND_IMPORT_CANCELLED';
+    // 获取 React Fiber 节点
+    function getFiberNode(element) {
+        if (!element) return null;
+        const key = Object.keys(element).find(k => k.startsWith('__reactFiber$'));
+        return key ? element[key] : null;
+    }
 
-function createSklandImportCancelledError() {
+    // 提取 React 节点中的文本内容
+    function getReactNodeText(node) {
+        if (!node) return '';
+        if (typeof node === 'string' || typeof node === 'number') return String(node);
+        if (Array.isArray(node)) return node.map(getReactNodeText).join('');
+        if (node.props && node.props.children) return getReactNodeText(node.props.children);
+        return '';
+    }
+
+    // 向上遍历 Fiber 树，获取完整的作业数据
+    function extractOperationFromFiber(element) {
+        let fiber = getFiberNode(element);
+        let depth = 0;
+
+        while (fiber && depth < 30) { // 向上遍历最多 30 层
+            const props = fiber.memoizedProps;
+            if (props) {
+                const candidate = props.operation || props.data || props.copilot || props.item;
+                if (candidate && typeof candidate === 'object') {
+                    if (candidate.parsedContent || candidate.opers !== undefined || candidate.groups !== undefined || typeof candidate.content === 'string') {
+                        return candidate;
+                    }
+                }
+            }
+            fiber = fiber.return;
+            depth++;
+        }
+        return null;
+    }
+
+    // 获取悬浮窗组件(Popover)内部的文本内容
+    function extractPopoverContentFromFiber(element) {
+        let fiber = getFiberNode(element);
+        let depth = 0;
+
+        while (fiber && depth < 15) {
+            const props = fiber.memoizedProps;
+            if (props && props.content !== undefined) {
+                return getReactNodeText(props.content);
+            }
+            fiber = fiber.return;
+            depth++;
+        }
+        return "";
+    }
+
+    async function generateSklandSign(token, path, queryOrBody, timestamp) {
+        const headerForSign = {
+            platform: '1',
+            timestamp,
+            dId: '',
+            vName: '1.21.0'
+        };
+        const source = path + queryOrBody + timestamp + JSON.stringify(headerForSign);
+        const hmac = await hmacSha256Hex(token, source);
+        return md5Hex(hmac);
+    }
+
+    async function hmacSha256Hex(key, message) {
+        const blockSize = 64;
+        let keyBytes = utf8Bytes(key);
+        if (keyBytes.length > blockSize) keyBytes = await sha256Bytes(keyBytes);
+
+        const paddedKey = new Uint8Array(blockSize);
+        paddedKey.set(keyBytes);
+
+        const outerPad = new Uint8Array(blockSize);
+        const innerPad = new Uint8Array(blockSize);
+        for (let i = 0; i < blockSize; i++) {
+            outerPad[i] = paddedKey[i] ^ 0x5c;
+            innerPad[i] = paddedKey[i] ^ 0x36;
+        }
+
+        const innerHash = await sha256Bytes(concatBytes(innerPad, utf8Bytes(message)));
+        const finalHash = await sha256Bytes(concatBytes(outerPad, innerHash));
+        return bytesToHex(finalHash);
+    }
+
+    async function sha256Bytes(bytes) {
+        if (!window.crypto?.subtle) throw new Error('当前浏览器不支持森空岛请求签名所需的 WebCrypto。');
+        return new Uint8Array(await window.crypto.subtle.digest('SHA-256', bytes));
+    }
+
+    function utf8Bytes(value) {
+        return new TextEncoder().encode(String(value));
+    }
+
+    function concatBytes(left, right) {
+        const combined = new Uint8Array(left.length + right.length);
+        combined.set(left, 0);
+        combined.set(right, left.length);
+        return combined;
+    }
+
+    function bytesToHex(bytes) {
+        return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
+    }
+
+    function md5Hex(input) {
+        const bytes = utf8Bytes(input);
+        const wordCount = (((bytes.length + 8) >>> 6) + 1) * 16;
+        const words = new Array(wordCount).fill(0);
+        for (let i = 0; i < bytes.length; i++) {
+            words[i >> 2] |= bytes[i] << ((i % 4) * 8);
+        }
+        words[bytes.length >> 2] |= 0x80 << ((bytes.length % 4) * 8);
+        const bitLength = bytes.length * 8;
+        words[wordCount - 2] = bitLength >>> 0;
+        words[wordCount - 1] = Math.floor(bitLength / 0x100000000) >>> 0;
+
+        let a = 0x67452301;
+        let b = 0xefcdab89;
+        let c = 0x98badcfe;
+        let d = 0x10325476;
+
+        for (let i = 0; i < wordCount; i += 16) {
+            const oldA = a;
+            const oldB = b;
+            const oldC = c;
+            const oldD = d;
+
+            a = md5Ff(a, b, c, d, words[i], 7, -680876936);
+            d = md5Ff(d, a, b, c, words[i + 1], 12, -389564586);
+            c = md5Ff(c, d, a, b, words[i + 2], 17, 606105819);
+            b = md5Ff(b, c, d, a, words[i + 3], 22, -1044525330);
+            a = md5Ff(a, b, c, d, words[i + 4], 7, -176418897);
+            d = md5Ff(d, a, b, c, words[i + 5], 12, 1200080426);
+            c = md5Ff(c, d, a, b, words[i + 6], 17, -1473231341);
+            b = md5Ff(b, c, d, a, words[i + 7], 22, -45705983);
+            a = md5Ff(a, b, c, d, words[i + 8], 7, 1770035416);
+            d = md5Ff(d, a, b, c, words[i + 9], 12, -1958414417);
+            c = md5Ff(c, d, a, b, words[i + 10], 17, -42063);
+            b = md5Ff(b, c, d, a, words[i + 11], 22, -1990404162);
+            a = md5Ff(a, b, c, d, words[i + 12], 7, 1804603682);
+            d = md5Ff(d, a, b, c, words[i + 13], 12, -40341101);
+            c = md5Ff(c, d, a, b, words[i + 14], 17, -1502002290);
+            b = md5Ff(b, c, d, a, words[i + 15], 22, 1236535329);
+
+            a = md5Gg(a, b, c, d, words[i + 1], 5, -165796510);
+            d = md5Gg(d, a, b, c, words[i + 6], 9, -1069501632);
+            c = md5Gg(c, d, a, b, words[i + 11], 14, 643717713);
+            b = md5Gg(b, c, d, a, words[i], 20, -373897302);
+            a = md5Gg(a, b, c, d, words[i + 5], 5, -701558691);
+            d = md5Gg(d, a, b, c, words[i + 10], 9, 38016083);
+            c = md5Gg(c, d, a, b, words[i + 15], 14, -660478335);
+            b = md5Gg(b, c, d, a, words[i + 4], 20, -405537848);
+            a = md5Gg(a, b, c, d, words[i + 9], 5, 568446438);
+            d = md5Gg(d, a, b, c, words[i + 14], 9, -1019803690);
+            c = md5Gg(c, d, a, b, words[i + 3], 14, -187363961);
+            b = md5Gg(b, c, d, a, words[i + 8], 20, 1163531501);
+            a = md5Gg(a, b, c, d, words[i + 13], 5, -1444681467);
+            d = md5Gg(d, a, b, c, words[i + 2], 9, -51403784);
+            c = md5Gg(c, d, a, b, words[i + 7], 14, 1735328473);
+            b = md5Gg(b, c, d, a, words[i + 12], 20, -1926607734);
+
+            a = md5Hh(a, b, c, d, words[i + 5], 4, -378558);
+            d = md5Hh(d, a, b, c, words[i + 8], 11, -2022574463);
+            c = md5Hh(c, d, a, b, words[i + 11], 16, 1839030562);
+            b = md5Hh(b, c, d, a, words[i + 14], 23, -35309556);
+            a = md5Hh(a, b, c, d, words[i + 1], 4, -1530992060);
+            d = md5Hh(d, a, b, c, words[i + 4], 11, 1272893353);
+            c = md5Hh(c, d, a, b, words[i + 7], 16, -155497632);
+            b = md5Hh(b, c, d, a, words[i + 10], 23, -1094730640);
+            a = md5Hh(a, b, c, d, words[i + 13], 4, 681279174);
+            d = md5Hh(d, a, b, c, words[i], 11, -358537222);
+            c = md5Hh(c, d, a, b, words[i + 3], 16, -722521979);
+            b = md5Hh(b, c, d, a, words[i + 6], 23, 76029189);
+            a = md5Hh(a, b, c, d, words[i + 9], 4, -640364487);
+            d = md5Hh(d, a, b, c, words[i + 12], 11, -421815835);
+            c = md5Hh(c, d, a, b, words[i + 15], 16, 530742520);
+            b = md5Hh(b, c, d, a, words[i + 2], 23, -995338651);
+
+            a = md5Ii(a, b, c, d, words[i], 6, -198630844);
+            d = md5Ii(d, a, b, c, words[i + 7], 10, 1126891415);
+            c = md5Ii(c, d, a, b, words[i + 14], 15, -1416354905);
+            b = md5Ii(b, c, d, a, words[i + 5], 21, -57434055);
+            a = md5Ii(a, b, c, d, words[i + 12], 6, 1700485571);
+            d = md5Ii(d, a, b, c, words[i + 3], 10, -1894986606);
+            c = md5Ii(c, d, a, b, words[i + 10], 15, -1051523);
+            b = md5Ii(b, c, d, a, words[i + 1], 21, -2054922799);
+            a = md5Ii(a, b, c, d, words[i + 8], 6, 1873313359);
+            d = md5Ii(d, a, b, c, words[i + 15], 10, -30611744);
+            c = md5Ii(c, d, a, b, words[i + 6], 15, -1560198380);
+            b = md5Ii(b, c, d, a, words[i + 13], 21, 1309151649);
+            a = md5Ii(a, b, c, d, words[i + 4], 6, -145523070);
+            d = md5Ii(d, a, b, c, words[i + 11], 10, -1120210379);
+            c = md5Ii(c, d, a, b, words[i + 2], 15, 718787259);
+            b = md5Ii(b, c, d, a, words[i + 9], 21, -343485551);
+
+            a = md5Add(a, oldA);
+            b = md5Add(b, oldB);
+            c = md5Add(c, oldC);
+            d = md5Add(d, oldD);
+        }
+
+        return md5WordToHex(a) + md5WordToHex(b) + md5WordToHex(c) + md5WordToHex(d);
+    }
+
+    function md5Add(left, right) {
+        return (left + right) >>> 0;
+    }
+
+    function md5RotateLeft(value, shift) {
+        return (value << shift) | (value >>> (32 - shift));
+    }
+
+    function md5Cmn(query, a, b, x, shift, constant) {
+        return md5Add(md5RotateLeft(md5Add(md5Add(a, query), md5Add(x, constant)), shift), b);
+    }
+
+    function md5Ff(a, b, c, d, x, shift, constant) {
+        return md5Cmn((b & c) | (~b & d), a, b, x, shift, constant);
+    }
+
+    function md5Gg(a, b, c, d, x, shift, constant) {
+        return md5Cmn((b & d) | (c & ~d), a, b, x, shift, constant);
+    }
+
+    function md5Hh(a, b, c, d, x, shift, constant) {
+        return md5Cmn(b ^ c ^ d, a, b, x, shift, constant);
+    }
+
+    function md5Ii(a, b, c, d, x, shift, constant) {
+        return md5Cmn(c ^ (b | ~d), a, b, x, shift, constant);
+    }
+
+    function md5WordToHex(word) {
+        let output = '';
+        for (let i = 0; i < 4; i++) {
+            output += ((word >>> (i * 8)) & 0xff).toString(16).padStart(2, '0');
+        }
+        return output;
+    }
+    const SKLAND_IMPORT_CANCELLED_CODE = 'SKLAND_IMPORT_CANCELLED';
+
+    function createSklandImportCancelledError() {
         const error = new Error('已取消森空岛导入。');
         error.code = SKLAND_IMPORT_CANCELLED_CODE;
         return error;
@@ -1331,214 +1574,7 @@ function createSklandImportCancelledError() {
         }
         return sanitized.sort((left, right) => left.localeCompare(right, 'zh-CN'));
     }
-
-    async function generateSklandSign(token, path, queryOrBody, timestamp) {
-        const headerForSign = {
-            platform: '1',
-            timestamp,
-            dId: '',
-            vName: '1.21.0'
-        };
-        const source = path + queryOrBody + timestamp + JSON.stringify(headerForSign);
-        const hmac = await hmacSha256Hex(token, source);
-        return md5Hex(hmac);
-    }
-
-    async function hmacSha256Hex(key, message) {
-        const blockSize = 64;
-        let keyBytes = utf8Bytes(key);
-        if (keyBytes.length > blockSize) keyBytes = await sha256Bytes(keyBytes);
-
-        const paddedKey = new Uint8Array(blockSize);
-        paddedKey.set(keyBytes);
-
-        const outerPad = new Uint8Array(blockSize);
-        const innerPad = new Uint8Array(blockSize);
-        for (let i = 0; i < blockSize; i++) {
-            outerPad[i] = paddedKey[i] ^ 0x5c;
-            innerPad[i] = paddedKey[i] ^ 0x36;
-        }
-
-        const innerHash = await sha256Bytes(concatBytes(innerPad, utf8Bytes(message)));
-        const finalHash = await sha256Bytes(concatBytes(outerPad, innerHash));
-        return bytesToHex(finalHash);
-    }
-
-    async function sha256Bytes(bytes) {
-        if (!window.crypto?.subtle) throw new Error('当前浏览器不支持森空岛请求签名所需的 WebCrypto。');
-        return new Uint8Array(await window.crypto.subtle.digest('SHA-256', bytes));
-    }
-
-    function utf8Bytes(value) {
-        return new TextEncoder().encode(String(value));
-    }
-
-    function concatBytes(left, right) {
-        const combined = new Uint8Array(left.length + right.length);
-        combined.set(left, 0);
-        combined.set(right, left.length);
-        return combined;
-    }
-
-    function bytesToHex(bytes) {
-        return Array.from(bytes, byte => byte.toString(16).padStart(2, '0')).join('');
-    }
-
-    function md5Hex(input) {
-        const bytes = utf8Bytes(input);
-        const wordCount = (((bytes.length + 8) >>> 6) + 1) * 16;
-        const words = new Array(wordCount).fill(0);
-        for (let i = 0; i < bytes.length; i++) {
-            words[i >> 2] |= bytes[i] << ((i % 4) * 8);
-        }
-        words[bytes.length >> 2] |= 0x80 << ((bytes.length % 4) * 8);
-        const bitLength = bytes.length * 8;
-        words[wordCount - 2] = bitLength >>> 0;
-        words[wordCount - 1] = Math.floor(bitLength / 0x100000000) >>> 0;
-
-        let a = 0x67452301;
-        let b = 0xefcdab89;
-        let c = 0x98badcfe;
-        let d = 0x10325476;
-
-        for (let i = 0; i < wordCount; i += 16) {
-            const oldA = a;
-            const oldB = b;
-            const oldC = c;
-            const oldD = d;
-
-            a = md5Ff(a, b, c, d, words[i], 7, -680876936);
-            d = md5Ff(d, a, b, c, words[i + 1], 12, -389564586);
-            c = md5Ff(c, d, a, b, words[i + 2], 17, 606105819);
-            b = md5Ff(b, c, d, a, words[i + 3], 22, -1044525330);
-            a = md5Ff(a, b, c, d, words[i + 4], 7, -176418897);
-            d = md5Ff(d, a, b, c, words[i + 5], 12, 1200080426);
-            c = md5Ff(c, d, a, b, words[i + 6], 17, -1473231341);
-            b = md5Ff(b, c, d, a, words[i + 7], 22, -45705983);
-            a = md5Ff(a, b, c, d, words[i + 8], 7, 1770035416);
-            d = md5Ff(d, a, b, c, words[i + 9], 12, -1958414417);
-            c = md5Ff(c, d, a, b, words[i + 10], 17, -42063);
-            b = md5Ff(b, c, d, a, words[i + 11], 22, -1990404162);
-            a = md5Ff(a, b, c, d, words[i + 12], 7, 1804603682);
-            d = md5Ff(d, a, b, c, words[i + 13], 12, -40341101);
-            c = md5Ff(c, d, a, b, words[i + 14], 17, -1502002290);
-            b = md5Ff(b, c, d, a, words[i + 15], 22, 1236535329);
-
-            a = md5Gg(a, b, c, d, words[i + 1], 5, -165796510);
-            d = md5Gg(d, a, b, c, words[i + 6], 9, -1069501632);
-            c = md5Gg(c, d, a, b, words[i + 11], 14, 643717713);
-            b = md5Gg(b, c, d, a, words[i], 20, -373897302);
-            a = md5Gg(a, b, c, d, words[i + 5], 5, -701558691);
-            d = md5Gg(d, a, b, c, words[i + 10], 9, 38016083);
-            c = md5Gg(c, d, a, b, words[i + 15], 14, -660478335);
-            b = md5Gg(b, c, d, a, words[i + 4], 20, -405537848);
-            a = md5Gg(a, b, c, d, words[i + 9], 5, 568446438);
-            d = md5Gg(d, a, b, c, words[i + 14], 9, -1019803690);
-            c = md5Gg(c, d, a, b, words[i + 3], 14, -187363961);
-            b = md5Gg(b, c, d, a, words[i + 8], 20, 1163531501);
-            a = md5Gg(a, b, c, d, words[i + 13], 5, -1444681467);
-            d = md5Gg(d, a, b, c, words[i + 2], 9, -51403784);
-            c = md5Gg(c, d, a, b, words[i + 7], 14, 1735328473);
-            b = md5Gg(b, c, d, a, words[i + 12], 20, -1926607734);
-
-            a = md5Hh(a, b, c, d, words[i + 5], 4, -378558);
-            d = md5Hh(d, a, b, c, words[i + 8], 11, -2022574463);
-            c = md5Hh(c, d, a, b, words[i + 11], 16, 1839030562);
-            b = md5Hh(b, c, d, a, words[i + 14], 23, -35309556);
-            a = md5Hh(a, b, c, d, words[i + 1], 4, -1530992060);
-            d = md5Hh(d, a, b, c, words[i + 4], 11, 1272893353);
-            c = md5Hh(c, d, a, b, words[i + 7], 16, -155497632);
-            b = md5Hh(b, c, d, a, words[i + 10], 23, -1094730640);
-            a = md5Hh(a, b, c, d, words[i + 13], 4, 681279174);
-            d = md5Hh(d, a, b, c, words[i], 11, -358537222);
-            c = md5Hh(c, d, a, b, words[i + 3], 16, -722521979);
-            b = md5Hh(b, c, d, a, words[i + 6], 23, 76029189);
-            a = md5Hh(a, b, c, d, words[i + 9], 4, -640364487);
-            d = md5Hh(d, a, b, c, words[i + 12], 11, -421815835);
-            c = md5Hh(c, d, a, b, words[i + 15], 16, 530742520);
-            b = md5Hh(b, c, d, a, words[i + 2], 23, -995338651);
-
-            a = md5Ii(a, b, c, d, words[i], 6, -198630844);
-            d = md5Ii(d, a, b, c, words[i + 7], 10, 1126891415);
-            c = md5Ii(c, d, a, b, words[i + 14], 15, -1416354905);
-            b = md5Ii(b, c, d, a, words[i + 5], 21, -57434055);
-            a = md5Ii(a, b, c, d, words[i + 12], 6, 1700485571);
-            d = md5Ii(d, a, b, c, words[i + 3], 10, -1894986606);
-            c = md5Ii(c, d, a, b, words[i + 10], 15, -1051523);
-            b = md5Ii(b, c, d, a, words[i + 1], 21, -2054922799);
-            a = md5Ii(a, b, c, d, words[i + 8], 6, 1873313359);
-            d = md5Ii(d, a, b, c, words[i + 15], 10, -30611744);
-            c = md5Ii(c, d, a, b, words[i + 6], 15, -1560198380);
-            b = md5Ii(b, c, d, a, words[i + 13], 21, 1309151649);
-            a = md5Ii(a, b, c, d, words[i + 4], 6, -145523070);
-            d = md5Ii(d, a, b, c, words[i + 11], 10, -1120210379);
-            c = md5Ii(c, d, a, b, words[i + 2], 15, 718787259);
-            b = md5Ii(b, c, d, a, words[i + 9], 21, -343485551);
-
-            a = md5Add(a, oldA);
-            b = md5Add(b, oldB);
-            c = md5Add(c, oldC);
-            d = md5Add(d, oldD);
-        }
-
-        return md5WordToHex(a) + md5WordToHex(b) + md5WordToHex(c) + md5WordToHex(d);
-    }
-
-    function md5Add(left, right) {
-        return (left + right) >>> 0;
-    }
-
-    function md5RotateLeft(value, shift) {
-        return (value << shift) | (value >>> (32 - shift));
-    }
-
-    function md5Cmn(query, a, b, x, shift, constant) {
-        return md5Add(md5RotateLeft(md5Add(md5Add(a, query), md5Add(x, constant)), shift), b);
-    }
-
-    function md5Ff(a, b, c, d, x, shift, constant) {
-        return md5Cmn((b & c) | (~b & d), a, b, x, shift, constant);
-    }
-
-    function md5Gg(a, b, c, d, x, shift, constant) {
-        return md5Cmn((b & d) | (c & ~d), a, b, x, shift, constant);
-    }
-
-    function md5Hh(a, b, c, d, x, shift, constant) {
-        return md5Cmn(b ^ c ^ d, a, b, x, shift, constant);
-    }
-
-    function md5Ii(a, b, c, d, x, shift, constant) {
-        return md5Cmn(c ^ (b | ~d), a, b, x, shift, constant);
-    }
-
-    function md5WordToHex(word) {
-        let output = '';
-        for (let i = 0; i < 4; i++) {
-            output += ((word >>> (i * 8)) & 0xff).toString(16).padStart(2, '0');
-        }
-        return output;
-    }
-    function parseFloatingPosition(rawValue) {
-        const fallback = { top: '40%', isRight: true };
-        const parsed = typeof rawValue === 'string' ? safeJsonParse(rawValue, fallback) : rawValue;
-        const topValue = typeof parsed?.top === 'string' ? parsed.top : fallback.top;
-        const topNumber = /^-?\d+(?:\.\d+)?%$/.test(topValue) ? parseFloat(topValue) : parseFloat(fallback.top);
-        const clampedTop = Math.min(95, Math.max(0, topNumber));
-
-        return {
-            top: `${Number(clampedTop.toFixed(1))}%`,
-            isRight: parsed?.isRight !== false
-        };
-    }
-
-    function normalizeFilterMode(mode) {
-        return ['NONE', 'PERFECT', 'SUPPORT'].includes(mode) ? mode : 'NONE';
-    }
-
-    function normalizeDisplayMode(mode) {
-        return ['GRAY', 'HIDE'].includes(mode) ? mode : 'GRAY';
-    }
+    const operationCache = new WeakMap();
 
     function findSearchInputGroup() {
         const blueprintGroup = document.querySelector(BP_SELECTORS.inputGroup);
@@ -1619,24 +1655,20 @@ function createSklandImportCancelledError() {
     }
 
     function getOperationResolutionForCard(card, cardInner) {
-        const signature = getCardSignature(card);
-        const cached = operationCache.get(card);
-        if (cached && cached.signature === signature) {
-            return cached.resolution;
+        // React 可复用文字相同的卡片，但更新其中的练度要求或作业类型。
+        const operation = extractOperationFromFiber(cardInner) || extractOperationFromFiber(card);
+        if (operation) {
+            const resolution = { operation, source: 'fiber' };
+            operationCache.set(card, { resolution });
+            return resolution;
         }
 
-        const cardInnerOperation = extractOperationFromFiber(cardInner);
-        const cardOperation = cardInnerOperation || extractOperationFromFiber(card);
-        const resolution = cardOperation
-            ? { operation: cardOperation, source: 'fiber' }
-            : { operation: buildFallbackOperation(card), source: 'fallback' };
-
+        const signature = getCardSignature(card);
+        const cached = operationCache.get(card);
+        if (cached?.resolution.source === 'fallback' && cached.signature === signature) return cached.resolution;
+        const resolution = { operation: buildFallbackOperation(card), source: 'fallback' };
         operationCache.set(card, { signature, resolution });
         return resolution;
-    }
-
-    function getOperationForCard(card, cardInner) {
-        return getOperationResolutionForCard(card, cardInner).operation;
     }
 
     function getCardTypeTag(cardInner, text) {
@@ -1665,6 +1697,481 @@ function createSklandImportCancelledError() {
         label.appendChild(document.createTextNode(text));
         label.dataset.prtsStatusState = state;
     }
+    const sklandImportStyles = `
+    #prts-skland-import-panel { position: fixed; right: 16px; top: 96px; z-index: 2147483646; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
+    #prts-skland-import-panel * { box-sizing: border-box; }
+    .prts-skland-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 14px 10px; border-bottom: 1px solid #eef2f7; }
+    .prts-skland-title { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 700; color: #111827; }
+    .prts-skland-subtitle { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: #64748b; }
+    .prts-skland-close { width: 28px; height: 28px; border: none; border-radius: 4px; background: transparent; color: #64748b; font-size: 20px; line-height: 1; cursor: pointer; }
+    .prts-skland-close:hover { background: #f1f5f9; color: #0f172a; }
+    .prts-skland-body { padding: 12px 14px 14px; }
+    .prts-skland-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #475569; }
+    .prts-skland-primary { width: 100%; height: 36px; border: none; border-radius: 4px; background: #2563eb; color: #ffffff; cursor: pointer; font-size: 14px; font-weight: 700; }
+    .prts-skland-primary:hover { background: #1d4ed8; }
+    .prts-skland-primary:disabled { background: #94a3b8; cursor: wait; }
+    .prts-skland-status { min-height: 36px; margin: 12px 0 0; padding: 8px 10px; border-radius: 4px; background: #f8fafc; color: #475569; font-size: 12px; line-height: 1.55; white-space: pre-line; }
+    .prts-skland-status.success { background: #ecfdf5; color: #047857; }
+    .prts-skland-status.error { background: #fef2f2; color: #b91c1c; }
+    .prts-skland-link { display: inline-flex; align-items: center; margin-top: 10px; color: #2563eb; font-size: 12px; text-decoration: none; }
+    .prts-skland-link:hover { text-decoration: underline; }
+    #prts-modal-backdrop { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.46); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
+    #prts-modal { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
+    #prts-modal * { box-sizing: border-box; }
+    .prts-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid #eef2f7; }
+    .prts-modal-title { margin: 0; color: #111827; font-size: 16px; line-height: 1.45; font-weight: 700; }
+    .prts-modal-body { padding: 14px 16px 0; }
+    .prts-modal-message { color: #475569; font-size: 13px; line-height: 1.55; white-space: normal; overflow-wrap: anywhere; }
+    .prts-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px; }
+    .prts-modal-actions .prts-import-action { min-width: 88px; }
+    .prts-import-close { flex: 0 0 auto; width: 44px; min-height: 44px; border: none; border-radius: 4px; background: transparent; color: #64748b; cursor: pointer; font-size: 24px; line-height: 1; }
+    .prts-import-close:hover, .prts-import-close:focus-visible { background: #f1f5f9; color: #0f172a; outline: none; }
+    .prts-import-action { min-height: 44px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #334155; cursor: pointer; padding: 0 14px; font-size: 13px; font-weight: 700; }
+    .prts-import-action:hover, .prts-import-action:focus-visible { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; outline: none; }
+    .prts-import-action.primary { border-color: #2563eb; background: #2563eb; color: #ffffff; }
+    .prts-import-action.primary:hover, .prts-import-action.primary:focus-visible { border-color: #1d4ed8; background: #1d4ed8; color: #ffffff; }
+    .prts-skland-binding-picker { display: flex; flex-direction: column; gap: 10px; }
+    .prts-skland-binding-intro { margin: 0; color: #475569; font-size: 13px; line-height: 1.55; }
+    .prts-skland-binding-list { display: flex; flex-direction: column; gap: 8px; max-height: min(320px, calc(100vh - 220px)); overflow: auto; padding: 2px; }
+    .prts-skland-binding-option { display: flex; align-items: flex-start; gap: 10px; min-height: 58px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #111827; cursor: pointer; transition: border-color 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1); }
+    .prts-skland-binding-option:hover { border-color: #93c5fd; background: #f8fafc; }
+    .prts-skland-binding-option.is-selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }
+    .prts-skland-binding-radio { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #2563eb; cursor: pointer; }
+    .prts-skland-binding-text { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 4px; }
+    .prts-skland-binding-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
+    .prts-skland-binding-name { min-width: 0; color: #111827; font-size: 14px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
+    .prts-skland-binding-badge { flex: 0 0 auto; padding: 2px 6px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 11px; line-height: 1.2; font-weight: 700; }
+    .prts-skland-binding-meta { color: #64748b; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    :root {
+        --prts-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+        --prts-color-primary: #2563eb;
+        --prts-color-primary-hover: #1d4ed8;
+        --prts-color-primary-soft: #eff6ff;
+        --prts-color-surface: #ffffff;
+        --prts-color-surface-muted: #f8fafc;
+        --prts-color-surface-hover: #f1f5f9;
+        --prts-color-text: #111827;
+        --prts-color-text-muted: #475569;
+        --prts-color-text-subtle: #64748b;
+        --prts-color-border: #cbd5e1;
+        --prts-color-border-soft: #e5e7eb;
+        --prts-color-ring: rgba(37, 99, 235, 0.28);
+        --prts-radius-md: 6px;
+        --prts-radius-lg: 8px;
+        --prts-shadow-lg: 0 18px 48px rgba(15, 23, 42, 0.28);
+        --prts-duration-fast: 160ms;
+        --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    body.dark {
+        --prts-color-primary: #60a5fa;
+        --prts-color-primary-hover: #93c5fd;
+        --prts-color-primary-soft: rgba(96, 165, 250, 0.16);
+        --prts-color-surface: #30404d;
+        --prts-color-surface-muted: #202b33;
+        --prts-color-surface-hover: rgba(138, 155, 168, 0.15);
+        --prts-color-text: #f5f8fa;
+        --prts-color-text-muted: #c4d0dc;
+        --prts-color-text-subtle: #8a9baa;
+        --prts-color-border: #415262;
+        --prts-color-border-soft: #415262;
+        --prts-color-ring: rgba(96, 165, 250, 0.32);
+        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.52);
+    }
+    body.high-contrast-theme {
+        --prts-color-primary: #60a5fa;
+        --prts-color-primary-hover: #93c5fd;
+        --prts-color-primary-soft: rgba(96, 165, 250, 0.18);
+        --prts-color-surface: #18181c;
+        --prts-color-surface-muted: #2d2d30;
+        --prts-color-surface-hover: rgba(138, 155, 168, 0.18);
+        --prts-color-text: #ffffff;
+        --prts-color-text-muted: #e0e0e0;
+        --prts-color-text-subtle: #d1d5db;
+        --prts-color-border: #38383b;
+        --prts-color-border-soft: #38383b;
+        --prts-color-ring: rgba(96, 165, 250, 0.38);
+        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
+    }
+    #prts-skland-import-panel {
+        border-color: var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-lg) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    .prts-skland-head { border-color: var(--prts-color-border-soft) !important; }
+    .prts-skland-title { color: var(--prts-color-text) !important; }
+    .prts-skland-subtitle, .prts-skland-label, .prts-skland-binding-intro { color: var(--prts-color-text-muted) !important; }
+    #prts-modal-backdrop { background: rgba(15, 23, 42, 0.52) !important; }
+    #prts-modal {
+        border-color: var(--prts-color-border-soft) !important;
+        border-radius: var(--prts-radius-lg) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        box-shadow: var(--prts-shadow-lg) !important;
+        font-family: var(--prts-font-sans) !important;
+    }
+    .prts-modal-head { border-color: var(--prts-color-border-soft) !important; }
+    .prts-modal-title { color: var(--prts-color-text) !important; }
+    .prts-modal-message { color: var(--prts-color-text-muted) !important; }
+    .prts-import-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--prts-color-text-subtle) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-import-close .bp4-icon { width: 16px; height: 16px; }
+    .prts-import-close:hover, .prts-import-close:focus-visible {
+        background: var(--prts-color-surface-hover) !important;
+        color: var(--prts-color-text) !important;
+    }
+    .prts-import-action {
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text-muted) !important;
+        font-family: var(--prts-font-sans) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-import-action:hover, .prts-import-action:focus-visible {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary) !important;
+    }
+    .prts-import-action.primary {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary) !important;
+        color: #ffffff !important;
+    }
+    .prts-import-action.primary.danger { border-color: #dc2626 !important; background: #dc2626 !important; color: #ffffff !important; }
+    .prts-import-action.primary.danger:hover, .prts-import-action.primary.danger:focus-visible { border-color: #b91c1c !important; background: #b91c1c !important; color: #ffffff !important; }
+    .prts-skland-close {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        min-height: 44px;
+        color: var(--prts-color-text-subtle) !important;
+        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-skland-close .bp4-icon { width: 16px; height: 16px; }
+    .prts-skland-close:hover, .prts-skland-close:focus-visible {
+        background: var(--prts-color-surface-hover) !important;
+        color: var(--prts-color-text) !important;
+    }
+    .prts-skland-primary {
+        min-height: 44px;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-primary) !important;
+        transition: background-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-skland-primary:hover { background: var(--prts-color-primary-hover) !important; }
+    .prts-skland-primary:disabled { opacity: 0.6; cursor: wait; }
+    .prts-skland-status {
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface-muted) !important;
+        color: var(--prts-color-text-muted) !important;
+    }
+    .prts-skland-status.loading { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary) !important; }
+    .prts-skland-link { color: var(--prts-color-primary) !important; }
+    .prts-skland-binding-option {
+        border-color: var(--prts-color-border) !important;
+        border-radius: var(--prts-radius-md) !important;
+        background: var(--prts-color-surface) !important;
+        color: var(--prts-color-text) !important;
+        transition: border-color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    .prts-skland-binding-option:hover {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-surface-hover) !important;
+    }
+    .prts-skland-binding-option.is-selected {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        box-shadow: 0 0 0 3px var(--prts-color-ring) !important;
+    }
+    .prts-skland-binding-radio { accent-color: var(--prts-color-primary); }
+    .prts-skland-binding-name { color: var(--prts-color-text) !important; }
+    .prts-skland-binding-meta { color: var(--prts-color-text-subtle) !important; }
+    .prts-skland-binding-badge {
+        border-color: var(--prts-color-primary) !important;
+        background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary) !important;
+    }
+    .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-import-close:focus-visible, .prts-import-action:focus-visible {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+        box-shadow: 0 0 0 4px var(--prts-color-ring);
+    }
+    @media (max-width: 520px) {
+        #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; }
+        #prts-modal-backdrop { align-items: flex-end; padding: 12px; }
+        #prts-modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: var(--prts-radius-lg) var(--prts-radius-lg) 0 0 !important; }
+        .prts-modal-actions { flex-direction: column-reverse; }
+        .prts-modal-actions .prts-import-action { width: 100%; }
+        .prts-skland-binding-list { max-height: min(360px, calc(100vh - 260px)); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        .prts-skland-close, .prts-skland-primary, .prts-skland-binding-option, .prts-import-close, .prts-import-action { transition: none !important; }
+    }
+`;
+
+    const siteRedesignStyles = `
+    /* Hallmark · macrostructure: Workbench · genre: modern-minimal · theme: existing PRTS tokens
+     * Optional visual layer; all rules are scoped for immediate restoration on disable.
+     * pre-emit critique: P5 H5 E4 S5 R5 V4 */
+    body.prts-site-redesign {
+        --prts-site-page: var(--prts-color-surface-muted);
+        --prts-site-radius: 12px;
+        --prts-site-gap: 24px;
+        --prts-site-padding: 20px;
+        --prts-site-action: #2563eb;
+        --prts-site-action-hover: #1d4ed8;
+        --prts-site-action-text: #ffffff;
+        background: var(--prts-site-page);
+        color: var(--prts-color-text);
+        font-family: var(--prts-font-sans);
+    }
+    body.prts-site-redesign #root > div {
+        background: var(--prts-site-page);
+        color: var(--prts-color-text);
+    }
+    body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) {
+        padding-inline: clamp(12px, 2.5vw, 32px);
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text);
+        border-bottom: 1px solid var(--prts-color-border-soft);
+        box-shadow: var(--prts-shadow-sm);
+    }
+    body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > a { color: var(--prts-color-text); }
+    body.prts-site-redesign .docs-content-wrapper > .flex:has(> [class~="md:w-2/3"]) {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--prts-site-gap);
+        max-width: 1440px;
+        margin: var(--prts-site-gap) auto 0;
+        padding-inline: clamp(12px, 2.5vw, 32px);
+        align-items: start;
+    }
+    body.prts-site-redesign .docs-content-wrapper > .flex > :is([class~="md:w-2/3"], [class~="md:w-1/3"]) {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        order: 0;
+    }
+    body.prts-site-redesign .docs-content-wrapper > .flex > [class~="md:w-1/3"] { order: 1; }
+    body.prts-site-redesign .docs-content-wrapper > .flex:has(> [class~="md:w-2/3"]) > a { order: 2; }
+    body.prts-site-redesign .prts-sidebar-hidden-layout { grid-template-columns: minmax(0, 1fr) !important; }
+    body.prts-site-redesign .prts-sidebar-hidden-layout > [class~="md:w-2/3"] { display: block !important; }
+    body.prts-site-redesign .prts-sidebar-hidden-layout > :is([class~="md:w-1/3"], a) { display: none !important; }
+    body.prts-site-redesign .grid[style*="auto-fill"]:has(> li > :is(.bp4-card, .bp6-card), > .bp4-card, > .bp6-card) {
+        grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr)) !important;
+    }
+    body.prts-site-redesign :is(.bp4-card, .bp6-card) {
+        min-width: 0;
+        border: 1px solid var(--prts-color-border-soft);
+        border-radius: var(--prts-site-radius);
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text);
+        box-shadow: none;
+        transition: border-color var(--prts-duration-fast) var(--prts-ease-out);
+    }
+    body.prts-site-redesign .docs-content-wrapper :is(.bp4-card, .bp6-card) {
+        padding: var(--prts-site-padding);
+    }
+    body.prts-site-redesign :is(.bp4-heading, .bp6-heading) {
+        color: var(--prts-color-text);
+        line-height: 1.5;
+        font-style: normal;
+    }
+    body.prts-site-redesign :is(.bp4-heading, .bp6-heading) :is(.bp4-icon, .bp6-icon) {
+        color: var(--prts-color-text-subtle);
+    }
+    body.prts-site-redesign li:has(> :is(.bp4-card, .bp6-card)) { min-width: 0; }
+    body.prts-site-redesign li > :is(.bp4-card, .bp6-card) { gap: var(--prts-space-3); }
+    body.prts-site-redesign li:has(> :is(.bp4-card, .bp6-card)) > .absolute,
+    body.prts-site-redesign .grid > :is(.bp4-card, .bp6-card) > .absolute {
+        top: var(--prts-site-padding);
+        right: var(--prts-site-padding);
+    }
+    body.prts-site-redesign :is(.bp4-card, .bp6-card) > .grow {
+        color: var(--prts-color-text-muted);
+        overflow-wrap: anywhere;
+    }
+    body.prts-site-redesign :is(.bp4-card, .bp6-card) > .flex:has(> .prts-level-badge) { flex-wrap: wrap; }
+    body.prts-site-redesign #prts-filter-bar {
+        margin-top: var(--prts-space-3);
+        margin-bottom: 0;
+        padding-top: var(--prts-space-3);
+        border-top: 1px solid var(--prts-color-border-soft);
+        gap: var(--prts-space-2);
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button) {
+        border-radius: var(--prts-radius-md);
+        font-weight: 500;
+        white-space: nowrap;
+        box-shadow: none;
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button):not(.bp4-small, .bp6-small) {
+        min-height: 38px;
+        padding: var(--prts-space-2) var(--prts-space-3);
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button):not([class*="-intent-"]) {
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text-muted);
+        border: 1px solid var(--prts-color-border);
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-minimal, .bp6-minimal) {
+        background: transparent;
+        border-color: transparent;
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-active, .bp6-active):not([class*="-intent-"]) {
+        background: var(--prts-color-primary-soft);
+        color: var(--prts-color-primary);
+        border-color: transparent;
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-intent-primary, .bp6-intent-primary) {
+        background: var(--prts-site-action);
+        color: var(--prts-site-action-text);
+        border: 1px solid var(--prts-site-action);
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-intent-primary, .bp6-intent-primary) > :is(.bp4-icon, .bp6-icon, .bp4-button-text, .bp6-button-text) { color: inherit; }
+    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group):is(.bp4-minimal, .bp6-minimal) > :is(.bp4-intent-primary, .bp6-intent-primary) {
+        background: var(--prts-color-primary-soft);
+        color: var(--prts-color-primary);
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(:disabled, .bp4-disabled, .bp6-disabled) {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group) > :is(.bp4-button, .bp6-button) {
+        border-radius: 0;
+    }
+    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group) > :first-child {
+        border-start-start-radius: var(--prts-radius-md);
+        border-end-start-radius: var(--prts-radius-md);
+    }
+    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group) > :last-child {
+        border-start-end-radius: var(--prts-radius-md);
+        border-end-end-radius: var(--prts-radius-md);
+    }
+    body.prts-site-redesign :is(.bp4-input, .bp6-input, .bp4-html-select select, .bp6-html-select select) {
+        border: 1px solid var(--prts-color-border);
+        border-radius: var(--prts-radius-md);
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text);
+        box-shadow: none;
+    }
+    body.prts-site-redesign input:is(.bp4-input, .bp6-input) { height: 38px; }
+    body.prts-site-redesign :is(.bp4-input, .bp6-input)::placeholder {
+        color: var(--prts-color-text-subtle);
+        font-style: normal;
+    }
+    body.prts-site-redesign :is(.bp4-input, .bp6-input):disabled { opacity: 0.5; cursor: not-allowed; }
+    body.prts-site-redesign :is(.bp4-input, .bp6-input)[aria-invalid="true"] { border-color: var(--prts-color-danger); }
+    body.prts-site-redesign :is(.bp4-tab, .bp6-tab)[aria-selected="true"] { color: var(--prts-color-primary); }
+    body.prts-site-redesign :is(.bp4-tab-indicator, .bp6-tab-indicator) { background: var(--prts-color-primary); }
+    body.prts-site-redesign :is(.bp4-dialog, .bp6-dialog, .bp4-drawer, .bp6-drawer) {
+        max-width: calc(100% - 24px);
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text);
+        box-shadow: var(--prts-shadow-lg);
+    }
+    body.prts-site-redesign :is(.bp4-dialog, .bp6-dialog) {
+        border: 1px solid var(--prts-color-border-soft);
+        border-radius: var(--prts-site-radius);
+    }
+    body.prts-site-redesign :is(.bp4-dialog-header, .bp6-dialog-header, .bp4-drawer-header, .bp6-drawer-header) {
+        background: var(--prts-color-surface);
+        color: var(--prts-color-text);
+        box-shadow: none;
+        border-bottom: 1px solid var(--prts-color-border-soft);
+    }
+    body.prts-site-redesign :is(.bp4-dialog-header, .bp6-dialog-header) {
+        border-radius: var(--prts-site-radius) var(--prts-site-radius) 0 0;
+    }
+    body.prts-site-redesign :is(.bp4-popover2-content, .bp6-popover-content) {
+        border: 1px solid var(--prts-color-border);
+        border-radius: var(--prts-radius-lg);
+        box-shadow: var(--prts-shadow-md);
+    }
+    body.prts-site-redesign :is(.bp4-menu, .bp6-menu) { padding: var(--prts-space-1); }
+    body.prts-site-redesign :is(.bp4-menu-item, .bp6-menu-item) { border-radius: var(--prts-radius-sm); }
+    body.prts-site-redesign .docs-content-wrapper > section {
+        max-width: 1440px;
+        margin-inline: auto;
+        padding-top: var(--prts-site-gap);
+    }
+    body.prts-site-redesign .docs-content-wrapper > section > div { padding-inline: clamp(12px, 2.5vw, 32px); }
+    body.prts-site-redesign .markdown-body {
+        color: var(--prts-color-text-muted);
+        line-height: 1.75;
+        overflow-wrap: anywhere;
+    }
+    body.prts-site-redesign .markdown-body :is(h1, h2, h3) {
+        color: var(--prts-color-text);
+        border-color: var(--prts-color-border-soft);
+        font-style: normal;
+    }
+    body.prts-site-redesign :is(.bp4-button, .bp6-button, .bp4-input, .bp6-input, .bp4-tab, .bp6-tab, .bp4-menu-item, .bp6-menu-item, a[href], select, [tabindex="0"]):focus-visible {
+        outline: 2px solid var(--prts-color-primary);
+        outline-offset: 2px;
+    }
+    @media (hover: hover) {
+        body.prts-site-redesign :is(.bp4-card, .bp6-card):is(.bp4-interactive, .bp6-interactive):hover {
+            border-color: color-mix(in srgb, var(--prts-color-border-soft) 85%, var(--prts-color-text-subtle));
+            box-shadow: none;
+        }
+        body.prts-site-redesign :is(.bp4-button, .bp6-button):not([class*="-intent-"], :disabled, .bp4-disabled, .bp6-disabled, .bp4-active, .bp6-active):hover {
+            background: var(--prts-color-surface-hover);
+            color: var(--prts-color-text);
+        }
+        body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-intent-primary, .bp6-intent-primary):not(:disabled, .bp4-disabled, .bp6-disabled):hover {
+            background: var(--prts-site-action-hover);
+            color: var(--prts-site-action-text);
+        }
+    }
+    @media (min-width: 64rem) {
+        body.prts-site-redesign .docs-content-wrapper > .flex:has(> [class~="md:w-2/3"]) {
+            grid-template-columns: minmax(0, 1fr) 300px;
+        }
+    }
+    @media (max-width: 48rem) {
+        body.prts-site-redesign { --prts-site-gap: 16px; --prts-site-padding: 16px; }
+        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:nth-child(2) { display: none; }
+        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child { gap: var(--prts-space-1); }
+        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child :is(.bp4-button, .bp6-button) {
+            min-width: 36px;
+            padding-inline: var(--prts-space-2);
+        }
+        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child :is(.bp4-button-text, .bp6-button-text) {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            overflow: hidden;
+            clip-path: inset(50%);
+        }
+        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child :is(.bp4-icon-caret-down, .bp6-icon-caret-down) { display: none; }
+        body.prts-site-redesign .grid:has(> li > :is(.bp4-card, .bp6-card), > .bp4-card, > .bp6-card) { grid-template-columns: minmax(0, 1fr) !important; }
+        body.prts-site-redesign .docs-content-wrapper > .flex > [class~="md:w-1/3"] > .sticky { position: static; }
+    }
+    @media (max-width: 22.5rem) {
+        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > a > :is(.bp4-tag, .bp6-tag) { display: none; }
+    }
+    @media (pointer: coarse) {
+        body.prts-site-redesign :is(.bp4-button, .bp6-button):not(.bp4-small, .bp6-small) { min-height: 44px; }
+        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) :is(.bp4-button, .bp6-button) { min-width: 44px; }
+        body.prts-site-redesign input:is(.bp4-input, .bp6-input) { height: 44px; }
+        body.prts-site-redesign :is(.bp4-menu-item, .bp6-menu-item) { min-height: 44px; align-items: center; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+        body.prts-site-redesign :is(.bp4-card, .bp6-card) { transition: none !important; }
+    }
+    `;
+
     // [样式] CSS 样式定义
     const iconStyles = `
     .prts-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 auto; line-height: 0; color: inherit; }
@@ -2863,227 +3370,6 @@ function createSklandImportCancelledError() {
     }
 `;
 
-    const sklandImportStyles = `
-    #prts-skland-import-panel { position: fixed; right: 16px; top: 96px; z-index: 2147483646; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
-    #prts-skland-import-panel * { box-sizing: border-box; }
-    .prts-skland-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 14px 14px 10px; border-bottom: 1px solid #eef2f7; }
-    .prts-skland-title { margin: 0; font-size: 15px; line-height: 1.4; font-weight: 700; color: #111827; }
-    .prts-skland-subtitle { margin: 4px 0 0; font-size: 12px; line-height: 1.5; color: #64748b; }
-    .prts-skland-close { width: 28px; height: 28px; border: none; border-radius: 4px; background: transparent; color: #64748b; font-size: 20px; line-height: 1; cursor: pointer; }
-    .prts-skland-close:hover { background: #f1f5f9; color: #0f172a; }
-    .prts-skland-body { padding: 12px 14px 14px; }
-    .prts-skland-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: #475569; }
-    .prts-skland-primary { width: 100%; height: 36px; border: none; border-radius: 4px; background: #2563eb; color: #ffffff; cursor: pointer; font-size: 14px; font-weight: 700; }
-    .prts-skland-primary:hover { background: #1d4ed8; }
-    .prts-skland-primary:disabled { background: #94a3b8; cursor: wait; }
-    .prts-skland-status { min-height: 36px; margin: 12px 0 0; padding: 8px 10px; border-radius: 4px; background: #f8fafc; color: #475569; font-size: 12px; line-height: 1.55; white-space: pre-line; }
-    .prts-skland-status.success { background: #ecfdf5; color: #047857; }
-    .prts-skland-status.error { background: #fef2f2; color: #b91c1c; }
-    .prts-skland-link { display: inline-flex; align-items: center; margin-top: 10px; color: #2563eb; font-size: 12px; text-decoration: none; }
-    .prts-skland-link:hover { text-decoration: underline; }
-    #prts-modal-backdrop { position: fixed; inset: 0; z-index: 2147483647; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, 0.46); box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; }
-    #prts-modal { width: min(440px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 18px 48px rgba(15, 23, 42, 0.28); }
-    #prts-modal * { box-sizing: border-box; }
-    .prts-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 16px 12px; border-bottom: 1px solid #eef2f7; }
-    .prts-modal-title { margin: 0; color: #111827; font-size: 16px; line-height: 1.45; font-weight: 700; }
-    .prts-modal-body { padding: 14px 16px 0; }
-    .prts-modal-message { color: #475569; font-size: 13px; line-height: 1.55; white-space: normal; overflow-wrap: anywhere; }
-    .prts-modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 16px 16px; }
-    .prts-modal-actions .prts-import-action { min-width: 88px; }
-    .prts-import-close { flex: 0 0 auto; width: 44px; min-height: 44px; border: none; border-radius: 4px; background: transparent; color: #64748b; cursor: pointer; font-size: 24px; line-height: 1; }
-    .prts-import-close:hover, .prts-import-close:focus-visible { background: #f1f5f9; color: #0f172a; outline: none; }
-    .prts-import-action { min-height: 44px; border: 1px solid #cbd5e1; border-radius: 4px; background: #ffffff; color: #334155; cursor: pointer; padding: 0 14px; font-size: 13px; font-weight: 700; }
-    .prts-import-action:hover, .prts-import-action:focus-visible { border-color: #93c5fd; background: #eff6ff; color: #1d4ed8; outline: none; }
-    .prts-import-action.primary { border-color: #2563eb; background: #2563eb; color: #ffffff; }
-    .prts-import-action.primary:hover, .prts-import-action.primary:focus-visible { border-color: #1d4ed8; background: #1d4ed8; color: #ffffff; }
-    .prts-skland-binding-picker { display: flex; flex-direction: column; gap: 10px; }
-    .prts-skland-binding-intro { margin: 0; color: #475569; font-size: 13px; line-height: 1.55; }
-    .prts-skland-binding-list { display: flex; flex-direction: column; gap: 8px; max-height: min(320px, calc(100vh - 220px)); overflow: auto; padding: 2px; }
-    .prts-skland-binding-option { display: flex; align-items: flex-start; gap: 10px; min-height: 58px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; background: #ffffff; color: #111827; cursor: pointer; transition: border-color 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms cubic-bezier(0.16, 1, 0.3, 1), box-shadow 160ms cubic-bezier(0.16, 1, 0.3, 1); }
-    .prts-skland-binding-option:hover { border-color: #93c5fd; background: #f8fafc; }
-    .prts-skland-binding-option.is-selected { border-color: #2563eb; background: #eff6ff; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.18); }
-    .prts-skland-binding-radio { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0 0; accent-color: #2563eb; cursor: pointer; }
-    .prts-skland-binding-text { display: flex; flex: 1 1 auto; min-width: 0; flex-direction: column; gap: 4px; }
-    .prts-skland-binding-name-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-width: 0; }
-    .prts-skland-binding-name { min-width: 0; color: #111827; font-size: 14px; line-height: 1.35; font-weight: 700; overflow-wrap: anywhere; }
-    .prts-skland-binding-badge { flex: 0 0 auto; padding: 2px 6px; border: 1px solid #bfdbfe; border-radius: 999px; background: #eff6ff; color: #2563eb; font-size: 11px; line-height: 1.2; font-weight: 700; }
-    .prts-skland-binding-meta { color: #64748b; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
-    :root {
-        --prts-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
-        --prts-color-primary: #2563eb;
-        --prts-color-primary-hover: #1d4ed8;
-        --prts-color-primary-soft: #eff6ff;
-        --prts-color-surface: #ffffff;
-        --prts-color-surface-muted: #f8fafc;
-        --prts-color-surface-hover: #f1f5f9;
-        --prts-color-text: #111827;
-        --prts-color-text-muted: #475569;
-        --prts-color-text-subtle: #64748b;
-        --prts-color-border: #cbd5e1;
-        --prts-color-border-soft: #e5e7eb;
-        --prts-color-ring: rgba(37, 99, 235, 0.28);
-        --prts-radius-md: 6px;
-        --prts-radius-lg: 8px;
-        --prts-shadow-lg: 0 18px 48px rgba(15, 23, 42, 0.28);
-        --prts-duration-fast: 160ms;
-        --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-    }
-    body.dark {
-        --prts-color-primary: #60a5fa;
-        --prts-color-primary-hover: #93c5fd;
-        --prts-color-primary-soft: rgba(96, 165, 250, 0.16);
-        --prts-color-surface: #30404d;
-        --prts-color-surface-muted: #202b33;
-        --prts-color-surface-hover: rgba(138, 155, 168, 0.15);
-        --prts-color-text: #f5f8fa;
-        --prts-color-text-muted: #c4d0dc;
-        --prts-color-text-subtle: #8a9baa;
-        --prts-color-border: #415262;
-        --prts-color-border-soft: #415262;
-        --prts-color-ring: rgba(96, 165, 250, 0.32);
-        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.52);
-    }
-    body.high-contrast-theme {
-        --prts-color-primary: #60a5fa;
-        --prts-color-primary-hover: #93c5fd;
-        --prts-color-primary-soft: rgba(96, 165, 250, 0.18);
-        --prts-color-surface: #18181c;
-        --prts-color-surface-muted: #2d2d30;
-        --prts-color-surface-hover: rgba(138, 155, 168, 0.18);
-        --prts-color-text: #ffffff;
-        --prts-color-text-muted: #e0e0e0;
-        --prts-color-text-subtle: #d1d5db;
-        --prts-color-border: #38383b;
-        --prts-color-border-soft: #38383b;
-        --prts-color-ring: rgba(96, 165, 250, 0.38);
-        --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
-    }
-    #prts-skland-import-panel {
-        border-color: var(--prts-color-border-soft) !important;
-        border-radius: var(--prts-radius-lg) !important;
-        background: var(--prts-color-surface) !important;
-        color: var(--prts-color-text) !important;
-        box-shadow: var(--prts-shadow-lg) !important;
-        font-family: var(--prts-font-sans) !important;
-    }
-    .prts-skland-head { border-color: var(--prts-color-border-soft) !important; }
-    .prts-skland-title { color: var(--prts-color-text) !important; }
-    .prts-skland-subtitle, .prts-skland-label, .prts-skland-binding-intro { color: var(--prts-color-text-muted) !important; }
-    #prts-modal-backdrop { background: rgba(15, 23, 42, 0.52) !important; }
-    #prts-modal {
-        border-color: var(--prts-color-border-soft) !important;
-        border-radius: var(--prts-radius-lg) !important;
-        background: var(--prts-color-surface) !important;
-        color: var(--prts-color-text) !important;
-        box-shadow: var(--prts-shadow-lg) !important;
-        font-family: var(--prts-font-sans) !important;
-    }
-    .prts-modal-head { border-color: var(--prts-color-border-soft) !important; }
-    .prts-modal-title { color: var(--prts-color-text) !important; }
-    .prts-modal-message { color: var(--prts-color-text-muted) !important; }
-    .prts-import-close {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        color: var(--prts-color-text-subtle) !important;
-        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out);
-    }
-    .prts-import-close .bp4-icon { width: 16px; height: 16px; }
-    .prts-import-close:hover, .prts-import-close:focus-visible {
-        background: var(--prts-color-surface-hover) !important;
-        color: var(--prts-color-text) !important;
-    }
-    .prts-import-action {
-        border-color: var(--prts-color-border) !important;
-        border-radius: var(--prts-radius-md) !important;
-        background: var(--prts-color-surface) !important;
-        color: var(--prts-color-text-muted) !important;
-        font-family: var(--prts-font-sans) !important;
-        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), border-color var(--prts-duration-fast) var(--prts-ease-out);
-    }
-    .prts-import-action:hover, .prts-import-action:focus-visible {
-        border-color: var(--prts-color-primary) !important;
-        background: var(--prts-color-primary-soft) !important;
-        color: var(--prts-color-primary) !important;
-    }
-    .prts-import-action.primary {
-        border-color: var(--prts-color-primary) !important;
-        background: var(--prts-color-primary) !important;
-        color: #ffffff !important;
-    }
-    .prts-import-action.primary.danger { border-color: #dc2626 !important; background: #dc2626 !important; color: #ffffff !important; }
-    .prts-import-action.primary.danger:hover, .prts-import-action.primary.danger:focus-visible { border-color: #b91c1c !important; background: #b91c1c !important; color: #ffffff !important; }
-    .prts-skland-close {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        min-width: 44px;
-        min-height: 44px;
-        color: var(--prts-color-text-subtle) !important;
-        transition: color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out);
-    }
-    .prts-skland-close .bp4-icon { width: 16px; height: 16px; }
-    .prts-skland-close:hover, .prts-skland-close:focus-visible {
-        background: var(--prts-color-surface-hover) !important;
-        color: var(--prts-color-text) !important;
-    }
-    .prts-skland-primary {
-        min-height: 44px;
-        border-radius: var(--prts-radius-md) !important;
-        background: var(--prts-color-primary) !important;
-        transition: background-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out);
-    }
-    .prts-skland-primary:hover { background: var(--prts-color-primary-hover) !important; }
-    .prts-skland-primary:disabled { opacity: 0.6; cursor: wait; }
-    .prts-skland-status {
-        border-radius: var(--prts-radius-md) !important;
-        background: var(--prts-color-surface-muted) !important;
-        color: var(--prts-color-text-muted) !important;
-    }
-    .prts-skland-status.loading { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary) !important; }
-    .prts-skland-link { color: var(--prts-color-primary) !important; }
-    .prts-skland-binding-option {
-        border-color: var(--prts-color-border) !important;
-        border-radius: var(--prts-radius-md) !important;
-        background: var(--prts-color-surface) !important;
-        color: var(--prts-color-text) !important;
-        transition: border-color var(--prts-duration-fast) var(--prts-ease-out), background-color var(--prts-duration-fast) var(--prts-ease-out), box-shadow var(--prts-duration-fast) var(--prts-ease-out);
-    }
-    .prts-skland-binding-option:hover {
-        border-color: var(--prts-color-primary) !important;
-        background: var(--prts-color-surface-hover) !important;
-    }
-    .prts-skland-binding-option.is-selected {
-        border-color: var(--prts-color-primary) !important;
-        background: var(--prts-color-primary-soft) !important;
-        box-shadow: 0 0 0 3px var(--prts-color-ring) !important;
-    }
-    .prts-skland-binding-radio { accent-color: var(--prts-color-primary); }
-    .prts-skland-binding-name { color: var(--prts-color-text) !important; }
-    .prts-skland-binding-meta { color: var(--prts-color-text-subtle) !important; }
-    .prts-skland-binding-badge {
-        border-color: var(--prts-color-primary) !important;
-        background: var(--prts-color-primary-soft) !important;
-        color: var(--prts-color-primary) !important;
-    }
-    .prts-skland-primary:focus-visible, .prts-skland-close:focus-visible, .prts-skland-link:focus-visible, .prts-skland-binding-radio:focus-visible, .prts-import-close:focus-visible, .prts-import-action:focus-visible {
-        outline: 2px solid var(--prts-color-primary);
-        outline-offset: 2px;
-        box-shadow: 0 0 0 4px var(--prts-color-ring);
-    }
-    @media (max-width: 520px) {
-        #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; }
-        #prts-modal-backdrop { align-items: flex-end; padding: 12px; }
-        #prts-modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: var(--prts-radius-lg) var(--prts-radius-lg) 0 0 !important; }
-        .prts-modal-actions { flex-direction: column-reverse; }
-        .prts-modal-actions .prts-import-action { width: 100%; }
-        .prts-skland-binding-list { max-height: min(360px, calc(100vh - 260px)); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        .prts-skland-close, .prts-skland-primary, .prts-skland-binding-option, .prts-import-close, .prts-import-action { transition: none !important; }
-    }
-`;
-
     const accountSelectStyles = `
     /* Hallmark · component: account select · theme: existing PRTS tokens
      * pre-emit critique: P4 H4 E4 S5 R5 V4 · states: default, hover, focus, disabled */
@@ -3138,260 +3424,6 @@ function createSklandImportCancelledError() {
     .prts-modal-actions-extra .prts-import-action { width: 100%; min-height: 44px; white-space: nowrap; }
     .prts-modal-actions-extra .prts-import-action:active { transform: translateY(1px); }
 `;
-
-    const siteRedesignStyles = `
-    /* Hallmark · macrostructure: Workbench · genre: modern-minimal · theme: existing PRTS tokens
-     * Optional visual layer; all rules are scoped for immediate restoration on disable.
-     * pre-emit critique: P5 H5 E4 S5 R5 V4 */
-    body.prts-site-redesign {
-        --prts-site-page: var(--prts-color-surface-muted);
-        --prts-site-radius: 12px;
-        --prts-site-gap: 24px;
-        --prts-site-padding: 20px;
-        --prts-site-action: #2563eb;
-        --prts-site-action-hover: #1d4ed8;
-        --prts-site-action-text: #ffffff;
-        background: var(--prts-site-page);
-        color: var(--prts-color-text);
-        font-family: var(--prts-font-sans);
-    }
-    body.prts-site-redesign #root > div {
-        background: var(--prts-site-page);
-        color: var(--prts-color-text);
-    }
-    body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) {
-        padding-inline: clamp(12px, 2.5vw, 32px);
-        background: var(--prts-color-surface);
-        color: var(--prts-color-text);
-        border-bottom: 1px solid var(--prts-color-border-soft);
-        box-shadow: var(--prts-shadow-sm);
-    }
-    body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > a { color: var(--prts-color-text); }
-    body.prts-site-redesign .docs-content-wrapper > .flex:has(> [class~="md:w-2/3"]) {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr);
-        gap: var(--prts-site-gap);
-        max-width: 1440px;
-        margin: var(--prts-site-gap) auto 0;
-        padding-inline: clamp(12px, 2.5vw, 32px);
-        align-items: start;
-    }
-    body.prts-site-redesign .docs-content-wrapper > .flex > :is([class~="md:w-2/3"], [class~="md:w-1/3"]) {
-        width: 100%;
-        min-width: 0;
-        margin: 0;
-        order: 0;
-    }
-    body.prts-site-redesign .docs-content-wrapper > .flex > [class~="md:w-1/3"] { order: 1; }
-    body.prts-site-redesign .docs-content-wrapper > .flex:has(> [class~="md:w-2/3"]) > a { order: 2; }
-    body.prts-site-redesign .prts-sidebar-hidden-layout { grid-template-columns: minmax(0, 1fr) !important; }
-    body.prts-site-redesign .prts-sidebar-hidden-layout > [class~="md:w-2/3"] { display: block !important; }
-    body.prts-site-redesign .prts-sidebar-hidden-layout > :is([class~="md:w-1/3"], a) { display: none !important; }
-    body.prts-site-redesign .grid[style*="auto-fill"]:has(> li > :is(.bp4-card, .bp6-card), > .bp4-card, > .bp6-card) {
-        grid-template-columns: repeat(auto-fill, minmax(min(100%, 24rem), 1fr)) !important;
-    }
-    body.prts-site-redesign :is(.bp4-card, .bp6-card) {
-        min-width: 0;
-        border: 1px solid var(--prts-color-border-soft);
-        border-radius: var(--prts-site-radius);
-        background: var(--prts-color-surface);
-        color: var(--prts-color-text);
-        box-shadow: none;
-        transition: border-color var(--prts-duration-fast) var(--prts-ease-out);
-    }
-    body.prts-site-redesign .docs-content-wrapper :is(.bp4-card, .bp6-card) {
-        padding: var(--prts-site-padding);
-    }
-    body.prts-site-redesign :is(.bp4-heading, .bp6-heading) {
-        color: var(--prts-color-text);
-        line-height: 1.5;
-        font-style: normal;
-    }
-    body.prts-site-redesign :is(.bp4-heading, .bp6-heading) :is(.bp4-icon, .bp6-icon) {
-        color: var(--prts-color-text-subtle);
-    }
-    body.prts-site-redesign li:has(> :is(.bp4-card, .bp6-card)) { min-width: 0; }
-    body.prts-site-redesign li > :is(.bp4-card, .bp6-card) { gap: var(--prts-space-3); }
-    body.prts-site-redesign li:has(> :is(.bp4-card, .bp6-card)) > .absolute,
-    body.prts-site-redesign .grid > :is(.bp4-card, .bp6-card) > .absolute {
-        top: var(--prts-site-padding);
-        right: var(--prts-site-padding);
-    }
-    body.prts-site-redesign :is(.bp4-card, .bp6-card) > .grow {
-        color: var(--prts-color-text-muted);
-        overflow-wrap: anywhere;
-    }
-    body.prts-site-redesign :is(.bp4-card, .bp6-card) > .flex:has(> .prts-level-badge) { flex-wrap: wrap; }
-    body.prts-site-redesign #prts-filter-bar {
-        margin-top: var(--prts-space-3);
-        margin-bottom: 0;
-        padding-top: var(--prts-space-3);
-        border-top: 1px solid var(--prts-color-border-soft);
-        gap: var(--prts-space-2);
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button) {
-        border-radius: var(--prts-radius-md);
-        font-weight: 500;
-        white-space: nowrap;
-        box-shadow: none;
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button):not(.bp4-small, .bp6-small) {
-        min-height: 38px;
-        padding: var(--prts-space-2) var(--prts-space-3);
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button):not([class*="-intent-"]) {
-        background: var(--prts-color-surface);
-        color: var(--prts-color-text-muted);
-        border: 1px solid var(--prts-color-border);
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-minimal, .bp6-minimal) {
-        background: transparent;
-        border-color: transparent;
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-active, .bp6-active):not([class*="-intent-"]) {
-        background: var(--prts-color-primary-soft);
-        color: var(--prts-color-primary);
-        border-color: transparent;
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-intent-primary, .bp6-intent-primary) {
-        background: var(--prts-site-action);
-        color: var(--prts-site-action-text);
-        border: 1px solid var(--prts-site-action);
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-intent-primary, .bp6-intent-primary) > :is(.bp4-icon, .bp6-icon, .bp4-button-text, .bp6-button-text) { color: inherit; }
-    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group):is(.bp4-minimal, .bp6-minimal) > :is(.bp4-intent-primary, .bp6-intent-primary) {
-        background: var(--prts-color-primary-soft);
-        color: var(--prts-color-primary);
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button):is(:disabled, .bp4-disabled, .bp6-disabled) {
-        opacity: 0.5;
-        cursor: not-allowed;
-    }
-    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group) > :is(.bp4-button, .bp6-button) {
-        border-radius: 0;
-    }
-    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group) > :first-child {
-        border-start-start-radius: var(--prts-radius-md);
-        border-end-start-radius: var(--prts-radius-md);
-    }
-    body.prts-site-redesign :is(.bp4-button-group, .bp6-button-group) > :last-child {
-        border-start-end-radius: var(--prts-radius-md);
-        border-end-end-radius: var(--prts-radius-md);
-    }
-    body.prts-site-redesign :is(.bp4-input, .bp6-input, .bp4-html-select select, .bp6-html-select select) {
-        border: 1px solid var(--prts-color-border);
-        border-radius: var(--prts-radius-md);
-        background: var(--prts-color-surface);
-        color: var(--prts-color-text);
-        box-shadow: none;
-    }
-    body.prts-site-redesign input:is(.bp4-input, .bp6-input) { height: 38px; }
-    body.prts-site-redesign :is(.bp4-input, .bp6-input)::placeholder {
-        color: var(--prts-color-text-subtle);
-        font-style: normal;
-    }
-    body.prts-site-redesign :is(.bp4-input, .bp6-input):disabled { opacity: 0.5; cursor: not-allowed; }
-    body.prts-site-redesign :is(.bp4-input, .bp6-input)[aria-invalid="true"] { border-color: var(--prts-color-danger); }
-    body.prts-site-redesign :is(.bp4-tab, .bp6-tab)[aria-selected="true"] { color: var(--prts-color-primary); }
-    body.prts-site-redesign :is(.bp4-tab-indicator, .bp6-tab-indicator) { background: var(--prts-color-primary); }
-    body.prts-site-redesign :is(.bp4-dialog, .bp6-dialog, .bp4-drawer, .bp6-drawer) {
-        max-width: calc(100% - 24px);
-        background: var(--prts-color-surface);
-        color: var(--prts-color-text);
-        box-shadow: var(--prts-shadow-lg);
-    }
-    body.prts-site-redesign :is(.bp4-dialog, .bp6-dialog) {
-        border: 1px solid var(--prts-color-border-soft);
-        border-radius: var(--prts-site-radius);
-    }
-    body.prts-site-redesign :is(.bp4-dialog-header, .bp6-dialog-header, .bp4-drawer-header, .bp6-drawer-header) {
-        background: var(--prts-color-surface);
-        color: var(--prts-color-text);
-        box-shadow: none;
-        border-bottom: 1px solid var(--prts-color-border-soft);
-    }
-    body.prts-site-redesign :is(.bp4-dialog-header, .bp6-dialog-header) {
-        border-radius: var(--prts-site-radius) var(--prts-site-radius) 0 0;
-    }
-    body.prts-site-redesign :is(.bp4-popover2-content, .bp6-popover-content) {
-        border: 1px solid var(--prts-color-border);
-        border-radius: var(--prts-radius-lg);
-        box-shadow: var(--prts-shadow-md);
-    }
-    body.prts-site-redesign :is(.bp4-menu, .bp6-menu) { padding: var(--prts-space-1); }
-    body.prts-site-redesign :is(.bp4-menu-item, .bp6-menu-item) { border-radius: var(--prts-radius-sm); }
-    body.prts-site-redesign .docs-content-wrapper > section {
-        max-width: 1440px;
-        margin-inline: auto;
-        padding-top: var(--prts-site-gap);
-    }
-    body.prts-site-redesign .docs-content-wrapper > section > div { padding-inline: clamp(12px, 2.5vw, 32px); }
-    body.prts-site-redesign .markdown-body {
-        color: var(--prts-color-text-muted);
-        line-height: 1.75;
-        overflow-wrap: anywhere;
-    }
-    body.prts-site-redesign .markdown-body :is(h1, h2, h3) {
-        color: var(--prts-color-text);
-        border-color: var(--prts-color-border-soft);
-        font-style: normal;
-    }
-    body.prts-site-redesign :is(.bp4-button, .bp6-button, .bp4-input, .bp6-input, .bp4-tab, .bp6-tab, .bp4-menu-item, .bp6-menu-item, a[href], select, [tabindex="0"]):focus-visible {
-        outline: 2px solid var(--prts-color-primary);
-        outline-offset: 2px;
-    }
-    @media (hover: hover) {
-        body.prts-site-redesign :is(.bp4-card, .bp6-card):is(.bp4-interactive, .bp6-interactive):hover {
-            border-color: color-mix(in srgb, var(--prts-color-border-soft) 85%, var(--prts-color-text-subtle));
-            box-shadow: none;
-        }
-        body.prts-site-redesign :is(.bp4-button, .bp6-button):not([class*="-intent-"], :disabled, .bp4-disabled, .bp6-disabled, .bp4-active, .bp6-active):hover {
-            background: var(--prts-color-surface-hover);
-            color: var(--prts-color-text);
-        }
-        body.prts-site-redesign :is(.bp4-button, .bp6-button):is(.bp4-intent-primary, .bp6-intent-primary):not(:disabled, .bp4-disabled, .bp6-disabled):hover {
-            background: var(--prts-site-action-hover);
-            color: var(--prts-site-action-text);
-        }
-    }
-    @media (min-width: 64rem) {
-        body.prts-site-redesign .docs-content-wrapper > .flex:has(> [class~="md:w-2/3"]) {
-            grid-template-columns: minmax(0, 1fr) 300px;
-        }
-    }
-    @media (max-width: 48rem) {
-        body.prts-site-redesign { --prts-site-gap: 16px; --prts-site-padding: 16px; }
-        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:nth-child(2) { display: none; }
-        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child { gap: var(--prts-space-1); }
-        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child :is(.bp4-button, .bp6-button) {
-            min-width: 36px;
-            padding-inline: var(--prts-space-2);
-        }
-        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child :is(.bp4-button-text, .bp6-button-text) {
-            position: absolute;
-            width: 1px;
-            height: 1px;
-            padding: 0;
-            overflow: hidden;
-            clip-path: inset(50%);
-        }
-        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > div:last-child :is(.bp4-icon-caret-down, .bp6-icon-caret-down) { display: none; }
-        body.prts-site-redesign .grid:has(> li > :is(.bp4-card, .bp6-card), > .bp4-card, > .bp6-card) { grid-template-columns: minmax(0, 1fr) !important; }
-        body.prts-site-redesign .docs-content-wrapper > .flex > [class~="md:w-1/3"] > .sticky { position: static; }
-    }
-    @media (max-width: 22.5rem) {
-        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) > a > :is(.bp4-tag, .bp6-tag) { display: none; }
-    }
-    @media (pointer: coarse) {
-        body.prts-site-redesign :is(.bp4-button, .bp6-button):not(.bp4-small, .bp6-small) { min-height: 44px; }
-        body.prts-site-redesign :is(.bp4-navbar, .bp6-navbar) :is(.bp4-button, .bp6-button) { min-width: 44px; }
-        body.prts-site-redesign input:is(.bp4-input, .bp6-input) { height: 44px; }
-        body.prts-site-redesign :is(.bp4-menu-item, .bp6-menu-item) { min-height: 44px; align-items: center; }
-    }
-    @media (prefers-reduced-motion: reduce) {
-        body.prts-site-redesign :is(.bp4-card, .bp6-card) { transition: none !important; }
-    }
-    `;
 
     GM_addStyle(iconStyles + toastStyles + (isSklandHost() ? sklandImportStyles : mergedStyles + siteRedesignStyles) + accountSelectStyles + scriptUpdateStyles);
     // =========================================================================
@@ -4110,63 +4142,6 @@ function createSklandImportCancelledError() {
         })().finally(() => { scriptUpdatePending = null; });
         return scriptUpdatePending;
     }
-    // =========================================================================
-    //                            MODULE 3: 工具函数与核心算法
-    // =========================================================================
-
-    // 获取 React Fiber 节点
-    function getFiberNode(element) {
-        if (!element) return null;
-        const key = Object.keys(element).find(k => k.startsWith('__reactFiber$'));
-        return key ? element[key] : null;
-    }
-
-    // 提取 React 节点中的文本内容
-    function getReactNodeText(node) {
-        if (!node) return '';
-        if (typeof node === 'string' || typeof node === 'number') return String(node);
-        if (Array.isArray(node)) return node.map(getReactNodeText).join('');
-        if (node.props && node.props.children) return getReactNodeText(node.props.children);
-        return '';
-    }
-
-    // 向上遍历 Fiber 树，获取完整的作业数据
-    function extractOperationFromFiber(element) {
-        let fiber = getFiberNode(element);
-        let depth = 0;
-
-        while (fiber && depth < 30) { // 向上遍历最多 30 层
-            const props = fiber.memoizedProps;
-            if (props) {
-                const candidate = props.operation || props.data || props.copilot || props.item;
-                if (candidate && typeof candidate === 'object') {
-                    if (candidate.parsedContent || candidate.opers !== undefined || candidate.groups !== undefined || typeof candidate.content === 'string') {
-                        return candidate;
-                    }
-                }
-            }
-            fiber = fiber.return;
-            depth++;
-        }
-        return null;
-    }
-
-    // 获取悬浮窗组件(Popover)内部的文本内容
-    function extractPopoverContentFromFiber(element) {
-        let fiber = getFiberNode(element);
-        let depth = 0;
-
-        while (fiber && depth < 15) {
-            const props = fiber.memoizedProps;
-            if (props && props.content !== undefined) {
-                return getReactNodeText(props.content);
-            }
-            fiber = fiber.return;
-            depth++;
-        }
-        return "";
-    }
-
     function matchOperatorGroups(requiredGroups, ownedOpsSet, usedOwnedOps, allowUnknownFallbackGroup,
         checkTraining, unknownTraining = [], lowTraining = [], trainingIssues = []) {
         const groups = requiredGroups
@@ -4387,7 +4362,11 @@ function createSklandImportCancelledError() {
         const trainingIssues = [];
         const hasRequirements = [...requiredOps, ...requiredGroups.flatMap(group => group.opers || [])]
             .some(op => op?.requirements && Object.values(op.requirements).some(value => Number.isInteger(value) && value > 0));
-        const evaluate = op => checkOperatorTraining(op, training[op.name]);
+        const trainingResults = new Map();
+        const evaluate = op => {
+            if (!trainingResults.has(op)) trainingResults.set(op, checkOperatorTraining(op, training[op.name]));
+            return trainingResults.get(op);
+        };
 
         requiredOps.forEach(op => {
             const opName = op.name;
@@ -4425,9 +4404,12 @@ function createSklandImportCancelledError() {
 
         return { isAvailable, missingCount, missingOps: missingDetails, lowTraining, unknownTraining, trainingIssues, hasRequirements };
     }
-    // =========================================================================
-    //                            MODULE 4: 数据存取与账号管理
-    // =========================================================================
+    let activeAccountId = 1;
+    let nextAccountId = 4;
+    let accountsData = createEmptyAccountsData();
+    let accountsTraining = { 1: {}, 2: {}, 3: {} };
+    let accountMeta = createDefaultAccountMeta();
+    let ownedOpsSet = new Set();
 
     function getCurrentAccountState() {
         return createAccountState({ activeAccountId, nextAccountId, accountsData, accountsTraining, accountMeta });
@@ -4551,8 +4533,6 @@ function createSklandImportCancelledError() {
     }
 
     function refreshAccountStateUi(forceFilterUpdate = false) {
-        const bar = document.getElementById('prts-filter-bar');
-        if (bar) bar.remove();
         injectFilterControls();
         refreshAccountControls();
         updateFloatingLayout();
@@ -4697,6 +4677,23 @@ function createSklandImportCancelledError() {
         return lines.join('\n');
     }
 
+
+    function registerAccountsDataChangeListener() {
+        if (typeof GM_addValueChangeListener !== 'function') return;
+        GM_addValueChangeListener(ACCOUNTS_DATA_KEY, (_name, oldValue, newValue, remote) => {
+            if (!remote || oldValue === newValue) return;
+            refreshOwnedOpsFromStorage();
+        });
+    }
+
+    function refreshOwnedOpsFromStorage() {
+        loadOwnedOps();
+        if (isSklandHost()) {
+            refreshAccountControls();
+            return;
+        }
+        refreshAccountStateUi();
+    }
     function getBackupPreferences() {
         return {
             filterMode: CONFIG.filterMode,
@@ -4866,14 +4863,7 @@ function createSklandImportCancelledError() {
         };
         input.click();
     }
-    // =========================================================================
-    //                            MODULE 5: 干员导入与筛选控件
-    // =========================================================================
-
-    function isFilterDisabledPage() {
-        const path = window.location.pathname;
-        return path.startsWith('/create') || path.startsWith('/editor');
-    }
+    let operatorImportDialogCleanup = null;
 
     function getImportErrorMessage(error) {
         return error instanceof Error ? error.message : '未知错误';
@@ -5179,12 +5169,9 @@ function createSklandImportCancelledError() {
                 : '如果没有看到新窗口，请手动打开 https://www.skland.com/index，登录后使用 Better-PRTS-Plus 导入面板。'
         );
     }
-
     function toggleDisplayMode() {
         CONFIG.displayMode = (CONFIG.displayMode === 'GRAY') ? 'HIDE' : 'GRAY';
         saveConfig();
-        const bar = document.getElementById('prts-filter-bar');
-        if (bar) bar.remove();
         injectFilterControls();
         requestFilterUpdate();
     }
@@ -5457,6 +5444,249 @@ function createSklandImportCancelledError() {
         renderFilterResults();
         if (isNew) requestFilterUpdate();
     }
+    function createSklandImportPanel() {
+        if (document.getElementById('prts-skland-import-panel')) return;
+
+        const panel = document.createElement('section');
+        panel.id = 'prts-skland-import-panel';
+
+        const head = document.createElement('div');
+        head.className = 'prts-skland-head';
+
+        const headingWrap = document.createElement('div');
+        const title = document.createElement('h2');
+        title.className = 'prts-skland-title';
+        title.textContent = 'Better-PRTS-Plus';
+        const subtitle = document.createElement('p');
+        subtitle.className = 'prts-skland-subtitle';
+        subtitle.textContent = '通过当前登录的森空岛账号读取明日方舟干员。';
+        headingWrap.appendChild(title);
+        headingWrap.appendChild(subtitle);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        closeBtn.className = 'prts-skland-close';
+        closeBtn.title = '关闭';
+        closeBtn.setAttribute('aria-label', '关闭森空岛导入面板');
+        closeBtn.appendChild(createPrtsIcon('close'));
+        closeBtn.onclick = () => panel.remove();
+
+        head.appendChild(headingWrap);
+        head.appendChild(closeBtn);
+        panel.appendChild(head);
+
+        const body = document.createElement('div');
+        body.className = 'prts-skland-body';
+        const defaultStatusText = '请确认当前页面已登录森空岛。读取后可预览干员名单和练度变化，确认后再导入。';
+
+        const accountLabel = document.createElement('span');
+        accountLabel.className = 'prts-skland-label';
+        accountLabel.textContent = '目标账号';
+        body.appendChild(accountLabel);
+
+        const accountSelect = createAccountSelect('prts-skland-target-account', activeAccountId, () => {
+            renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
+        });
+        body.appendChild(accountSelect);
+
+        const importBtn = document.createElement('button');
+        importBtn.type = 'button';
+        importBtn.className = 'prts-skland-primary';
+        importBtn.textContent = '读取并导入干员';
+        body.appendChild(importBtn);
+
+        const status = document.createElement('div');
+        status.className = 'prts-skland-status';
+        status.setAttribute('role', 'status');
+        status.setAttribute('aria-live', 'polite');
+        status.textContent = defaultStatusText;
+        body.appendChild(status);
+
+        const link = document.createElement('a');
+        link.className = 'prts-skland-link';
+        link.href = 'https://prts.plus/';
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        link.textContent = '打开 PRTS Plus';
+        body.appendChild(link);
+
+        importBtn.onclick = async () => {
+            const accountId = Number(accountSelect.value);
+            const progressText = `正在读取森空岛数据，完成后请核对 ${getAccountLabel(accountId)} 的导入预览。`;
+            const updateToast = showPrtsToast('正在读取森空岛干员…', 'loading', progressText, 0);
+            importBtn.disabled = true;
+            importBtn.textContent = '读取中…';
+            accountSelect.disabled = true;
+            setSklandPanelStatus(status, progressText, 'loading');
+            try {
+                const summary = await importSklandOperatorsToAccount(accountId, {
+                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
+                });
+                createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
+                const detail = formatSklandImportSummary(summary);
+                setSklandPanelStatus(status, detail, 'success');
+                updateToast('森空岛干员导入成功', 'success', detail);
+            } catch (error) {
+                if (isSklandImportCancelledError(error)) {
+                    setSklandPanelStatus(status, '已取消导入，未修改账号数据。', '');
+                    updateToast('已取消森空岛导入', 'info', '未修改账号数据。');
+                    return;
+                }
+                console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
+                const detail = error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。';
+                setSklandPanelStatus(status, detail, 'error');
+                updateToast('森空岛干员导入失败', 'error', detail);
+            } finally {
+                importBtn.disabled = false;
+                importBtn.textContent = '读取并导入干员';
+                accountSelect.disabled = false;
+            }
+        };
+
+        renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
+
+        panel.appendChild(body);
+        document.body.appendChild(panel);
+    }
+
+    async function showSklandBindingPicker(bindings, preferredUid, accountId) {
+        const availableBindings = normalizeSklandArknightsBindings(bindings);
+        if (availableBindings.length === 0) return null;
+
+        const accountLabel = getAccountLabel(accountId);
+        const lastUid = normalizeSklandSyncText(getAccountSklandSyncMeta(accountId)?.uid);
+        let selectedBinding = selectSklandBindingOption(availableBindings, preferredUid) || availableBindings[0];
+
+        const content = document.createElement('div');
+        content.className = 'prts-skland-binding-picker';
+
+        const intro = document.createElement('p');
+        intro.className = 'prts-skland-binding-intro';
+        intro.textContent = `检测到多个明日方舟角色，请选择要导入到 ${accountLabel} 的角色。`;
+        content.appendChild(intro);
+
+        const list = document.createElement('div');
+        list.className = 'prts-skland-binding-list';
+        list.setAttribute('role', 'radiogroup');
+        list.setAttribute('aria-label', '森空岛明日方舟角色');
+        content.appendChild(list);
+
+        const options = [];
+        const selectByIndex = (index, focus = false) => {
+            const next = options[index];
+            if (!next) return;
+            selectedBinding = next.binding;
+            options.forEach(option => {
+                const selected = option.binding.uid === selectedBinding.uid;
+                option.root.classList.toggle('is-selected', selected);
+                option.input.checked = selected;
+            });
+            if (focus) next.input.focus();
+        };
+
+        availableBindings.forEach((binding, index) => {
+            const option = document.createElement('label');
+            option.className = 'prts-skland-binding-option';
+
+            const input = document.createElement('input');
+            input.type = 'radio';
+            input.name = 'prts-skland-binding';
+            input.className = 'prts-skland-binding-radio';
+            input.value = binding.uid;
+            input.checked = binding.uid === selectedBinding.uid;
+            input.onchange = () => selectByIndex(index);
+            input.onkeydown = event => {
+                if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) return;
+                event.preventDefault();
+                const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
+                const nextIndex = (index + delta + availableBindings.length) % availableBindings.length;
+                selectByIndex(nextIndex, true);
+            };
+
+            const textWrap = document.createElement('span');
+            textWrap.className = 'prts-skland-binding-text';
+
+            const nameRow = document.createElement('span');
+            nameRow.className = 'prts-skland-binding-name-row';
+
+            const name = document.createElement('span');
+            name.className = 'prts-skland-binding-name';
+            name.textContent = binding.nickname || '博士';
+            nameRow.appendChild(name);
+
+            if (lastUid && binding.uid === lastUid) {
+                const badge = document.createElement('span');
+                badge.className = 'prts-skland-binding-badge';
+                badge.textContent = '上次导入';
+                nameRow.appendChild(badge);
+            } else if (binding.isDefault) {
+                const badge = document.createElement('span');
+                badge.className = 'prts-skland-binding-badge';
+                badge.textContent = '森空岛默认';
+                nameRow.appendChild(badge);
+            }
+
+            const meta = document.createElement('span');
+            meta.className = 'prts-skland-binding-meta';
+            meta.textContent = `UID ${binding.uid} / ${binding.channelName || '官方'}`;
+
+            textWrap.appendChild(nameRow);
+            textWrap.appendChild(meta);
+            option.appendChild(input);
+            option.appendChild(textWrap);
+            option.classList.toggle('is-selected', input.checked);
+            list.appendChild(option);
+            options.push({ root: option, input, binding });
+        });
+
+        const resultPromise = showPrtsModal({
+            title: '选择森空岛角色',
+            message: content,
+            confirmText: '导入所选角色',
+            cancelText: '取消'
+        });
+
+        window.setTimeout(() => {
+            const selectedOption = options.find(option => option.binding.uid === selectedBinding.uid);
+            selectedOption?.input.focus();
+        }, 20);
+
+        const confirmed = await resultPromise;
+        return confirmed === true ? selectedBinding : null;
+    }
+
+    function renderSklandSelectedAccountStatus(status, accountId, fallbackText) {
+        const summary = getAccountSklandImportSummary(accountId);
+        if (summary) {
+            setSklandPanelStatus(status, `该账号上次同步：
+${formatSklandImportSummary(summary)}`, 'success');
+            return;
+        }
+        setSklandPanelStatus(status, fallbackText, '');
+    }
+
+    function setSklandPanelStatus(status, text, type) {
+        status.className = 'prts-skland-status';
+        if (type) status.classList.add(type);
+        status.setAttribute('role', type === 'error' ? 'alert' : 'status');
+        status.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
+        status.textContent = text;
+    }
+
+    function formatSklandImportSummary(summary) {
+        const normalized = normalizeSklandImportSummary(summary);
+        if (!normalized) return '';
+
+        const timeText = formatSklandSyncTime(normalized.importedAt);
+        const accountLabel = normalized.accountLabel || getAccountLabel(normalized.accountId);
+        const lines = [
+            `${accountLabel} 已导入 ${normalized.operatorCount} 名干员。`,
+            `${normalized.nickname || '博士'} / UID ${normalized.uid || '未知'}`
+        ];
+        if (timeText) lines.push(timeText);
+        return lines.join('\n');
+    }
+
     function findBilibiliUrl(text) {
         const match = String(text || '').match(/(?:【.*?】\s*)?(https?:\/\/(?:www\.)?(?:bilibili\.com\/video\/|b23\.tv\/)[^\s<"']+)/i);
         return match ? { fullText: match[0], url: match[1] } : null;
@@ -5553,208 +5783,6 @@ function createSklandImportCancelledError() {
         descContainer.style.width = '100%';
         descContainer.tabIndex = 0;
         descContainer.setAttribute('aria-label', '作业描述');
-    }
-
-    function getOperationCards() {
-        return Array.from(getOperationListRoot()?.querySelectorAll(BP_SELECTORS.operationCard) || []);
-    }
-
-    function getCardFromMutationNode(node) {
-        const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
-        if (!element) return null;
-        if (element.matches?.(BP_SELECTORS.operationCard)) return element;
-        return element.closest?.(BP_SELECTORS.operationCard) || null;
-    }
-
-    const filterUpdateCoordinator = createFilterUpdateCoordinator({
-        requestFrame: callback => requestAnimationFrame(callback),
-        cancelFrame: id => cancelAnimationFrame(id),
-        setDelay: (callback, delay) => setTimeout(callback, delay),
-        clearDelay: id => clearTimeout(id),
-        run: () => applyFilterLogic()
-    });
-
-    function requestFilterUpdate(options = {}) {
-        filterUpdateCoordinator.request(options);
-    }
-
-    function scheduleFilterUpdate(delay = 80, options = {}) {
-        if (isFilterDisabledPage()) {
-            filterUpdateCoordinator.reset();
-            return;
-        }
-        filterUpdateCoordinator.schedule(delay, options);
-    }
-
-    function syncOperationTypeButtons(hidden = CONFIG.hideVideo) {
-        document.querySelectorAll('.bp4-button-group.flex-wrap, .bp6-button-group.flex-wrap').forEach(group => {
-            const labels = Array.from(group.children, button => button.textContent.trim());
-            if (labels.length === 3 && labels[1] === 'PRTS' && ['视频', 'Video', 'Videos'].includes(labels[2])) {
-                group.style.display = hidden ? 'none' : '';
-            }
-        });
-    }
-
-    function syncOperatorMatchingSettings(hidden = CONFIG.hideOperatorMatchingSettings) {
-        document.querySelectorAll('button.bp4-button, button.bp6-button').forEach(button => {
-            if (button.textContent.trim() !== '干员匹配设置') return;
-            button.style.display = hidden ? 'none' : '';
-            const group = button.parentElement;
-            if (group?.matches('div.flex.flex-wrap.items-center.gap-1')) {
-                group.style.display = hidden && group.children.length === 1 ? 'none' : '';
-            }
-        });
-    }
-
-    function syncSiteRedesign() {
-        document.body?.classList.toggle('prts-site-redesign', isPrtsHost() && CONFIG.siteRedesign);
-    }
-
-    function syncPageScaffold() {
-        syncSiteRedesign();
-        applySidebarCollapse();
-        optimizeDialogContent();
-        createFloatingBall();
-        injectFilterControls();
-        syncOperationTypeButtons();
-        syncOperatorMatchingSettings();
-        if (isFilterDisabledPage()) {
-            setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
-        } else {
-            renderCompatibilityDiagnosticsPanel();
-        }
-    }
-
-    function getRouteKey() {
-        return `${window.location.pathname}${window.location.search}`;
-    }
-
-    function createCompatibilityDiagnostics(totalCards = 0, fiberCards = 0, fallbackCards = 0, noDataCards = 0) {
-        return {
-            route: getRouteKey(),
-            totalCards,
-            fiberCards,
-            fallbackCards,
-            noDataCards,
-            updatedAt: new Date().toISOString()
-        };
-    }
-
-    let compatibilityDiagnostics = createCompatibilityDiagnostics();
-
-    function getCompatibilityDiagnostics() {
-        return { ...compatibilityDiagnostics };
-    }
-
-    function setCompatibilityDiagnostics(stats) {
-        compatibilityDiagnostics = createCompatibilityDiagnostics(
-            Number(stats?.totalCards) || 0,
-            Number(stats?.fiberCards) || 0,
-            Number(stats?.fallbackCards) || 0,
-            Number(stats?.noDataCards) || 0
-        );
-        renderCompatibilityDiagnosticsPanel();
-    }
-
-    function removeCompatibilityDiagnosticsPanel() {
-        document.getElementById('prts-compat-debug-panel')?.remove();
-    }
-
-    function renderCompatibilityDiagnosticsPanel() {
-        if (!CONFIG.compatDebug || isFilterDisabledPage()) {
-            removeCompatibilityDiagnosticsPanel();
-            return;
-        }
-        if (!document.body) return;
-
-        let panel = document.getElementById('prts-compat-debug-panel');
-        if (!panel) {
-            panel = document.createElement('div');
-            panel.id = 'prts-compat-debug-panel';
-            panel.setAttribute('role', 'status');
-            panel.setAttribute('aria-live', 'polite');
-
-            const title = document.createElement('div');
-            title.className = 'prts-compat-debug-title';
-            title.textContent = '兼容诊断';
-
-            const summary = document.createElement('div');
-            summary.className = 'prts-compat-debug-summary';
-
-            const meta = document.createElement('div');
-            meta.className = 'prts-compat-debug-meta';
-
-            panel.appendChild(title);
-            panel.appendChild(summary);
-            panel.appendChild(meta);
-            document.body.appendChild(panel);
-        }
-
-        const diagnostics = getCompatibilityDiagnostics();
-        const summary = panel.querySelector('.prts-compat-debug-summary');
-        const meta = panel.querySelector('.prts-compat-debug-meta');
-        const timeText = diagnostics.updatedAt ? new Date(diagnostics.updatedAt).toLocaleTimeString() : '未刷新';
-
-        if (summary) {
-            summary.textContent = `卡片 ${diagnostics.totalCards} · Fiber ${diagnostics.fiberCards} · fallback ${diagnostics.fallbackCards} · 无有效数据 ${diagnostics.noDataCards}`;
-        }
-        if (meta) {
-            meta.textContent = `${diagnostics.route || '/'} · ${timeText}`;
-        }
-    }
-
-    betterPrtsDebug.getCompatibilityDiagnostics = getCompatibilityDiagnostics;
-    window.BetterPRTSPlusDebug = betterPrtsDebug;
-
-    function handleRouteChange() {
-        const routeKey = getRouteKey();
-        if (routeKey === lastRouteKey) return false;
-
-        lastRouteKey = routeKey;
-        filterUpdateCoordinator.reset();
-        renderFilterResults(null);
-        syncPageScaffold();
-        scheduleFilterUpdate(120);
-        return true;
-    }
-
-    function isScriptOwnedNode(node) {
-        const element = node?.nodeType === 1 ? node : node?.parentElement;
-        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label'));
-    }
-
-    function collectDirtyCardsFromMutations(mutations) {
-        const dirtyCards = new Set();
-        for (const mutation of mutations) {
-            if (isScriptOwnedNode(mutation.target)) continue;
-
-            const targetCard = getCardFromMutationNode(mutation.target);
-            if (targetCard) dirtyCards.add(targetCard);
-
-            const changedNodes = Array.from(mutation.addedNodes || []).concat(Array.from(mutation.removedNodes || []));
-            changedNodes.forEach(node => {
-                if (isScriptOwnedNode(node)) return;
-                const card = getCardFromMutationNode(node);
-                if (card) dirtyCards.add(card);
-                if (node?.nodeType === Node.ELEMENT_NODE) {
-                    node.querySelectorAll?.(BP_SELECTORS.operationCard).forEach(childCard => dirtyCards.add(childCard));
-                }
-            });
-        }
-        return dirtyCards;
-    }
-
-    function hasRelevantDomMutation(mutations) {
-        for (const mutation of mutations) {
-            if (isScriptOwnedNode(mutation.target)) continue;
-            if (mutation.type === 'characterData' && getCardFromMutationNode(mutation.target)) return true;
-
-            const added = Array.from(mutation.addedNodes || []);
-            const removed = Array.from(mutation.removedNodes || []);
-            const changedNodes = added.concat(removed);
-            if (changedNodes.some(node => !isScriptOwnedNode(node))) return true;
-        }
-        return false;
     }
 
     function addStageBadge(cardInner) {
@@ -5933,7 +5961,7 @@ function createSklandImportCancelledError() {
                         interactiveWrapper.title = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
                         interactiveWrapper.setAttribute('aria-label', interactiveWrapper.title);
                         grid.appendChild(interactiveWrapper);
-                interactiveWrapper.replaceChildren();
+                        interactiveWrapper.replaceChildren();
                         interactiveWrapper.appendChild(newItem);
                     } else {
                         const tooltipText = `${nameKey}${extraInfo ? ' ' + extraInfo : ''}`;
@@ -6047,9 +6075,48 @@ function createSklandImportCancelledError() {
         }
     }
 
-    /**
-     * 记录作业卡片的数据来源、筛选状态和可见状态。
-     */
+
+    function createDialogTag(text) {
+        const tag = document.createElement('span');
+        tag.classList.add('prts-dialog-tag');
+
+        if (text.includes('升级') || text.includes('优化') || text.includes('更新')) {
+            tag.classList.add('prts-tag-update');
+            tag.textContent = '更新';
+        } else if (text.includes('修复') || text.includes('问题') || text.includes('Bug')) {
+            tag.classList.add('prts-tag-fix');
+            tag.textContent = '维护';
+        } else if (text.includes('活动') || text.includes('关卡')) {
+            tag.classList.add('prts-tag-event');
+            tag.textContent = '活动';
+        } else {
+            tag.classList.add('prts-tag-note');
+            tag.textContent = '通知';
+        }
+
+        return tag;
+    }
+
+    function optimizeDialogContent() {
+        if (!CONFIG.announcementTags) return;
+        const dialog = document.querySelector(BP_SELECTORS.dialog);
+        if (!dialog || dialog.dataset.contentOptimized) return;
+
+        const title = dialog.querySelector(BP_SELECTORS.heading);
+        if (title && title.innerText.includes('公告')) {
+            const contentBody = dialog.querySelector('.markdown-body');
+            if (contentBody) {
+                const headers = contentBody.querySelectorAll('h2');
+                headers.forEach(h2 => {
+                    if (!h2.querySelector('.prts-dialog-tag')) {
+                        h2.insertBefore(createDialogTag(h2.textContent), h2.firstChild);
+                    }
+                });
+            }
+            dialog.dataset.contentOptimized = "true";
+        }
+    }
+    const cardDiagnosticsCache = new WeakMap();
     function createCardDiagnostics(source = 'none') {
         return {
             fiberCards: source === 'fiber' ? 1 : 0,
@@ -6347,8 +6414,6 @@ function createSklandImportCancelledError() {
             renderFilterResults(null);
             return;
         }
-        isProcessingFilter = true;
-
         try {
             const cards = getOperationCards();
             if (cards.length === 0) filterUpdateCoordinator.reset();
@@ -6362,333 +6427,237 @@ function createSklandImportCancelledError() {
         } catch (error) {
             filterUpdateCoordinator.reset();
             throw error;
-        } finally {
-            isProcessingFilter = false;
         }
     }
-    // =========================================================================
-    //                            MODULE 6: 侧边栏与悬浮球面板
-    // =========================================================================
+    let lastRouteKey = getRouteKey();
 
-    function createDialogTag(text) {
-        const tag = document.createElement('span');
-        tag.classList.add('prts-dialog-tag');
-
-        if (text.includes('升级') || text.includes('优化') || text.includes('更新')) {
-            tag.classList.add('prts-tag-update');
-            tag.textContent = '更新';
-        } else if (text.includes('修复') || text.includes('问题') || text.includes('Bug')) {
-            tag.classList.add('prts-tag-fix');
-            tag.textContent = '维护';
-        } else if (text.includes('活动') || text.includes('关卡')) {
-            tag.classList.add('prts-tag-event');
-            tag.textContent = '活动';
-        } else {
-            tag.classList.add('prts-tag-note');
-            tag.textContent = '通知';
-        }
-
-        return tag;
+    function isFilterDisabledPage() {
+        const path = window.location.pathname;
+        return path.startsWith('/create') || path.startsWith('/editor');
     }
 
-    function optimizeDialogContent() {
-        if (!CONFIG.announcementTags) return;
-        const dialog = document.querySelector(BP_SELECTORS.dialog);
-        if (!dialog || dialog.dataset.contentOptimized) return;
+    function getOperationCards() {
+        return Array.from(getOperationListRoot()?.querySelectorAll(BP_SELECTORS.operationCard) || []);
+    }
 
-        const title = dialog.querySelector(BP_SELECTORS.heading);
-        if (title && title.innerText.includes('公告')) {
-            const contentBody = dialog.querySelector('.markdown-body');
-            if (contentBody) {
-                const headers = contentBody.querySelectorAll('h2');
-                headers.forEach(h2 => {
-                    if (!h2.querySelector('.prts-dialog-tag')) {
-                        h2.insertBefore(createDialogTag(h2.textContent), h2.firstChild);
-                    }
-                });
+    function getCardFromMutationNode(node) {
+        const element = node?.nodeType === Node.ELEMENT_NODE ? node : node?.parentElement;
+        if (!element) return null;
+        if (element.matches?.(BP_SELECTORS.operationCard)) return element;
+        return element.closest?.(BP_SELECTORS.operationCard) || null;
+    }
+
+    const filterUpdateCoordinator = createFilterUpdateCoordinator({
+        requestFrame: callback => requestAnimationFrame(callback),
+        cancelFrame: id => cancelAnimationFrame(id),
+        setDelay: (callback, delay) => setTimeout(callback, delay),
+        clearDelay: id => clearTimeout(id),
+        run: () => applyFilterLogic()
+    });
+
+    function requestFilterUpdate(options = {}) {
+        filterUpdateCoordinator.request(options);
+    }
+
+    function scheduleFilterUpdate(delay = 80, options = {}) {
+        if (isFilterDisabledPage()) {
+            filterUpdateCoordinator.dispose();
+            return;
+        }
+        filterUpdateCoordinator.schedule(delay, options);
+    }
+
+    function syncOperationTypeButtons(hidden = CONFIG.hideVideo) {
+        document.querySelectorAll('.bp4-button-group.flex-wrap, .bp6-button-group.flex-wrap').forEach(group => {
+            const labels = Array.from(group.children, button => button.textContent.trim());
+            if (labels.length === 3 && labels[1] === 'PRTS' && ['视频', 'Video', 'Videos'].includes(labels[2])) {
+                group.style.display = hidden ? 'none' : '';
             }
-            dialog.dataset.contentOptimized = "true";
-        }
-    }
-
-    function registerAccountsDataChangeListener() {
-        if (typeof GM_addValueChangeListener !== 'function') return;
-        GM_addValueChangeListener(ACCOUNTS_DATA_KEY, (_name, oldValue, newValue, remote) => {
-            if (!remote || oldValue === newValue) return;
-            refreshOwnedOpsFromStorage();
         });
     }
 
-    function refreshOwnedOpsFromStorage() {
-        loadOwnedOps();
-        if (isSklandHost()) {
-            refreshAccountControls();
-            return;
-        }
-        const bar = document.getElementById('prts-filter-bar');
-        if (bar) bar.remove();
+    function syncOperatorMatchingSettings(hidden = CONFIG.hideOperatorMatchingSettings) {
+        document.querySelectorAll('button.bp4-button, button.bp6-button').forEach(button => {
+            if (button.textContent.trim() !== '干员匹配设置') return;
+            button.style.display = hidden ? 'none' : '';
+            const group = button.parentElement;
+            if (group?.matches('div.flex.flex-wrap.items-center.gap-1')) {
+                group.style.display = hidden && group.children.length === 1 ? 'none' : '';
+            }
+        });
+    }
+
+    function syncSiteRedesign() {
+        document.body?.classList.toggle('prts-site-redesign', isPrtsHost() && CONFIG.siteRedesign);
+    }
+
+    function syncPageScaffold() {
+        syncSiteRedesign();
+        applySidebarCollapse();
+        optimizeDialogContent();
+        createFloatingBall();
         injectFilterControls();
-        refreshAccountControls();
-        updateFloatingLayout();
-        if (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck) requestFilterUpdate();
+        syncOperationTypeButtons();
+        syncOperatorMatchingSettings();
+        if (isFilterDisabledPage()) {
+            setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
+        } else {
+            renderCompatibilityDiagnosticsPanel();
+        }
     }
 
-    function initSklandImportPage() {
-        loadOwnedOps();
-        registerAccountsDataChangeListener();
-        if (document.body) {
-            createSklandImportPanel();
+    function getRouteKey() {
+        return `${window.location.pathname}${window.location.search}`;
+    }
+
+    function createCompatibilityDiagnostics(totalCards = 0, fiberCards = 0, fallbackCards = 0, noDataCards = 0) {
+        return {
+            route: getRouteKey(),
+            totalCards,
+            fiberCards,
+            fallbackCards,
+            noDataCards,
+            updatedAt: new Date().toISOString()
+        };
+    }
+
+    let compatibilityDiagnostics = createCompatibilityDiagnostics();
+
+    function getCompatibilityDiagnostics() {
+        return { ...compatibilityDiagnostics };
+    }
+
+    function setCompatibilityDiagnostics(stats) {
+        compatibilityDiagnostics = createCompatibilityDiagnostics(
+            Number(stats?.totalCards) || 0,
+            Number(stats?.fiberCards) || 0,
+            Number(stats?.fallbackCards) || 0,
+            Number(stats?.noDataCards) || 0
+        );
+        renderCompatibilityDiagnosticsPanel();
+    }
+
+    function removeCompatibilityDiagnosticsPanel() {
+        document.getElementById('prts-compat-debug-panel')?.remove();
+    }
+
+    function renderCompatibilityDiagnosticsPanel() {
+        if (!CONFIG.compatDebug || isFilterDisabledPage()) {
+            removeCompatibilityDiagnosticsPanel();
             return;
         }
-        window.addEventListener('DOMContentLoaded', createSklandImportPanel, { once: true });
-    }
+        if (!document.body) return;
 
-    function createSklandImportPanel() {
-        if (document.getElementById('prts-skland-import-panel')) return;
+        let panel = document.getElementById('prts-compat-debug-panel');
+        if (!panel) {
+            panel = document.createElement('div');
+            panel.id = 'prts-compat-debug-panel';
+            panel.setAttribute('role', 'status');
+            panel.setAttribute('aria-live', 'polite');
 
-        const panel = document.createElement('section');
-        panel.id = 'prts-skland-import-panel';
+            const title = document.createElement('div');
+            title.className = 'prts-compat-debug-title';
+            title.textContent = '兼容诊断';
 
-        const head = document.createElement('div');
-        head.className = 'prts-skland-head';
+            const summary = document.createElement('div');
+            summary.className = 'prts-compat-debug-summary';
 
-        const headingWrap = document.createElement('div');
-        const title = document.createElement('h2');
-        title.className = 'prts-skland-title';
-        title.textContent = 'Better-PRTS-Plus';
-        const subtitle = document.createElement('p');
-        subtitle.className = 'prts-skland-subtitle';
-        subtitle.textContent = '通过当前登录的森空岛账号读取明日方舟干员。';
-        headingWrap.appendChild(title);
-        headingWrap.appendChild(subtitle);
+            const meta = document.createElement('div');
+            meta.className = 'prts-compat-debug-meta';
 
-        const closeBtn = document.createElement('button');
-        closeBtn.type = 'button';
-        closeBtn.className = 'prts-skland-close';
-        closeBtn.title = '关闭';
-        closeBtn.setAttribute('aria-label', '关闭森空岛导入面板');
-        closeBtn.appendChild(createPrtsIcon('close'));
-        closeBtn.onclick = () => panel.remove();
+            panel.appendChild(title);
+            panel.appendChild(summary);
+            panel.appendChild(meta);
+            document.body.appendChild(panel);
+        }
 
-        head.appendChild(headingWrap);
-        head.appendChild(closeBtn);
-        panel.appendChild(head);
+        const diagnostics = getCompatibilityDiagnostics();
+        const summary = panel.querySelector('.prts-compat-debug-summary');
+        const meta = panel.querySelector('.prts-compat-debug-meta');
+        const timeText = diagnostics.updatedAt ? new Date(diagnostics.updatedAt).toLocaleTimeString() : '未刷新';
 
-        const body = document.createElement('div');
-        body.className = 'prts-skland-body';
-        const defaultStatusText = '请确认当前页面已登录森空岛。读取后可预览干员名单和练度变化，确认后再导入。';
-
-        const accountLabel = document.createElement('span');
-        accountLabel.className = 'prts-skland-label';
-        accountLabel.textContent = '目标账号';
-        body.appendChild(accountLabel);
-
-        const accountSelect = createAccountSelect('prts-skland-target-account', activeAccountId, () => {
-            renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
-        });
-        body.appendChild(accountSelect);
-
-        const importBtn = document.createElement('button');
-        importBtn.type = 'button';
-        importBtn.className = 'prts-skland-primary';
-        importBtn.textContent = '读取并导入干员';
-        body.appendChild(importBtn);
-
-        const status = document.createElement('div');
-        status.className = 'prts-skland-status';
-        status.setAttribute('role', 'status');
-        status.setAttribute('aria-live', 'polite');
-        status.textContent = defaultStatusText;
-        body.appendChild(status);
-
-        const link = document.createElement('a');
-        link.className = 'prts-skland-link';
-        link.href = 'https://prts.plus/';
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        link.textContent = '打开 PRTS Plus';
-        body.appendChild(link);
-
-        importBtn.onclick = async () => {
-            const accountId = Number(accountSelect.value);
-            const progressText = `正在读取森空岛数据，完成后请核对 ${getAccountLabel(accountId)} 的导入预览。`;
-            const updateToast = showPrtsToast('正在读取森空岛干员…', 'loading', progressText, 0);
-            importBtn.disabled = true;
-            importBtn.textContent = '读取中…';
-            accountSelect.disabled = true;
-            setSklandPanelStatus(status, progressText, 'loading');
-            try {
-                const summary = await importSklandOperatorsToAccount(accountId, {
-                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
-                });
-                createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
-                const detail = formatSklandImportSummary(summary);
-                setSklandPanelStatus(status, detail, 'success');
-                updateToast('森空岛干员导入成功', 'success', detail);
-            } catch (error) {
-                if (isSklandImportCancelledError(error)) {
-                    setSklandPanelStatus(status, '已取消导入，未修改账号数据。', '');
-                    updateToast('已取消森空岛导入', 'info', '未修改账号数据。');
-                    return;
-                }
-                console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
-                const detail = error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。';
-                setSklandPanelStatus(status, detail, 'error');
-                updateToast('森空岛干员导入失败', 'error', detail);
-            } finally {
-                importBtn.disabled = false;
-                importBtn.textContent = '读取并导入干员';
-                accountSelect.disabled = false;
-            }
-        };
-
-        renderSklandSelectedAccountStatus(status, Number(accountSelect.value), defaultStatusText);
-
-        panel.appendChild(body);
-        document.body.appendChild(panel);
-    }
-
-    async function showSklandBindingPicker(bindings, preferredUid, accountId) {
-        const availableBindings = normalizeSklandArknightsBindings(bindings);
-        if (availableBindings.length === 0) return null;
-
-        const accountLabel = getAccountLabel(accountId);
-        const lastUid = normalizeSklandSyncText(getAccountSklandSyncMeta(accountId)?.uid);
-        let selectedBinding = selectSklandBindingOption(availableBindings, preferredUid) || availableBindings[0];
-
-        const content = document.createElement('div');
-        content.className = 'prts-skland-binding-picker';
-
-        const intro = document.createElement('p');
-        intro.className = 'prts-skland-binding-intro';
-        intro.textContent = `检测到多个明日方舟角色，请选择要导入到 ${accountLabel} 的角色。`;
-        content.appendChild(intro);
-
-        const list = document.createElement('div');
-        list.className = 'prts-skland-binding-list';
-        list.setAttribute('role', 'radiogroup');
-        list.setAttribute('aria-label', '森空岛明日方舟角色');
-        content.appendChild(list);
-
-        const options = [];
-        const selectByIndex = (index, focus = false) => {
-            const next = options[index];
-            if (!next) return;
-            selectedBinding = next.binding;
-            options.forEach(option => {
-                const selected = option.binding.uid === selectedBinding.uid;
-                option.root.classList.toggle('is-selected', selected);
-                option.input.checked = selected;
-            });
-            if (focus) next.input.focus();
-        };
-
-        availableBindings.forEach((binding, index) => {
-            const option = document.createElement('label');
-            option.className = 'prts-skland-binding-option';
-
-            const input = document.createElement('input');
-            input.type = 'radio';
-            input.name = 'prts-skland-binding';
-            input.className = 'prts-skland-binding-radio';
-            input.value = binding.uid;
-            input.checked = binding.uid === selectedBinding.uid;
-            input.onchange = () => selectByIndex(index);
-            input.onkeydown = event => {
-                if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) return;
-                event.preventDefault();
-                const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
-                const nextIndex = (index + delta + availableBindings.length) % availableBindings.length;
-                selectByIndex(nextIndex, true);
-            };
-
-            const textWrap = document.createElement('span');
-            textWrap.className = 'prts-skland-binding-text';
-
-            const nameRow = document.createElement('span');
-            nameRow.className = 'prts-skland-binding-name-row';
-
-            const name = document.createElement('span');
-            name.className = 'prts-skland-binding-name';
-            name.textContent = binding.nickname || '博士';
-            nameRow.appendChild(name);
-
-            if (lastUid && binding.uid === lastUid) {
-                const badge = document.createElement('span');
-                badge.className = 'prts-skland-binding-badge';
-                badge.textContent = '上次导入';
-                nameRow.appendChild(badge);
-            } else if (binding.isDefault) {
-                const badge = document.createElement('span');
-                badge.className = 'prts-skland-binding-badge';
-                badge.textContent = '森空岛默认';
-                nameRow.appendChild(badge);
-            }
-
-            const meta = document.createElement('span');
-            meta.className = 'prts-skland-binding-meta';
-            meta.textContent = `UID ${binding.uid} / ${binding.channelName || '官方'}`;
-
-            textWrap.appendChild(nameRow);
-            textWrap.appendChild(meta);
-            option.appendChild(input);
-            option.appendChild(textWrap);
-            option.classList.toggle('is-selected', input.checked);
-            list.appendChild(option);
-            options.push({ root: option, input, binding });
-        });
-
-        const resultPromise = showPrtsModal({
-            title: '选择森空岛角色',
-            message: content,
-            confirmText: '导入所选角色',
-            cancelText: '取消'
-        });
-
-        window.setTimeout(() => {
-            const selectedOption = options.find(option => option.binding.uid === selectedBinding.uid);
-            selectedOption?.input.focus();
-        }, 20);
-
-        const confirmed = await resultPromise;
-        return confirmed === true ? selectedBinding : null;
-    }
-
-    function renderSklandSelectedAccountStatus(status, accountId, fallbackText) {
-        const summary = getAccountSklandImportSummary(accountId);
         if (summary) {
-            setSklandPanelStatus(status, `该账号上次同步：
-${formatSklandImportSummary(summary)}`, 'success');
-            return;
+            summary.textContent = `卡片 ${diagnostics.totalCards} · Fiber ${diagnostics.fiberCards} · fallback ${diagnostics.fallbackCards} · 无有效数据 ${diagnostics.noDataCards}`;
         }
-        setSklandPanelStatus(status, fallbackText, '');
+        if (meta) {
+            meta.textContent = `${diagnostics.route || '/'} · ${timeText}`;
+        }
     }
 
-    function setSklandPanelStatus(status, text, type) {
-        status.className = 'prts-skland-status';
-        if (type) status.classList.add(type);
-        status.setAttribute('role', type === 'error' ? 'alert' : 'status');
-        status.setAttribute('aria-live', type === 'error' ? 'assertive' : 'polite');
-        status.textContent = text;
+    betterPrtsDebug.getCompatibilityDiagnostics = getCompatibilityDiagnostics;
+    window.BetterPRTSPlusDebug = betterPrtsDebug;
+
+    function handleRouteChange() {
+        const routeKey = getRouteKey();
+        if (routeKey === lastRouteKey) return false;
+
+        lastRouteKey = routeKey;
+        filterUpdateCoordinator.dispose();
+        renderFilterResults(null);
+        syncPageScaffold();
+        scheduleFilterUpdate(120);
+        return true;
     }
 
-    function readSklandLastImportSummary() {
-        const parsed = safeJsonParse(GM_getValue(SKLAND_LAST_IMPORT_KEY) || '', null);
-        return normalizeSklandImportSummary(parsed);
+    function isScriptOwnedNode(node) {
+        const element = node?.nodeType === 1 ? node : node?.parentElement;
+        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-popover-grid'));
     }
 
-    function formatSklandImportSummary(summary) {
-        const normalized = normalizeSklandImportSummary(summary);
-        if (!normalized) return '';
+    function collectPageMutations(mutations) {
+        const dirtyCards = new Set();
+        const portals = new Set();
+        let scaffoldChanged = false;
+        for (const mutation of mutations) {
+            if (isScriptOwnedNode(mutation.target)) continue;
+            const element = mutation.target.nodeType === Node.ELEMENT_NODE ? mutation.target : mutation.target.parentElement;
+            const portal = element?.closest?.(BP_SELECTORS.portal);
+            if (portal) portals.add(portal);
+            const targetCard = getCardFromMutationNode(mutation.target);
+            if (mutation.type === 'characterData') {
+                if (targetCard) dirtyCards.add(targetCard);
+                continue;
+            }
+            const changedNodes = [...mutation.addedNodes, ...mutation.removedNodes].filter(node => !isScriptOwnedNode(node));
+            if (!changedNodes.length) continue;
+            if (targetCard) dirtyCards.add(targetCard);
+            else if (!portal) scaffoldChanged = true;
+            for (const node of changedNodes) {
+                const card = getCardFromMutationNode(node);
+                if (card) dirtyCards.add(card);
+                if (node.nodeType !== Node.ELEMENT_NODE) continue;
+                if (!card) node.querySelectorAll(BP_SELECTORS.operationCard).forEach(child => dirtyCards.add(child));
+                if (node.matches(BP_SELECTORS.portal)) portals.add(node);
+                node.querySelectorAll(BP_SELECTORS.portal).forEach(child => portals.add(child));
+            }
+        }
+        return { dirtyCards, portals, scaffoldChanged };
+    }
 
-        const timeText = formatSklandSyncTime(normalized.importedAt);
-        const accountLabel = normalized.accountLabel || getAccountLabel(normalized.accountId);
-        const lines = [
-            `${accountLabel} 已导入 ${normalized.operatorCount} 名干员。`,
-            `${normalized.nickname || '博士'} / UID ${normalized.uid || '未知'}`
-        ];
-        if (timeText) lines.push(timeText);
-        return lines.join('\n');
+    function initPrtsPage() {
+        syncPageScaffold();
+        scheduleFilterUpdate(0);
+        document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
+        const observer = new MutationObserver(mutations => {
+            const { dirtyCards, portals, scaffoldChanged } = collectPageMutations(mutations);
+            portals.forEach(portal => { if (portal.isConnected) enhancePopover(portal); });
+            if (handleRouteChange()) return;
+            if (scaffoldChanged) syncPageScaffold();
+            if (scaffoldChanged || dirtyCards.size) scheduleFilterUpdate(80, { forceFull: false, dirtyCards });
+        });
+        observer.observe(document.body, { childList: true, characterData: true, subtree: true });
+
+        const fallbackTimer = setInterval(() => {
+            if (document.hidden || handleRouteChange()) return;
+            const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
+            syncPageScaffold();
+            if (missingFilterBar) scheduleFilterUpdate(120);
+        }, 3000);
+        return () => {
+            observer.disconnect();
+            clearInterval(fallbackTimer);
+            filterUpdateCoordinator.dispose();
+        };
     }
 
     function updateSettingsReloadNotice() {
@@ -7187,10 +7156,6 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }
         });
     }
-    // =========================================================================
-    //                            MODULE 7: 初始化与统一监听
-    // =========================================================================
-
     function init() {
         if (!isSklandHost() && !isPrtsHost()) return;
         loadCachedResources();
@@ -7198,66 +7163,13 @@ ${formatSklandImportSummary(summary)}`, 'success');
         setInterval(updateResources, RESOURCE_CHECK_INTERVAL_MS);
         checkScriptUpdates();
         setInterval(checkScriptUpdates, 60 * 1000);
-        if (isSklandHost()) {
-            initSklandImportPage();
-            return;
-        }
-        if (!isPrtsHost()) return;
-
         loadOwnedOps();
         registerAccountsDataChangeListener();
-        syncPageScaffold();
-        scheduleFilterUpdate(0);
-
-        // 卡片渲染观察者
-        const observer = new MutationObserver((mutations) => {
-            if (handleRouteChange()) return;
-
-            if (isProcessingFilter) return;
-            if (isFilterDisabledPage()) return;
-
-            if (hasRelevantDomMutation(mutations)) {
-                const dirtyCards = collectDirtyCardsFromMutations(mutations);
-                syncPageScaffold();
-                scheduleFilterUpdate(80, { forceFull: false, dirtyCards });
-            }
-        });
-
-        observer.observe(document.body, { childList: true, characterData: true, subtree: true });
-
-        const portalInnerObserver = new MutationObserver((mutations) => {
-            mutations.forEach(mutation => {
-                const portalNode = mutation.target.closest(BP_SELECTORS.portal);
-                if (portalNode) enhancePopover(portalNode);
-            });
-        });
-
-        const bodyObserver = new MutationObserver((mutations) => {
-            mutations.forEach(mutation => {
-                if (mutation.addedNodes.length > 0) {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === 1 && node.matches(BP_SELECTORS.portal)) {
-                            setTimeout(() => enhancePopover(node), 0);
-                            portalInnerObserver.observe(node, { childList: true, subtree: true });
-                        }
-                    });
-                }
-            });
-        });
-
-        bodyObserver.observe(document.body, { childList: true });
-
-        // 保底同步刷新
-        setInterval(() => {
-            if (handleRouteChange()) return;
-            const missingFilterBar = !isFilterDisabledPage() && !document.getElementById('prts-filter-bar');
-            syncPageScaffold();
-            if (missingFilterBar && (CONFIG.filterMode !== 'NONE' || CONFIG.trainingCheck || CONFIG.hideVideo)) {
-                scheduleFilterUpdate(120);
-            }
-        }, 3000);
+        if (isSklandHost()) createSklandImportPanel();
+        else initPrtsPage();
     }
 
-    init();
+    if (document.body) init();
+    else document.addEventListener('DOMContentLoaded', init, { once: true });
 
 })();

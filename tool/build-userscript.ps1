@@ -11,28 +11,7 @@ if ([string]::IsNullOrWhiteSpace($OutputPath)) {
     $OutputPath = Join-Path $repoRoot "Better-PRTS-Plus.user.js"
 }
 
-$sourceFiles = @(
-    "src/meta/userscript-header.js",
-    "src/core/constants.js",
-    "src/data/operators.generated.js",
-    "src/data/module-types.generated.js",
-    "src/data/resources.js",
-    "src/import/parsers.js",
-    "src/core/account-state.js",
-    "src/core/filter-scheduler.js",
-    "src/import/skland.js",
-    "src/dom/card-resolution.js",
-    "src/styles/styles.js",
-    "src/ui/dom-helpers.js",
-    "src/core/release-manifest.js",
-    "src/core/script-updates.js",
-    "src/filter/operation-matching.js",
-    "src/import/accounts.js",
-    "src/ui/import-controls.js",
-    "src/dom/page-enhancements.js",
-    "src/ui/panels.js",
-    "src/main.js"
-)
+$sourceFiles = Get-Content -LiteralPath (Join-Path $PSScriptRoot "userscript-sources.json") -Raw -Encoding UTF8 | ConvertFrom-Json
 
 $utf8NoBom = [System.Text.UTF8Encoding]::new($false)
 

@@ -1,23 +1,4 @@
-    function parseFloatingPosition(rawValue) {
-        const fallback = { top: '40%', isRight: true };
-        const parsed = typeof rawValue === 'string' ? safeJsonParse(rawValue, fallback) : rawValue;
-        const topValue = typeof parsed?.top === 'string' ? parsed.top : fallback.top;
-        const topNumber = /^-?\d+(?:\.\d+)?%$/.test(topValue) ? parseFloat(topValue) : parseFloat(fallback.top);
-        const clampedTop = Math.min(95, Math.max(0, topNumber));
-
-        return {
-            top: `${Number(clampedTop.toFixed(1))}%`,
-            isRight: parsed?.isRight !== false
-        };
-    }
-
-    function normalizeFilterMode(mode) {
-        return ['NONE', 'PERFECT', 'SUPPORT'].includes(mode) ? mode : 'NONE';
-    }
-
-    function normalizeDisplayMode(mode) {
-        return ['GRAY', 'HIDE'].includes(mode) ? mode : 'GRAY';
-    }
+    const operationCache = new WeakMap();
 
     function findSearchInputGroup() {
         const blueprintGroup = document.querySelector(BP_SELECTORS.inputGroup);
@@ -98,24 +79,20 @@
     }
 
     function getOperationResolutionForCard(card, cardInner) {
-        const signature = getCardSignature(card);
-        const cached = operationCache.get(card);
-        if (cached && cached.signature === signature) {
-            return cached.resolution;
+        // React 可复用文字相同的卡片，但更新其中的练度要求或作业类型。
+        const operation = extractOperationFromFiber(cardInner) || extractOperationFromFiber(card);
+        if (operation) {
+            const resolution = { operation, source: 'fiber' };
+            operationCache.set(card, { resolution });
+            return resolution;
         }
 
-        const cardInnerOperation = extractOperationFromFiber(cardInner);
-        const cardOperation = cardInnerOperation || extractOperationFromFiber(card);
-        const resolution = cardOperation
-            ? { operation: cardOperation, source: 'fiber' }
-            : { operation: buildFallbackOperation(card), source: 'fallback' };
-
+        const signature = getCardSignature(card);
+        const cached = operationCache.get(card);
+        if (cached?.resolution.source === 'fallback' && cached.signature === signature) return cached.resolution;
+        const resolution = { operation: buildFallbackOperation(card), source: 'fallback' };
         operationCache.set(card, { signature, resolution });
         return resolution;
-    }
-
-    function getOperationForCard(card, cardInner) {
-        return getOperationResolutionForCard(card, cardInner).operation;
     }
 
     function getCardTypeTag(cardInner, text) {
