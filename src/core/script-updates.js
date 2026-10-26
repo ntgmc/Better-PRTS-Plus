@@ -64,7 +64,7 @@
                 GM_setValue(SCRIPT_IGNORED_VERSION_KEY, update.version);
             } else if (choice === true) {
                 // 安装链接固定到已检测的版本，避免检查与安装之间切换版本。
-                GM_openInTab(`${SCRIPT_RELEASE_URL}/download/v${encodeURIComponent(update.version)}/Better-PRTS-Plus.user.js`, { active: true, insert: true });
+                GM_openInTab(`https://gh-proxy.com/${SCRIPT_RELEASE_URL}/download/v${encodeURIComponent(update.version)}/Better-PRTS-Plus.user.js`, { active: true, insert: true });
             }
         } catch (error) {
             scriptUpdatePromptedVersion = '';

@@ -11,8 +11,8 @@
 // @icon         https://prts.plus/favicon.ico
 // @homepage     https://github.com/ntgmc/Better-PRTS-Plus
 // @supportURL   https://github.com/ntgmc/Better-PRTS-Plus/issues
-// @updateURL    https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
-// @downloadURL  https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
+// @updateURL    https://gh-proxy.com/https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
+// @downloadURL  https://gh-proxy.com/https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
 // @grant        GM_info
 // @grant        GM_openInTab
 // @grant        GM_setValue

@@ -18,7 +18,7 @@
 ## 📦 快速安装
 
 1. 安装浏览器扩展 [Tampermonkey](https://www.tampermonkey.net/)（油猴）。
-2. 打开 [GreasyFork 发布页（推荐）](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)或 [GitHub 脚本文件](https://github.com/ntgmc/Better-PRTS-Plus/raw/main/Better-PRTS-Plus.user.js)。
+2. 打开 [GreasyFork 发布页（推荐）](https://greasyfork.org/zh-CN/scripts/558329-better-prts-plus)、[最新 Release 镜像安装](https://gh-proxy.com/https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js)或 [备用镜像](https://ghfast.top/https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js)。
 3. 在油猴页面确认安装，然后打开 [prts.plus](https://prts.plus) 即可使用。
 
 ## ✨ 功能一览

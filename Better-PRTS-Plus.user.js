@@ -11,8 +11,8 @@
 // @icon         https://prts.plus/favicon.ico
 // @homepage     https://github.com/ntgmc/Better-PRTS-Plus
 // @supportURL   https://github.com/ntgmc/Better-PRTS-Plus/issues
-// @updateURL    https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
-// @downloadURL  https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
+// @updateURL    https://gh-proxy.com/https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
+// @downloadURL  https://gh-proxy.com/https://github.com/ntgmc/Better-PRTS-Plus/releases/latest/download/Better-PRTS-Plus.user.js
 // @grant        GM_info
 // @grant        GM_openInTab
 // @grant        GM_setValue
@@ -4011,7 +4011,7 @@ Object.entries({
                 GM_setValue(SCRIPT_IGNORED_VERSION_KEY, update.version);
             } else if (choice === true) {
                 // 安装链接固定到已检测的版本，避免检查与安装之间切换版本。
-                GM_openInTab(`${SCRIPT_RELEASE_URL}/download/v${encodeURIComponent(update.version)}/Better-PRTS-Plus.user.js`, { active: true, insert: true });
+                GM_openInTab(`https://gh-proxy.com/${SCRIPT_RELEASE_URL}/download/v${encodeURIComponent(update.version)}/Better-PRTS-Plus.user.js`, { active: true, insert: true });
             }
         } catch (error) {
             scriptUpdatePromptedVersion = '';

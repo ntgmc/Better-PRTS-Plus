@@ -696,7 +696,7 @@ test('update installation opens only the detected tagged userscript and storage 
   const pending = h.api.checkScriptUpdates();
   h.respond();
   await pending;
-  assert.strictEqual(h.opened[0][0], 'https://github.com/ntgmc/Better-PRTS-Plus/releases/download/v3.11.0/Better-PRTS-Plus.user.js');
+  assert.strictEqual(h.opened[0][0], 'https://gh-proxy.com/https://github.com/ntgmc/Better-PRTS-Plus/releases/download/v3.11.0/Better-PRTS-Plus.user.js');
   for (const choice of ['important', 'skip']) {
     const broken = createScriptUpdateHarness();
     broken.choice = choice;
