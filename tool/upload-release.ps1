@@ -120,11 +120,18 @@ try {
         throw "There are already staged changes. Commit or unstage them before running this release upload script."
     }
 
+    $releaseVersion = if ([string]::IsNullOrWhiteSpace($Version)) { Get-UserscriptHeaderVersion } else { $Version }
+    if ($PublishRelease) {
+        node (Join-Path $PSScriptRoot "prepare-release.js") --init $releaseVersion
+        if ($LASTEXITCODE -ne 0) { throw "Cannot initialize release notes" }
+        node (Join-Path $PSScriptRoot "prepare-release.js") $releaseVersion
+        if ($LASTEXITCODE -ne 0) { throw "Fill in the release notes before publishing" }
+    }
+
     if (-not [string]::IsNullOrWhiteSpace($Version)) {
         Set-UserscriptHeaderVersion -NextVersion $Version
     }
 
-    $releaseVersion = Get-UserscriptHeaderVersion
     $tagName = "v$releaseVersion"
 
     if ([string]::IsNullOrWhiteSpace($CommitMessage)) {

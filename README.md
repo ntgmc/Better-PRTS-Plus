@@ -128,7 +128,9 @@
 
 ## 发布版本
 
-发布前，由维护者在 [releases.json](releases.json) 中亲自填写目标版本的更新内容和级别，并确认 `humanWritten: true`；缺少说明或人工确认时，发布流程会停止。可先运行 **Summarize Changes for Maintainer** 获取 AI 参考摘要，默认对比最新正式 Release 与 main，也支持指定基准版本 tag 或分析单个 PR；最终说明仍由维护者提供。
+发布前运行 `node tool/prepare-release.js --init X.Y.Z [normal|important|urgent]`，自动创建更新说明文件并登记版本；省略级别时默认为普通更新。编辑 `release-notes/X.Y.Z.md` 后运行发布脚本即可。直接发布尚未登记的版本时，也会自动生成文件并提示填写，重复运行会保留已有正文。
+
+可运行 **Summarize Changes for Maintainer** 获取 AI 参考摘要，默认对比最新正式 Release 与 main，也支持指定基准版本 tag 或分析单个 PR；最终说明由维护者提供。
 
 AI 接口配置、说明格式和发布命令见 [发布流程](RELEASE.md)。
 

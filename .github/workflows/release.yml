@@ -32,7 +32,7 @@ jobs:
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File tool/check-release.ps1 -Tag "${{ github.ref_name }}"
 
-      - name: Prepare handwritten release notes and update manifest
+      - name: Prepare release notes and update manifest
         shell: pwsh
         run: |
           node tool/prepare-release.js ("${{ github.ref_name }}".Substring(1)) release-output

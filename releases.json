@@ -4,26 +4,22 @@
     {
       "version": "4.1.2",
       "level": "normal",
-      "notesFile": "release-notes/4.1.2.md",
-      "humanWritten": true
+      "notesFile": "release-notes/4.1.2.md"
     },
     {
       "version": "4.1.1",
       "level": "normal",
-      "notesFile": "release-notes/4.1.1.md",
-      "humanWritten": true
+      "notesFile": "release-notes/4.1.1.md"
     },
     {
       "version": "4.1.0",
       "level": "normal",
-      "notesFile": "release-notes/4.1.0.md",
-      "humanWritten": true
+      "notesFile": "release-notes/4.1.0.md"
     },
     {
       "version": "4.0.0",
       "level": "important",
-      "notesFile": "release-notes/4.0.0.md",
-      "humanWritten": true
+      "notesFile": "release-notes/4.0.0.md"
     }
   ]
 }

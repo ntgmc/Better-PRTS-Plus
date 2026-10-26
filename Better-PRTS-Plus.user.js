@@ -3902,9 +3902,8 @@ function createSklandImportCancelledError() {
         const releases = [...data.releases];
         releases.forEach(release => {
             if (!release || typeof release !== 'object' || !Object.hasOwn(RELEASE_LEVELS, release.level) ||
-                typeof release.notes !== 'string' || !release.notes.trim() || release.notes.length > 12000 ||
-                release.humanWritten !== true) {
-                throw new Error('每个版本必须填写更新级别和人工撰写的更新说明，并确认 humanWritten');
+                typeof release.notes !== 'string' || !release.notes.trim() || release.notes.length > 12000) {
+                throw new Error('每个版本必须填写有效的更新级别和非空更新说明');
             }
             parseScriptVersion(release.version);
         });

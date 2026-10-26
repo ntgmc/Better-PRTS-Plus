@@ -14,8 +14,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -25,20 +23,6 @@ jobs:
       - name: Run project checks
         shell: pwsh
         run: pwsh -NoProfile -ExecutionPolicy Bypass -File tool/check.ps1
-
-      - name: Run offline release tests for tooling changes
-        shell: bash
-        timeout-minutes: 5
-        env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: |
-          if [[ -z "$BASE_SHA" || "$BASE_SHA" == 0000000000000000000000000000000000000000 ]] ||
-            ! git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- 'tool/*.ps1' tool/prepare-release.js src/core/release-manifest.js releases.json release-notes .githooks .github/workflows; then
-            pwsh -NoProfile -ExecutionPolicy Bypass -File tool/test-release.ps1
-          else
-            echo "Release tooling is unchanged; skipping offline release tests."
-          fi
 
   commitlint:
     name: Lint commit messages

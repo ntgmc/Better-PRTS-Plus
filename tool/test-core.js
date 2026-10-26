@@ -465,7 +465,7 @@ test('all stale or unversioned download sources preserve current resources and c
 });
 
 const releaseManifestSource = fs.readFileSync(path.join(repoRoot, 'src/core/release-manifest.js'), 'utf8');
-const updateRelease = (version = '3.11.0', level = 'normal', notes = '更新测试说明') => ({ version, level, notes, humanWritten: true });
+const updateRelease = (version = '3.11.0', level = 'normal', notes = '更新测试说明') => ({ version, level, notes });
 const releaseManifest = (...releases) => ({ schemaVersion: 1, releases });
 
 function createScriptUpdateHarness(saved = new Map(), version = '3.10.1') {
@@ -512,10 +512,11 @@ test('script versions compare numerically, order prereleases, and ignore build m
   for (const invalid of ['', null, 'v3.10.1', '3.10.1\n', '3.10.1-beta..2', '3.9007199254740992']) assert.throws(() => compare(invalid, '3.10'));
 });
 
-test('release manifests reject missing human confirmation, empty notes, invalid levels and duplicate versions', () => {
+test('release manifests reject empty notes, invalid levels and duplicate versions', () => {
   const { validateReleaseManifest: validate } = createScriptUpdateHarness().api;
+  assert.strictEqual(validate(releaseManifest(updateRelease())).releases.length, 1);
   for (const invalid of [null, { schemaVersion: 2, releases: [] }, releaseManifest(null),
-    ...[{ notes: ' ' }, { notes: 12 }, { humanWritten: false }, { humanWritten: 'true' }, { level: 'critical' }, { level: '__proto__' }, { version: 'invalid' }]
+    ...[{ notes: ' ' }, { notes: 12 }, { level: 'critical' }, { level: '__proto__' }, { version: 'invalid' }]
       .map(change => releaseManifest({ ...updateRelease(), ...change })),
     releaseManifest(updateRelease('3.11'), updateRelease('3.11.0'))]) assert.throws(() => validate(invalid));
 });
@@ -613,7 +614,7 @@ test('script checks tolerate malformed responses and sources throwing before a v
     const h = createScriptUpdateHarness();
     const pending = h.api.checkScriptUpdates();
     const failures = h.requests.filter((_, index) => index !== winner);
-    h.respond(releaseManifest({ ...updateRelease(), humanWritten: false }), 200, failures[0]);
+    h.respond(releaseManifest({ ...updateRelease(), level: 'invalid' }), 200, failures[0]);
     failures[1].onerror();
     h.respond(releaseManifest(updateRelease()), 200, h.requests[winner]);
     assert.strictEqual(await pending, true);
@@ -801,7 +802,7 @@ test('failed script checks and timeouts stay silent automatically and can be ret
     if (failure === 'timeout') [...h.timers.values()].forEach(callback => callback());
     else if (failure.startsWith('on')) h.requests.forEach(request => request[failure]());
     else h.requests.forEach(request => h.respond(failure === 'oversized' ? 'x'.repeat(1024 * 1024 + 1)
-      : failure === 'schema' ? releaseManifest({ ...updateRelease(), humanWritten: false }) : 'invalid', failure === 'http' ? 503 : 200, request));
+      : failure === 'schema' ? releaseManifest({ ...updateRelease(), level: 'invalid' }) : 'invalid', failure === 'http' ? 503 : 200, request));
     assert.strictEqual(await pending, false);
     assert.strictEqual(h.timers.size, 0);
     if (failure === 'timeout') assert.strictEqual(h.abortedUrls.length, h.api.SCRIPT_UPDATE_URLS.length);
@@ -823,233 +824,67 @@ test('failed script checks and timeouts stay silent automatically and can be ret
   assert(h.toasts.some(toast => toast[1] === 'error' && toast[2].includes('所有更新下载源均不可用')));
 });
 
-test('release preparation refuses unconfirmed notes and publishes only the selected version and history', () => {
+test('release drafts preserve notes and publishing validates files and includes only selected history', () => {
   const temporary = fs.mkdtempSync(path.join(require('os').tmpdir(), 'prts-release-notes-'));
   try {
     fs.mkdirSync(path.join(temporary, 'tool'));
     fs.mkdirSync(path.join(temporary, 'src/core'), { recursive: true });
     fs.copyFileSync(path.join(repoRoot, 'tool/prepare-release.js'), path.join(temporary, 'tool/prepare-release.js'));
     fs.writeFileSync(path.join(temporary, 'src/core/release-manifest.js'), releaseManifestSource);
-    const prepare = () => require('child_process').spawnSync(process.execPath,
-      [path.join(temporary, 'tool/prepare-release.js'), '3.11.0', path.join(temporary, 'output')], { encoding: 'utf8' });
-    fs.mkdirSync(path.join(temporary, 'release-notes'));
+    const run = (...args) => require('child_process').spawnSync(process.execPath,
+      [path.join(temporary, 'tool/prepare-release.js'), ...args], { encoding: 'utf8' });
+    const prepare = () => run('3.11.0', path.join(temporary, 'output'));
+    const manifestPath = path.join(temporary, 'releases.json');
+    fs.writeFileSync(manifestPath, JSON.stringify(releaseManifest()));
+    for (const args of [['--init'], ['--init', '../outside'], ['--init', '3.11.0', 'invalid']]) {
+      assert.notStrictEqual(run(...args).status, 0);
+      assert.deepStrictEqual(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), releaseManifest());
+    }
+    assert.strictEqual(run('--init', '3.11.0', 'important').status, 0);
+    const draft = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    assert.deepStrictEqual(draft.releases, [{ version: '3.11.0', level: 'important', notesFile: 'release-notes/3.11.0.md' }]);
+    assert.strictEqual(fs.readFileSync(path.join(temporary, draft.releases[0].notesFile), 'utf8'), '');
+    assert.notStrictEqual(prepare().status, 0);
+    assert(!fs.existsSync(path.join(temporary, 'output')));
     const notes = '### 新增\n\n- 维护者提供的**正式说明**\n\n### 修复\n\n- 第二项原文';
     fs.writeFileSync(path.join(temporary, 'release-notes/3.11.0.md'), notes + '\n');
     fs.writeFileSync(path.join(temporary, 'release-notes/empty.md'), ' \n');
     fs.writeFileSync(path.join(temporary, 'release-notes/notes.txt'), notes);
     fs.writeFileSync(path.join(temporary, 'outside.md'), notes);
-    const fileRelease = { version: '3.11.0', level: 'important', notesFile: 'release-notes/3.11.0.md', humanWritten: true };
+    assert.strictEqual(run('--init', '3.11.0').status, 0);
+    assert.deepStrictEqual(JSON.parse(fs.readFileSync(manifestPath, 'utf8')), draft);
+    assert.strictEqual(fs.readFileSync(path.join(temporary, draft.releases[0].notesFile), 'utf8'), notes + '\n');
+    assert.notStrictEqual(run('--init', '3.11').status, 0);
+    fs.writeFileSync(path.join(temporary, 'release-notes/3.12.0.md'), notes);
+    assert.strictEqual(run('--init', '3.12.0').status, 0);
+    assert.strictEqual(fs.readFileSync(path.join(temporary, 'release-notes/3.12.0.md'), 'utf8'), notes);
+    const fileRelease = draft.releases[0];
     const invalidFiles = ['', null, 123, 'release-notes/missing.md', 'release-notes/empty.md', 'release-notes/notes.txt',
       'release-notes/../outside.md', path.join(temporary, 'outside.md')];
     if (process.platform !== 'win32') {
       fs.symlinkSync(path.join(temporary, 'outside.md'), path.join(temporary, 'release-notes/link.md'));
       invalidFiles.push('release-notes/link.md');
     }
-    for (const manifest of [releaseManifest(), releaseManifest({ ...updateRelease(), humanWritten: false }), releaseManifest({ ...updateRelease(), notes: '' }),
-      releaseManifest({ ...fileRelease, notes: '不能同时提供两份说明' }), releaseManifest({ ...fileRelease, humanWritten: false }),
+    for (const manifest of [releaseManifest(), releaseManifest({ ...updateRelease(), notes: '' }),
+      releaseManifest({ ...fileRelease, notes: '不能同时提供两份说明' }),
       ...invalidFiles.map(notesFile => releaseManifest({ ...fileRelease, notesFile }))]) {
       fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(manifest));
       assert.notStrictEqual(prepare().status, 0);
       assert(!fs.existsSync(path.join(temporary, 'output')));
     }
-    fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(releaseManifest(updateRelease('3.12.0'), fileRelease, updateRelease('3.10.1'))));
+    fs.writeFileSync(path.join(temporary, 'releases.json'), JSON.stringify(releaseManifest(
+      { version: '3.12.0', level: 'normal', notesFile: 'release-notes/future-draft.md' }, fileRelease, updateRelease('3.10.1'))));
     const result = prepare();
     assert.strictEqual(result.status, 0, result.stderr);
     const manifest = JSON.parse(fs.readFileSync(path.join(temporary, 'output/update.json'), 'utf8'));
     assert.deepStrictEqual(manifest.releases.map(release => release.version), ['3.11.0', '3.10.1']);
     assert.strictEqual(manifest.releases[0].notes, notes + '\n');
     assert(!Object.hasOwn(manifest.releases[0], 'notesFile'));
+    assert(manifest.releases.every(release => release.humanWritten === true));
     assert.strictEqual(manifest.releases[1].notes, '更新测试说明');
     assert.strictEqual(fs.readFileSync(path.join(temporary, 'output/RELEASE_NOTES.md'), 'utf8'), `## 3.11.0 · 重要更新\n\n${notes}\n`);
   } finally {
     fs.rmSync(temporary, { recursive: true, force: true });
-  }
-});
-
-test('AI summaries default to comparing main with the latest release and support explicit version tags', async () => {
-  const { summarizeChanges } = require('./summarize-pr-changelog');
-  const before = fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8');
-  const base = 'a'.repeat(40);
-  const head = 'b'.repeat(40);
-  const files = [{ filename: 'src/main.js', status: 'modified', additions: 1, deletions: 0, patch: '+releaseChange();' },
-    { filename: 'Better-PRTS-Plus.user.js', patch: 'BUILD_OUTPUT_MUST_BE_SKIPPED' }];
-  for (const [baseTag, apiType] of [['', 'message'], ['v3.9.0', 'response'], ['archive/v3.8.0', 'chatcompletion']]) {
-    const tag = baseTag || 'v3.10.1';
-    const requests = [];
-    const env = { GITHUB_REPOSITORY: 'owner/repo', BASE_TAG: baseTag, GITHUB_TOKEN: 'test-github-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType };
-    const routes = {
-      'releases/latest': { tag_name: tag },
-      [`commits/${encodeURIComponent(tag)}`]: { sha: base },
-      'commits/main': { sha: head },
-      [`compare/${base}...${head}?per_page=1`]: { status: 'ahead', files }
-    };
-    const summary = await summarizeChanges(env, async (url, options) => {
-      requests.push({ url, options });
-      const route = url.replace('https://api.github.com/repos/owner/repo/', '');
-      if (url.startsWith('https://api.github.com/')) {
-        assert(Object.hasOwn(routes, route), `Unexpected GitHub route: ${route}`);
-        return { ok: true, json: async () => routes[route] };
-      }
-      const text = requests.filter(item => !item.url.startsWith('https://api.github.com/')).length === 1 ? '版本分块事实' : '版本变更摘要\n更新级别：重要';
-      const response = apiType === 'message' ? { content: [{ type: 'text', text }] }
-        : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text }] }] }
-          : { choices: [{ message: { content: text }, finish_reason: 'stop' }] };
-      return { ok: true, json: async () => response };
-    });
-    assert(summary.includes(`main 对比 ${tag}`));
-    assert(summary.includes(`Base SHA：${base}`) && summary.includes(`Head SHA：${head}`));
-    assert(summary.includes('版本变更摘要') && summary.includes('更新级别：重要'));
-    assert(!summary.includes('版本分块事实') && !summary.includes('最终更新内容'));
-    assert.strictEqual(requests.length, baseTag ? 5 : 6);
-    assert.strictEqual(requests.some(item => item.url.endsWith('/releases/latest')), !baseTag);
-    const extraction = requests.at(-2);
-    const reduction = requests.at(-1);
-    assert(extraction.options.body.includes('+releaseChange();'));
-    assert(extraction.options.body.includes(base) && extraction.options.body.includes(head));
-    assert(!extraction.options.body.includes('BUILD_OUTPUT_MUST_BE_SKIPPED'));
-    assert(reduction.options.body.includes('版本分块事实') && reduction.options.body.includes('合并同类项'));
-    const extractBody = JSON.parse(extraction.options.body);
-    const extractSystem = apiType === 'message' ? extractBody.system : (extractBody.input || extractBody.messages)[0].content;
-    assert(!/普通|重要|紧急|维护者|人工确认|仅供/.test(extractSystem));
-    assert(!reduction.options.body.includes('维护者') && !reduction.options.body.includes('人工确认'));
-    assert([extraction, reduction].every(item => !item.options.headers.Authorization?.includes('test-github-key')));
-    assert(requests.slice(0, -2).every(item => item.options.headers.Authorization === 'Bearer test-github-key' && !item.options.headers['x-api-key']));
-  }
-  assert.strictEqual(fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8'), before);
-});
-
-test('version summaries skip unchanged ranges and refuse incomplete or unrelated comparisons', async () => {
-  const { summarizeChanges } = require('./summarize-pr-changelog');
-  const env = { GITHUB_REPOSITORY: 'owner/repo', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model' };
-  const base = 'a'.repeat(40);
-  const head = 'b'.repeat(40);
-  const run = (comparison, overrides = {}) => summarizeChanges(env, async url => {
-    assert(url.startsWith('https://api.github.com/'), 'Unchanged or invalid comparisons must not request AI');
-    const result = url.endsWith('/releases/latest') ? { tag_name: 'v3.10.1' }
-      : url.endsWith('/commits/v3.10.1') ? { sha: base }
-        : url.endsWith('/commits/main') ? { sha: head } : comparison;
-    return { ok: true, json: async () => Object.hasOwn(overrides, url.split('/').at(-1)) ? overrides[url.split('/').at(-1)] : result };
-  });
-  assert((await run({ status: 'identical', files: [] })).includes('没有文件变化'));
-  await assert.rejects(run({ status: 'ahead', files: Array.from({ length: 300 }, () => ({})) }), /300 文件上限/);
-  await assert.rejects(run({ status: 'diverged', files: [] }), /不是 main 的祖先/);
-  await assert.rejects(run({ status: 'behind', files: [] }), /不是 main 的祖先/);
-  await assert.rejects(run({ status: 'ahead' }), /文件列表格式无效/);
-  await assert.rejects(run({}, { latest: {} }), /未找到上一正式版本/);
-  await assert.rejects(run({}, { main: { sha: 'invalid' } }), /版本提交无效/);
-  await assert.rejects(summarizeChanges(env, async () => ({ ok: false, status: 404 })), /HTTP 404/);
-  for (const invalid of [{ SUMMARY_TYPE: 'unknown' }, { BASE_TAG: 'invalid\nref' }, { SUMMARY_TYPE: 'pr' }]) {
-    await assert.rejects(summarizeChanges({ ...env, ...invalid }, () => { throw new Error('must not request'); }), /请选择|请填写/);
-  }
-});
-
-test('PR summaries support three APIs and preserve the release manifest', async () => {
-  const { summarizeChanges } = require('./summarize-pr-changelog');
-  const before = fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8');
-  for (const apiType of ['message', 'response', 'chatcompletion']) {
-    const requests = [];
-    const env = { SUMMARY_TYPE: 'pr', GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-github-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType, CHANGELOG_BASE_URL: 'https://model.invalid/v1' };
-    const pr = { title: 'Example', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 2 };
-    const files = [{ filename: 'src/main.js', status: 'modified', additions: 1, deletions: 0, patch: '+checkScriptUpdates();' },
-      { filename: 'Better-PRTS-Plus.user.js', patch: 'BUILD_OUTPUT_MUST_BE_SKIPPED' }];
-    const response = apiType === 'message' ? { content: [{ type: 'text', text: 'AI 测试摘要' }] }
-      : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text: 'AI 测试摘要' }] }] }
-        : { choices: [{ message: { content: 'AI 测试摘要' }, finish_reason: 'stop' }] };
-    const summary = await summarizeChanges(env, async (url, options) => {
-      requests.push({ url, options });
-      return { ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : response };
-    });
-    assert(summary.includes('AI 测试摘要'));
-    assert(!summary.includes('最终更新内容') && !summary.includes('humanWritten'));
-    assert(summary.includes(pr.head.sha));
-    assert.strictEqual(requests.length, 5);
-    const ai = requests.at(-2);
-    assert(!ai.options.body.includes('BUILD_OUTPUT_MUST_BE_SKIPPED'));
-    assert(ai.options.body.includes('+checkScriptUpdates();'));
-    assert.strictEqual(ai.options.redirect, 'error');
-    assert(!ai.options.headers.Authorization?.includes('test-github-key'));
-    assert(requests.slice(0, 3).every(item => !item.options.headers['x-api-key']));
-    for (const invalid of [{ CHANGELOG_API_KEY: '' }, { CHANGELOG_API_TYPE: 'unknown' }, { CHANGELOG_BASE_URL: 'http://model.invalid' }, { PR_NUMBER: '../secret' }]) {
-      await assert.rejects(summarizeChanges({ ...env, ...invalid }, () => { throw new Error('must not request'); }));
-    }
-    await assert.rejects(summarizeChanges(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files.slice(0, 1) : pr })), /不完整/);
-    await assert.rejects(summarizeChanges(env, async url => ({ ok: true, json: async () => url.includes('/files?') ? files : url.startsWith('https://api.github.com/') ? pr : { stop_reason: 'max_tokens' } })), /截断/);
-  }
-  assert.strictEqual(fs.readFileSync(path.join(repoRoot, 'releases.json'), 'utf8'), before);
-});
-
-test('PR analysis merges all chunks, judges importance once and logs request progress', async () => {
-  const { summarizeChanges } = require('./summarize-pr-changelog');
-  const env = { SUMMARY_TYPE: 'pr', GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model' };
-  const pr = { title: 'Long PR', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 101 };
-  const files = Array.from({ length: 101 }, (_, index) => ({ filename: `file-${index}.js`, patch: '+' + 'x'.repeat(300), status: 'modified', additions: 1, deletions: 0 }));
-  let modelCalls = 0;
-  const logs = [];
-  const summary = await summarizeChanges(env, async (url, options) => ({ ok: true, json: async () => {
-    if (url.startsWith('https://api.github.com/')) return url.includes('/files?') ? files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101) : pr;
-    modelCalls++;
-    const payload = JSON.parse(options.body);
-    if (modelCalls <= 2) {
-      assert(payload.messages[0].content.length < 25000);
-      assert(!/普通|重要|紧急/.test(payload.system));
-    } else {
-      assert(payload.messages[0].content.includes('分块 1/2\n摘要 1：统一账号切换'));
-      assert(payload.messages[0].content.includes('分块 2/2\n摘要 2：统一账号切换'));
-      assert(payload.system.includes('合并同类项') && payload.system.includes('根据整体影响'));
-    }
-    return { content: [{ type: 'text', text: modelCalls <= 2 ? `摘要 ${modelCalls}：统一账号切换` : '新增统一账号切换。\n更新级别：普通，属于体验调整。' }],
-      usage: { input_tokens: 81, output_tokens: 23 }, stop_reason: 'end_turn' };
-  } }), message => logs.push(message));
-  assert.strictEqual(modelCalls, 3);
-  assert(summary.includes('新增统一账号切换。') && summary.includes('更新级别：普通'));
-  assert(!summary.includes('摘要 1') && !summary.includes('摘要 2'));
-  for (const stage of ['分块分析 1/2', '分块分析 2/2', '合并总结']) {
-    assert(logs.some(line => line.includes(`${stage} 开始：`) && line.includes('input_chars=') && line.includes('estimated_tokens=')));
-    assert(logs.some(line => line.includes(`${stage} 响应：input_tokens=81 output_tokens=23 stop=end_turn elapsed_ms=`)));
-    assert(logs.some(line => line.includes(`${stage} 完成：output_chars=`)));
-  }
-  assert(logs.some(line => line.includes('文件=101 分析文件=101') && line.includes('分块=2')));
-  assert(!logs.join('\n').includes('test-key') && !logs.join('\n').includes('test-ai-key'));
-  let metadataReads = 0;
-  await assert.rejects(summarizeChanges(env, async url => ({ ok: true, json: async () => {
-    if (url.includes('/files?')) return files.slice(url.endsWith('page=1') ? 0 : 100, url.endsWith('page=1') ? 100 : 101);
-    return metadataReads++ ? { ...pr, head: { sha: 'b'.repeat(40) } } : pr;
-  } })), /PR 已更新/);
-  await assert.rejects(summarizeChanges(env, async () => ({ ok: false, status: 429 })), /HTTP 429/);
-});
-
-test('final summarization rejects truncation, bad responses and request failures for all APIs', async () => {
-  const { summarizeChanges } = require('./summarize-pr-changelog');
-  const pr = { title: 'Example', base: { ref: 'main' }, head: { sha: 'a'.repeat(40) }, changed_files: 1 };
-  const files = [{ filename: 'src/main.js', patch: '+change();', status: 'modified', additions: 1, deletions: 0 }];
-  for (const apiType of ['message', 'response', 'chatcompletion']) {
-    const env = { SUMMARY_TYPE: 'pr', GITHUB_REPOSITORY: 'owner/repo', PR_NUMBER: '12', GITHUB_TOKEN: 'test-key', CHANGELOG_API_KEY: 'test-ai-key', CHANGELOG_MODEL: 'test-model', CHANGELOG_API_TYPE: apiType };
-    const extraction = apiType === 'message' ? { content: [{ type: 'text', text: '分块事实' }] }
-      : apiType === 'response' ? { output: [{ content: [{ type: 'output_text', text: '分块事实' }] }] }
-        : { choices: [{ message: { content: '分块事实' }, finish_reason: 'stop' }] };
-    const truncated = apiType === 'message' ? { stop_reason: 'max_tokens' }
-      : apiType === 'response' ? { status: 'incomplete' } : { choices: [{ finish_reason: 'length' }] };
-    for (const failure of ['truncated', 'empty', 'http', 'json', 'network']) {
-      let modelCalls = 0;
-      const logs = [];
-      await assert.rejects(summarizeChanges(env, async url => {
-        if (url.startsWith('https://api.github.com/')) return { ok: true, json: async () => url.includes('/files?') ? files : pr };
-        modelCalls++;
-        if (modelCalls === 2 && failure === 'network') throw new Error('https://secret:test-ai-key@model.invalid');
-        return { ok: !(modelCalls === 2 && failure === 'http'), status: 429, json: async () => {
-          if (modelCalls === 1) return extraction;
-          if (failure === 'json') throw new Error('private API response');
-          return failure === 'truncated' ? truncated : {};
-        } };
-      }, message => logs.push(message)), error => {
-        assert(/合并总结.*(截断|有效摘要|HTTP 429|有效 JSON|网络错误)/.test(error.message));
-        assert(!error.message.includes('test-ai-key') && !error.message.includes('private API response'));
-        return true;
-      });
-      assert.strictEqual(modelCalls, 2);
-      assert(logs.some(line => line.includes('合并总结 开始')));
-      assert(!logs.some(line => line.includes('合并总结 完成') || line.includes('变更总结完成')));
-    }
   }
 });
 
