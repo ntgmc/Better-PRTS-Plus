@@ -300,7 +300,7 @@
             opened ? '已打开森空岛页面' : '已尝试打开森空岛页面',
             opened ? 'success' : 'warning',
             opened
-                ? '请登录森空岛，然后在页面右侧的 Better-PRTS-Plus 导入面板中读取干员数据。'
+                ? '请登录森空岛，然后在 Better-PRTS-Plus 导入面板中读取干员数据。'
                 : '如果没有看到新窗口，请手动打开 https://www.skland.com/index，登录后使用 Better-PRTS-Plus 导入面板。'
         );
     }
