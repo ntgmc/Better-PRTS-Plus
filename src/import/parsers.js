@@ -221,10 +221,6 @@
         );
     }
 
-    function parseImportedOperatorNames(rawText, fileName = '') {
-        return parseImportedOperators(rawText, fileName).names;
-    }
-
     function parseImportedOperators(rawText, fileName = '') {
         const text = String(rawText || '');
         const records = safeJsonParse(text, undefined);

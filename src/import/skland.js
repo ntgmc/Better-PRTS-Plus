@@ -182,23 +182,9 @@
         return bindings;
     }
 
-    function selectSklandBindingOption(bindings, preferredUid = '', defaultUid = '') {
-        const normalized = normalizeSklandArknightsBindings(bindings, defaultUid);
-        if (normalized.length === 0) return null;
-
-        const preferredUidText = normalizeSklandSyncText(preferredUid);
-        if (preferredUidText) {
-            const preferred = normalized.find(binding => binding.uid === preferredUidText);
-            if (preferred) return preferred;
-        }
-
-        const defaultBinding = normalized.find(binding => binding.isDefault);
-        return defaultBinding || normalized[0];
-    }
-
-    function selectSklandArknightsBinding(list, preferredUid = '') {
-        const bindingOptions = getSklandArknightsBindingOptionsFromList(list);
-        return selectSklandBindingOption(bindingOptions.bindings, preferredUid, bindingOptions.defaultUid);
+    function selectSklandBindingOption(bindings, preferredUid = '') {
+        return bindings.find(binding => binding.uid === preferredUid)
+            || bindings.find(binding => binding.isDefault) || bindings[0] || null;
     }
 
     function resolveSelectedSklandBinding(selected, bindings) {
@@ -210,19 +196,16 @@
     }
 
     async function resolveSklandImportBinding(accountId, bindingOptions, options = {}) {
-        const bindings = normalizeSklandArknightsBindings(bindingOptions?.bindings || [], bindingOptions?.defaultUid);
-        if (bindings.length === 0) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
-
+        const { bindings, defaultUid } = bindingOptions;
         const accountSyncMeta = getAccountSklandSyncMeta(accountId);
         const preferredUid = normalizeSklandSyncText(options.preferredUid ?? accountSyncMeta?.uid);
-        const defaultBinding = selectSklandBindingOption(bindings, preferredUid, bindingOptions?.defaultUid);
-        if (!defaultBinding) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
+        const defaultBinding = selectSklandBindingOption(bindings, preferredUid);
         if (bindings.length === 1 || typeof options.selectBinding !== 'function') return defaultBinding;
 
         const selected = await options.selectBinding(bindings, defaultBinding, {
             accountId: normalizeAccountId(accountId),
             preferredUid,
-            defaultUid: normalizeSklandSyncText(bindingOptions?.defaultUid)
+            defaultUid: normalizeSklandSyncText(defaultUid)
         });
         if (selected === null || selected === undefined || selected === false) {
             throw createSklandImportCancelledError();

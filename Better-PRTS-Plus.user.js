@@ -613,10 +613,6 @@ Object.entries({
         );
     }
 
-    function parseImportedOperatorNames(rawText, fileName = '') {
-        return parseImportedOperators(rawText, fileName).names;
-    }
-
     function parseImportedOperators(rawText, fileName = '') {
         const text = String(rawText || '');
         const records = safeJsonParse(text, undefined);
@@ -1370,23 +1366,9 @@ Object.entries({
         return bindings;
     }
 
-    function selectSklandBindingOption(bindings, preferredUid = '', defaultUid = '') {
-        const normalized = normalizeSklandArknightsBindings(bindings, defaultUid);
-        if (normalized.length === 0) return null;
-
-        const preferredUidText = normalizeSklandSyncText(preferredUid);
-        if (preferredUidText) {
-            const preferred = normalized.find(binding => binding.uid === preferredUidText);
-            if (preferred) return preferred;
-        }
-
-        const defaultBinding = normalized.find(binding => binding.isDefault);
-        return defaultBinding || normalized[0];
-    }
-
-    function selectSklandArknightsBinding(list, preferredUid = '') {
-        const bindingOptions = getSklandArknightsBindingOptionsFromList(list);
-        return selectSklandBindingOption(bindingOptions.bindings, preferredUid, bindingOptions.defaultUid);
+    function selectSklandBindingOption(bindings, preferredUid = '') {
+        return bindings.find(binding => binding.uid === preferredUid)
+            || bindings.find(binding => binding.isDefault) || bindings[0] || null;
     }
 
     function resolveSelectedSklandBinding(selected, bindings) {
@@ -1398,19 +1380,16 @@ Object.entries({
     }
 
     async function resolveSklandImportBinding(accountId, bindingOptions, options = {}) {
-        const bindings = normalizeSklandArknightsBindings(bindingOptions?.bindings || [], bindingOptions?.defaultUid);
-        if (bindings.length === 0) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
-
+        const { bindings, defaultUid } = bindingOptions;
         const accountSyncMeta = getAccountSklandSyncMeta(accountId);
         const preferredUid = normalizeSklandSyncText(options.preferredUid ?? accountSyncMeta?.uid);
-        const defaultBinding = selectSklandBindingOption(bindings, preferredUid, bindingOptions?.defaultUid);
-        if (!defaultBinding) throw new Error('未找到该森空岛账号绑定的明日方舟角色。');
+        const defaultBinding = selectSklandBindingOption(bindings, preferredUid);
         if (bindings.length === 1 || typeof options.selectBinding !== 'function') return defaultBinding;
 
         const selected = await options.selectBinding(bindings, defaultBinding, {
             accountId: normalizeAccountId(accountId),
             preferredUid,
-            defaultUid: normalizeSklandSyncText(bindingOptions?.defaultUid)
+            defaultUid: normalizeSklandSyncText(defaultUid)
         });
         if (selected === null || selected === undefined || selected === false) {
             throw createSklandImportCancelledError();
@@ -5520,7 +5499,7 @@ Object.entries({
             setSklandPanelStatus(status, progressText, 'loading');
             try {
                 const summary = await importSklandOperatorsToAccount(accountId, {
-                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
+                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding.uid, accountId)
                 });
                 createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
                 const detail = formatSklandImportSummary(summary);
@@ -5550,12 +5529,9 @@ Object.entries({
     }
 
     async function showSklandBindingPicker(bindings, preferredUid, accountId) {
-        const availableBindings = normalizeSklandArknightsBindings(bindings);
-        if (availableBindings.length === 0) return null;
-
         const accountLabel = getAccountLabel(accountId);
         const lastUid = normalizeSklandSyncText(getAccountSklandSyncMeta(accountId)?.uid);
-        let selectedBinding = selectSklandBindingOption(availableBindings, preferredUid) || availableBindings[0];
+        let selectedBinding = selectSklandBindingOption(bindings, preferredUid);
 
         const content = document.createElement('div');
         content.className = 'prts-skland-binding-picker';
@@ -5584,7 +5560,7 @@ Object.entries({
             if (focus) next.input.focus();
         };
 
-        availableBindings.forEach((binding, index) => {
+        bindings.forEach((binding, index) => {
             const option = document.createElement('label');
             option.className = 'prts-skland-binding-option';
 
@@ -5599,7 +5575,7 @@ Object.entries({
                 if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) return;
                 event.preventDefault();
                 const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
-                const nextIndex = (index + delta + availableBindings.length) % availableBindings.length;
+                const nextIndex = (index + delta + bindings.length) % bindings.length;
                 selectByIndex(nextIndex, true);
             };
 

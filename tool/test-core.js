@@ -49,7 +49,6 @@ globalThis.__testExports = {
   validateResourceData,
   refreshResourceViews,
   buildFallbackOperation,
-  parseImportedOperatorNames,
   parseImportedOperators,
   normalizeAccountMeta,
   normalizeSklandSyncMeta,
@@ -81,7 +80,6 @@ globalThis.__testExports = {
   getSklandArknightsBindingOptionsFromList,
   normalizeSklandArknightsBindings,
   selectSklandBindingOption,
-  selectSklandArknightsBinding,
   convertSklandPlayerInfoToNames
 };
 `;
@@ -144,7 +142,6 @@ const {
   validateResourceData,
   refreshResourceViews,
   buildFallbackOperation,
-  parseImportedOperatorNames,
   parseImportedOperators,
   normalizeAccountMeta,
   normalizeSklandSyncMeta,
@@ -176,7 +173,6 @@ const {
   getSklandArknightsBindingOptionsFromList,
   normalizeSklandArknightsBindings,
   selectSklandBindingOption,
-  selectSklandArknightsBinding,
   convertSklandPlayerInfoToNames
 } = context.__testExports;
 
@@ -1948,11 +1944,11 @@ function hostObject(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
-test('parseImportedOperatorNames parses JSON string arrays', () => {
-  assert.deepStrictEqual(hostArray(parseImportedOperatorNames('["阿米娅","阿米娅","  W  "]', 'ops.json')), ['阿米娅', 'W']);
+test('parseImportedOperators parses JSON string arrays', () => {
+  assert.deepStrictEqual(hostArray(parseImportedOperators('["阿米娅","阿米娅","  W  "]', 'ops.json').names), ['阿米娅', 'W']);
 });
 
-test('parseImportedOperatorNames filters unowned MAA records', () => {
+test('parseImportedOperators filters unowned MAA records', () => {
   const raw = JSON.stringify([
     { name: 'A', own: true },
     { name: 'B', own: false },
@@ -1960,24 +1956,23 @@ test('parseImportedOperatorNames filters unowned MAA records', () => {
     { name: 'D', own: 'false' },
     { name: 'E' }
   ]);
-  assert.deepStrictEqual(hostArray(parseImportedOperatorNames(raw, 'maa.json')), ['A', 'E']);
+  assert.deepStrictEqual(hostArray(parseImportedOperators(raw, 'maa.json').names), ['A', 'E']);
 });
 
-test('parseImportedOperatorNames handles TXT comments and special characters', () => {
+test('parseImportedOperators handles TXT comments and special characters', () => {
   const raw = ['# comment', 'GALLUS²', '// skip', 'Miss.Christine', '', 'U-Official'].join('\n');
-  assert.deepStrictEqual(hostArray(parseImportedOperatorNames(raw, 'ops.txt')), ['GALLUS²', 'Miss.Christine', 'U-Official']);
+  assert.deepStrictEqual(hostArray(parseImportedOperators(raw, 'ops.txt').names), ['GALLUS²', 'Miss.Christine', 'U-Official']);
 });
 
 test('operator imports reject broken JSON without falling back to TXT', () => {
   for (const raw of ['["阿米娅",', '{bad json', '["阿米娅",]', '["阿米娅"] trailing', '[', '{']) {
     for (const prefix of ['', ' \t\r\n', '\uFEFF', '\uFEFF \r\n']) {
       for (const fileName of ['', 'ops.txt', 'ops.json', 'ops.JSON']) {
-        assert.throws(() => parseImportedOperatorNames(prefix + raw, fileName), /JSON 格式错误/);
         assert.throws(() => parseImportedOperators(prefix + raw, fileName), /JSON 格式错误/);
       }
     }
   }
-  assert.throws(() => parseImportedOperatorNames('阿米娅', 'ops.json'), /JSON 格式错误/);
+  assert.throws(() => parseImportedOperators('阿米娅', 'ops.json'), /JSON 格式错误/);
 });
 
 test('valid JSON with an unsupported shape never falls back to TXT', () => {
@@ -2094,7 +2089,6 @@ test('BOM JSON parses names and MAA training consistently for files and pasted t
   for (const { raw, expected } of payloads) {
     for (const fileName of ['operators.json', 'operators.txt', '']) {
       assert.deepStrictEqual(hostObject(parseImportedOperators('\uFEFF' + raw, fileName)), expected);
-      assert.deepStrictEqual(hostArray(parseImportedOperatorNames('\uFEFF' + raw, fileName)), expected.names);
     }
   }
 });
@@ -2588,20 +2582,20 @@ test('selectSklandBindingOption prefers the saved account UID', () => {
 });
 
 test('selectSklandBindingOption falls back to Skland default then first binding', () => {
-  assert.deepStrictEqual(hostObject(selectSklandBindingOption([
+  const rawBindings = [
     { uid: '111111111', nickname: '官服博士', channelName: '官服' },
     { uid: '222222222', nickname: 'B服博士', channelName: 'B服' }
-  ], '999999999', '222222222')), {
+  ];
+  assert.deepStrictEqual(hostObject(selectSklandBindingOption(
+    normalizeSklandArknightsBindings(rawBindings, '222222222'), '999999999')), {
     uid: '222222222',
     nickname: 'B服博士',
     channelName: 'B服',
     isDefault: true
   });
 
-  assert.deepStrictEqual(hostObject(selectSklandBindingOption([
-    { uid: '111111111', nickname: '官服博士', channelName: '官服' },
-    { uid: '222222222', nickname: 'B服博士', channelName: 'B服' }
-  ], '999999999', '333333333')), {
+  assert.deepStrictEqual(hostObject(selectSklandBindingOption(
+    normalizeSklandArknightsBindings(rawBindings, '333333333'), '999999999')), {
     uid: '111111111',
     nickname: '官服博士',
     channelName: '官服',
@@ -2609,102 +2603,94 @@ test('selectSklandBindingOption falls back to Skland default then first binding'
   });
 });
 
-test('selectSklandArknightsBinding uses matching non-empty defaultUid', () => {
-  const binding = selectSklandArknightsBinding([
+test('Skland binding selection follows validated API defaults and ignores other games', async () => {
+  const page = createAccountPage(new Map(), 'www.skland.com');
+  const otherGame = { appCode: 'endfield', bindingList: [{ uid: 'endfield-uid' }] };
+  const cases = [
     {
-      appCode: 'endfield',
-      bindingList: [
-        { uid: 'endfield-uid', defaultRole: { roleId: 'not-arknights', nickname: '终末地博士' } }
-      ]
-    },
-    {
-      appCode: 'arknights',
       defaultUid: '123456789',
       bindingList: [
         { uid: '000000000', nickName: '备用博士', channelName: 'B服' },
         { uid: '123456789', nickName: '雪糕我只吃铃兰的#5776', channelName: '官服' }
-      ]
-    }
-  ]);
-
-  assert.deepStrictEqual(hostObject(binding), {
-    uid: '123456789',
-    nickname: '雪糕我只吃铃兰的#5776',
-    channelName: '官服',
-    isDefault: true
-  });
-});
-
-test('selectSklandArknightsBinding falls back to bindingList uid for empty defaultUid', () => {
-  const binding = selectSklandArknightsBinding([
+      ],
+      expected: { uid: '123456789', nickname: '雪糕我只吃铃兰的#5776', channelName: '官服', isDefault: true }
+    },
     {
-      appCode: 'arknights',
       defaultUid: '',
-      bindingList: [
-        { uid: '987654321', nickName: '晓晗#7658', channelName: '官服' }
-      ]
-    }
-  ]);
-
-  assert.deepStrictEqual(hostObject(binding), {
-    uid: '987654321',
-    nickname: '晓晗#7658',
-    channelName: '官服',
-    isDefault: false
-  });
-});
-
-test('selectSklandArknightsBinding treats blank defaultUid as missing', () => {
-  const binding = selectSklandArknightsBinding([
+      bindingList: [{ uid: '987654321', nickName: '晓晗#7658', channelName: '官服' }],
+      expected: { uid: '987654321', nickname: '晓晗#7658', channelName: '官服', isDefault: false }
+    },
     {
-      appCode: 'arknights',
       defaultUid: '   ',
-      bindingList: [
-        { uid: '', nickName: '空 UID' },
-        { uid: '456789123', nickname: 'Doctor', channel: '渠道服' }
-      ]
-    }
-  ]);
-
-  assert.deepStrictEqual(hostObject(binding), {
-    uid: '456789123',
-    nickname: 'Doctor',
-    channelName: '渠道服',
-    isDefault: false
-  });
-});
-
-test('selectSklandArknightsBinding does not synthesize mismatched defaultUid roles', () => {
-  const binding = selectSklandArknightsBinding([
+      bindingList: [{ uid: '', nickName: '空 UID' }, { uid: '456789123', nickname: 'Doctor', channel: '渠道服' }],
+      expected: { uid: '456789123', nickname: 'Doctor', channelName: '渠道服', isDefault: false }
+    },
     {
-      appCode: 'arknights',
       defaultUid: '333333333',
       bindingList: [
         { uid: '111111111', nickName: '第一个博士', channelName: '官服' },
         { uid: '222222222', nickName: '第二个博士', channelName: 'B服' }
-      ]
+      ],
+      expected: { uid: '111111111', nickname: '第一个博士', channelName: '官服', isDefault: false }
     }
-  ]);
-
-  assert.deepStrictEqual(hostObject(binding), {
-    uid: '111111111',
-    nickname: '第一个博士',
-    channelName: '官服',
-    isDefault: false
-  });
+  ];
+  for (const { expected, ...game } of cases) {
+    page.sklandSignedGet = async () => ({ code: 0, message: 'OK', data: {
+      list: [otherGame, { appCode: 'arknights', ...game }]
+    } });
+    const options = await page.getSklandArknightsBindingOptions('test-credential', 'test-token', '1');
+    const binding = await page.resolveSklandImportBinding(1, options, {
+      selectBinding: async (_bindings, defaultBinding) => defaultBinding
+    });
+    assert.deepStrictEqual(hostObject(binding), expected);
+  }
+  page.sklandSignedGet = async () => ({ code: 0, message: 'OK', data: { list: [otherGame] } });
+  await assert.rejects(page.getSklandArknightsBindingOptions('', '', ''), /未找到.*明日方舟角色/);
+  for (const data of [{ code: 1 }, { code: 0, message: 'OK', data: { list: null } }]) {
+    page.sklandSignedGet = async () => data;
+    await assert.rejects(page.getSklandArknightsBindingOptions('', '', ''), /读取森空岛绑定角色失败/);
+  }
 });
 
-test('selectSklandArknightsBinding ignores endfield bindings', () => {
-  const binding = selectSklandArknightsBinding([
-    {
-      appCode: 'endfield',
-      bindingList: [
-        { uid: '987654321', defaultRole: { roleId: '0987654321', nickname: '晓晗' } }
-      ]
-    }
-  ]);
-
-  assert.strictEqual(binding, null);
+test('Skland binding picker preserves saved roles, keyboard selection, cancellation and selection validation', async () => {
+  const page = createAccountPage(new Map(), 'www.skland.com');
+  page.document = { createElement: tag => Object.assign(createTestElement(tag), { focus() {} }) };
+  page.window.setTimeout = callback => { callback(); return 0; };
+  vm.runInContext(fs.readFileSync(path.join(repoRoot, 'src/ui/skland-panel.js'), 'utf8'), page);
+  page.publishAccountState({ accountMeta: { 1: { skland: {
+    uid: '222', nickname: '上次导入', importedAt: '2026-07-19T00:00:00.000Z', operatorCount: 1
+  } } } });
+  page.sklandSignedGet = async () => ({ code: 0, message: 'OK', data: { list: [{
+    appCode: 'arknights', defaultUid: '111', bindingList: [
+      { uid: '111', nickName: '默认博士' },
+      { uid: '222', nickName: '上次导入' },
+      { uid: '222', nickName: '重复角色' },
+      { uid: '' }
+    ]
+  }] } });
+  const options = await page.getSklandArknightsBindingOptions('', '', '');
+  const selectBinding = (bindings, defaultBinding) => page.showSklandBindingPicker(bindings, defaultBinding.uid, 1);
+  for (const confirmed of [true, false]) {
+    page.showPrtsModal = async ({ message }) => {
+      const list = message.querySelector('.prts-skland-binding-list');
+      assert.strictEqual(list.children.length, 2);
+      const radios = list.children.map(option => option.children[0]);
+      assert.strictEqual(radios[1].checked, true);
+      assert(list.children[1].textContent.includes('上次导入'));
+      let prevented = false;
+      radios[1].onkeydown({ key: 'ArrowDown', preventDefault() { prevented = true; } });
+      assert(prevented);
+      assert.strictEqual(radios[0].checked, true);
+      assert.strictEqual(radios[1].checked, false);
+      return confirmed;
+    };
+    const pending = page.resolveSklandImportBinding(1, options, { selectBinding });
+    if (confirmed) assert.strictEqual((await pending).uid, '111');
+    else await assert.rejects(pending, { code: 'SKLAND_IMPORT_CANCELLED' });
+  }
+  await assert.rejects(page.resolveSklandImportBinding(1, options, {
+    selectBinding: async () => ({ uid: '999' })
+  }), /选择的森空岛角色无效/);
 });
 
 test('convertSklandPlayerInfoToNames maps charInfoMap names and raw fallbacks', () => {
@@ -3758,7 +3744,9 @@ test('Skland import from a stale page preserves other accounts updated during th
   });
   sklandPage.readSklandCredentialFromStorage = () => 'test-credential';
   sklandPage.refreshSklandToken = async () => ({ token: 'test-token', timestamp: '1' });
-  sklandPage.getSklandArknightsBindingOptions = async () => ({ bindings: [{ uid: '111', nickname: '导入博士' }] });
+  sklandPage.sklandSignedGet = async () => ({ code: 0, message: 'OK', data: { list: [
+    { appCode: 'arknights', bindingList: [{ uid: '111', nickname: '导入博士' }] }
+  ] } });
   sklandPage.getSklandGamePlayerInfo = async () => ({ data: { chars: [
     { id: 'char_002_amiya', name: '阿米娅', evolvePhase: 2, level: 80 }
   ] } });
@@ -3800,7 +3788,9 @@ test('cancelling a Skland import preview preserves account data and sync metadat
   const page = createAccountPage(sharedStorage, 'www.skland.com');
   page.readSklandCredentialFromStorage = () => 'test-credential';
   page.refreshSklandToken = async () => ({ token: 'test-token', timestamp: '1' });
-  page.getSklandArknightsBindingOptions = async () => ({ bindings: [{ uid: '111', nickname: '博士' }] });
+  page.sklandSignedGet = async () => ({ code: 0, message: 'OK', data: { list: [
+    { appCode: 'arknights', bindingList: [{ uid: '111', nickname: '博士' }] }
+  ] } });
   page.getSklandGamePlayerInfo = async () => ({ data: { chars: [{ id: 'char_002_amiya', name: '阿米娅' }] } });
   page.getSklandGameCultivateInfo = async () => ({ data: { characters: [] } });
   page.showPrtsConfirm = async () => false;

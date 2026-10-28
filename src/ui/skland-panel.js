@@ -74,7 +74,7 @@
             setSklandPanelStatus(status, progressText, 'loading');
             try {
                 const summary = await importSklandOperatorsToAccount(accountId, {
-                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding?.uid, accountId)
+                    selectBinding: (bindings, defaultBinding) => showSklandBindingPicker(bindings, defaultBinding.uid, accountId)
                 });
                 createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
                 const detail = formatSklandImportSummary(summary);
@@ -104,12 +104,9 @@
     }
 
     async function showSklandBindingPicker(bindings, preferredUid, accountId) {
-        const availableBindings = normalizeSklandArknightsBindings(bindings);
-        if (availableBindings.length === 0) return null;
-
         const accountLabel = getAccountLabel(accountId);
         const lastUid = normalizeSklandSyncText(getAccountSklandSyncMeta(accountId)?.uid);
-        let selectedBinding = selectSklandBindingOption(availableBindings, preferredUid) || availableBindings[0];
+        let selectedBinding = selectSklandBindingOption(bindings, preferredUid);
 
         const content = document.createElement('div');
         content.className = 'prts-skland-binding-picker';
@@ -138,7 +135,7 @@
             if (focus) next.input.focus();
         };
 
-        availableBindings.forEach((binding, index) => {
+        bindings.forEach((binding, index) => {
             const option = document.createElement('label');
             option.className = 'prts-skland-binding-option';
 
@@ -153,7 +150,7 @@
                 if (!['ArrowDown', 'ArrowRight', 'ArrowUp', 'ArrowLeft'].includes(event.key)) return;
                 event.preventDefault();
                 const delta = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1 : -1;
-                const nextIndex = (index + delta + availableBindings.length) % availableBindings.length;
+                const nextIndex = (index + delta + bindings.length) % bindings.length;
                 selectByIndex(nextIndex, true);
             };
 
