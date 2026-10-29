@@ -801,6 +801,7 @@
     body:not(:has(.bp4-overlay-open .bp4-overlay-backdrop, .bp6-overlay-open .bp6-overlay-backdrop))
         .prts-desc-wrapper:is(:hover, :focus-visible:not(.prts-desc-dismissed), :has(:focus-visible):not(.prts-desc-dismissed)) .prts-desc-content {
         position: absolute;
+        padding: var(--prts-space-2) var(--prts-space-3);
         top: -4px;
         left: -8px;
         width: calc(100% + 16px);
