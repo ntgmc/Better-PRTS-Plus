@@ -66,6 +66,8 @@
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        syncActivityShortcuts();
+        updateActivitySchedule();
         syncOperationTypeButtons();
         syncOperatorMatchingSettings();
         if (isFilterDisabledPage()) {
@@ -170,7 +172,7 @@
 
     function isScriptOwnedNode(node) {
         const element = node?.nodeType === 1 ? node : node?.parentElement;
-        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-popover-grid'));
+        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-popover-grid'));
     }
 
     function collectPageMutations(mutations) {
@@ -204,6 +206,8 @@
     }
 
     function initPrtsPage() {
+        loadCachedActivitySchedule();
+        document.addEventListener('focusin', collapseActivityShortcutsOnFocus);
         syncPageScaffold();
         scheduleFilterUpdate(0);
         document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
@@ -224,6 +228,7 @@
         }, 3000);
         return () => {
             observer.disconnect();
+            document.removeEventListener('focusin', collapseActivityShortcutsOnFocus);
             clearInterval(fallbackTimer);
             filterUpdateCoordinator.dispose();
         };

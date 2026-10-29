@@ -114,6 +114,7 @@
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
         hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'hidePrtsBadge', default: true, reloadOnDisable: true },
         trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'trainingPromptStyle', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
+        activityShortcuts: { group: '页面增强', label: '活动关卡快捷浮窗', icon: 'activityShortcuts', default: true },
         siteRedesign: { group: '页面增强', label: '全站样式优化', icon: 'siteRedesign', default: false },
         popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'popoverAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'hideSidebar', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
@@ -389,6 +390,73 @@ Object.entries({
             resourceUpdatePending = null;
         });
         return resourceUpdatePending;
+    }
+    const ACTIVITY_CACHE_KEY = 'prts_plus_activity_schedule_v1';
+    let activitySchedule = [];
+    let activityCheckedAt = 0;
+    let activityUpdatePending = null;
+
+    function validateActivitySchedule(data) {
+        const validText = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 200;
+        const validTimes = value => Number.isSafeInteger(value.startTime) && value.startTime > 0 &&
+            Number.isSafeInteger(value.endTime) && value.endTime > value.startTime;
+        if (!isPlainRecord(data) || data.schemaVersion !== 1 || !Array.isArray(data.activities) || !data.activities.length) {
+            throw new Error('活动日程格式无效');
+        }
+        const ids = new Set();
+        for (const activity of data.activities) {
+            if (!isPlainRecord(activity) || !validText(activity.id) || ids.has(activity.id) ||
+                !validText(activity.name) || !validTimes(activity) || !Array.isArray(activity.groups) || !activity.groups.length) {
+                throw new Error('活动信息无效');
+            }
+            ids.add(activity.id);
+            const stageIds = new Set();
+            for (const group of activity.groups) {
+                if (!isPlainRecord(group) || !validText(group.id) || typeof group.name !== 'string' || group.name.length > 200 ||
+                    !['NORMAL', 'EX', 'S', 'OTHER'].includes(group.kind) || !validTimes(group) ||
+                    group.startTime < activity.startTime || group.endTime > activity.endTime ||
+                    !Array.isArray(group.stages) || !group.stages.length) throw new Error('活动分区无效');
+                for (const stage of group.stages) {
+                    if (!isPlainRecord(stage) || !validText(stage.id) || stageIds.has(stage.id) ||
+                        !validText(stage.code) || !validText(stage.name) || !validText(stage.levelId)) throw new Error('活动关卡无效');
+                    stageIds.add(stage.id);
+                }
+            }
+        }
+        return data;
+    }
+
+    function loadCachedActivitySchedule() {
+        try {
+            const cache = JSON.parse(GM_getValue(ACTIVITY_CACHE_KEY, 'null'));
+            if (!cache) return;
+            activitySchedule = validateActivitySchedule(cache.data).activities;
+            activityCheckedAt = Number.isFinite(cache.checkedAt) && cache.checkedAt <= Date.now() ? cache.checkedAt : 0;
+        } catch (error) {
+            console.warn('[Better PRTS] 活动日程缓存读取失败', error);
+        }
+    }
+
+    function updateActivitySchedule() {
+        if (!CONFIG.activityShortcuts) return Promise.resolve(false);
+        if (activityUpdatePending) return activityUpdatePending;
+        if (Date.now() - activityCheckedAt < RESOURCE_CHECK_INTERVAL_MS) return Promise.resolve(false);
+        activityCheckedAt = Date.now();
+        const urls = RESOURCE_URLS.map(url => url.replace('/data.json', '/activities.json'));
+        activityUpdatePending = downloadFirstValidJson(urls, validateActivitySchedule, 2 * 1024 * 1024).then(data => {
+            activitySchedule = data.activities;
+            try {
+                GM_setValue(ACTIVITY_CACHE_KEY, JSON.stringify({ checkedAt: activityCheckedAt, data }));
+            } catch (error) {
+                console.warn('[Better PRTS] 活动日程缓存保存失败', error);
+            }
+            syncActivityShortcuts();
+            return true;
+        }).catch(error => {
+            console.warn('[Better PRTS] 活动日程更新失败，保留已有日程', error);
+            return false;
+        }).finally(() => { activityUpdatePending = null; });
+        return activityUpdatePending;
     }
     function getAccountIds(value = accountsData) {
         return Object.keys(value || {})
@@ -2558,6 +2626,7 @@ Object.entries({
         --prts-duration-fast: 160ms;
         --prts-duration-base: 220ms;
         --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --prts-z-shortcuts: 19; /* 原站 Blueprint 弹窗使用 20，快捷栏留在遮罩下。 */
         --prts-z-float: 2147483644;
         --prts-z-toast: 2147483647;
         --prts-z-dialog: 2147483646;
@@ -3023,6 +3092,38 @@ Object.entries({
         vertical-align: middle;
     }
     body.high-contrast-theme .prts-level-badge { border-color: var(--prts-color-primary); }
+    #prts-activity-shortcuts {
+        position: fixed; right: env(safe-area-inset-right, 0px); bottom: max(16px, env(safe-area-inset-bottom, 0px));
+        z-index: var(--prts-z-shortcuts); width: min(288px, calc(100vw - 24px));
+        border: 1px solid var(--prts-color-border); border-radius: var(--prts-radius-lg) 0 0 var(--prts-radius-lg);
+        background: var(--prts-color-surface); color: var(--prts-color-text); box-shadow: var(--prts-shadow-md);
+        font: 14px/1.5 var(--prts-font-sans);
+    }
+    #prts-activity-shortcuts.prts-activity-left {
+        left: env(safe-area-inset-left, 0px); right: auto; border-radius: 0 var(--prts-radius-lg) var(--prts-radius-lg) 0;
+    }
+    #prts-activity-shortcuts:has(details:not([open])) { width: 160px; }
+    #prts-activity-shortcuts summary {
+        min-height: 44px; padding: 12px 52px 12px 12px; cursor: pointer; font-weight: 600;
+    }
+    #prts-activity-shortcuts summary:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: -3px; }
+    #prts-activity-shortcuts .prts-activity-close {
+        position: absolute; top: 0; right: 0; width: 44px; min-height: 44px !important; margin: 0;
+    }
+    .prts-activity-body { max-height: min(55dvh, 520px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 12px; }
+    .prts-activity-body h2 { margin: 4px 0; color: inherit; font-size: 16px; overflow-wrap: anywhere; }
+    .prts-activity-body h3 { margin: 12px 0 4px; color: inherit; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+    .prts-activity-body section { border-top: 1px solid var(--prts-color-border-soft); margin-top: 12px; }
+    .prts-activity-time { margin: 4px 0 8px; color: var(--prts-color-text-muted); font-size: 12px; }
+    .prts-activity-stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    #prts-activity-shortcuts .prts-activity-stages .prts-btn {
+        min-width: 0; min-height: 44px !important; padding: 4px !important; margin: 0; overflow-wrap: anywhere; font-size: 12px !important;
+    }
+    #prts-activity-shortcuts .prts-btn[aria-pressed='true'] {
+        border-color: var(--prts-color-primary) !important; background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary-hover) !important; font-weight: 700;
+    }
+    #prts-activity-shortcuts .prts-btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .prts-stage-filter { cursor: pointer; }
     .prts-stage-filter:hover { box-shadow: 0 0 0 2px var(--prts-color-ring); }
     .prts-stage-filter:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }
@@ -3429,6 +3530,7 @@ Object.entries({
         checkUpdates: 'M4 11h-.5C1.6 11 .5 9.5.5 7.7c0-1.7 1.1-3 2.7-3.3C4 .8 11.8.8 12.6 4.4c1.7.2 2.9 1.6 2.9 3.3 0 1.8-1.1 3.3-3 3.3H12V9.5h.5c.9 0 1.5-.7 1.5-1.8 0-1-.8-1.8-1.8-1.8h-.8l-.2-.8c-.6-2.8-5.8-2.8-6.4 0l-.2.8h-.8C2.8 5.9 2 6.7 2 7.7c0 1.1.6 1.8 1.5 1.8H4ZM7 7h2v5h2l-3 3-3-3h2Z',
         reload: 'M13.5 1v5.5H8L10 4.5a4.5 4.5 0 1 0 2.4 5H14A6 6 0 1 1 11.1 3.4Z',
         cards: 'M4 1h11v11h-1.5V2.5H4ZM1 4h11v11H1Zm1.5 1.5v8h8v-8ZM4 8h5v1.5H4Zm0 3h4v1.5H4Z',
+        activityShortcuts: 'M2 2h2V0h1.5v2h5V0H12v2h2v13H2Zm1.5 4v7.5h9V6Zm0-2.5v1h9v-1ZM5 8h2v2H5Zm4 0h2v2H9ZM5 11h2v1H5Z',
         pageEnhancements: 'M1 2h14v12H1Zm1.5 4v6.5h11V6Zm0-2.5v1h11v-1ZM8 6.5l.9 2.1L11 9.5l-2.1.9L8 12.5l-.9-2.1L5 9.5l2.1-.9Z',
         siteRedesign: 'M1 2h14v12H1Zm1.5 1.5v2h11v-2Zm0 3.5v5.5h3V7Zm4.5 0v5.5h6.5V7Zm1 1h4.5v1.5H8Zm0 2.5h3V12H8Z',
         collapseDescription: 'M2 1h12v1.5H2Zm0 3h12v1.5H2Zm0 3h8v1.5H2Zm2 6 4-4 4 4-1.1 1.1L8 11.2l-2.9 2.9Z',
@@ -5814,9 +5916,23 @@ ${formatSklandImportSummary(summary)}`, 'success');
         for (let depth = 0; fiber && depth < 30; depth++, fiber = fiber.return) {
             const props = fiber.memoizedProps;
             if (Array.isArray(props?.items)) levels = props.items;
-            if (typeof props?.value === 'string' && typeof props.onChange === 'function') return { onChange: props.onChange, levels };
+            if (typeof props?.value === 'string' && typeof props.onChange === 'function') return { onChange: props.onChange, levels, value: props.value };
         }
         return null;
+    }
+
+    function applyStageFilter(stageName) {
+        const filter = getStageFilter();
+        if (!filter) {
+            showPrtsToast('无法应用关卡筛选', 'error', '请刷新页面后重试');
+            return false;
+        }
+        // 原站筛选器只列出普通关卡，突袭和磨难作业也应选中对应的普通关卡。
+        const normalStageName = stageName.replace(/#f#$/, '').replace('bossrush_tm', 'bossrush_');
+        const level = filter.levels.find(item => item.stageId === stageName || item.stageId === normalStageName ||
+            item.levelId === stageName || item.name === stageName || item.catThree === stageName);
+        filter.onChange(level?.stageId || stageName);
+        return true;
     }
 
     function syncCardStageFilters(cardInner) {
@@ -5857,16 +5973,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 if (!CONFIG.clickStageFilter) return;
                 event.preventDefault();
                 event.stopPropagation();
-                const filter = getStageFilter();
-                if (!filter) {
-                    showPrtsToast('无法应用关卡筛选', 'error', '请刷新页面后重试');
-                    return;
-                }
-                // 原站筛选器只列出普通关卡，突袭和磨难作业也应选中对应的普通关卡。
-                const normalStageName = stageName.replace(/#f#$/, '').replace('bossrush_tm', 'bossrush_');
-                const level = filter.levels.find(item => item.stageId === stageName || item.stageId === normalStageName ||
-                    item.levelId === stageName || item.name === stageName || item.catThree === stageName);
-                filter.onChange(level?.stageId || stageName);
+                applyStageFilter(stageName);
             };
             target.onkeydown = event => {
                 if (event.key === 'Enter' || event.key === ' ') target.onclick(event);
@@ -6091,6 +6198,154 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }
             dialog.dataset.contentOptimized = "true";
         }
+    }
+    let activityPreview = null;
+
+    function setActivityPreview(enabled) {
+        if (enabled) {
+            const levels = (getStageFilter()?.levels || []).filter(level => level.catOne === '活动关卡');
+            const source = levels.find(level => /-S-\d+$/.test(level.catThree));
+            if (!source) {
+                showPrtsToast('暂时无法模拟活动', 'warning', '请在作业列表加载关卡后重试。');
+                return;
+            }
+            const now = Math.floor(Date.now() / 1000);
+            activityPreview = {
+                id: 'diagnostic-preview', name: `模拟活动 · ${source.catTwo}`, startTime: now, endTime: now + 3600,
+                groups: [['NORMAL', /^[A-Z\d]+-\d+$/], ['EX', /-EX-\d+$/], ['S', /-S-\d+$/]].map(([kind, pattern]) => ({
+                    id: `preview-${kind}`, name: '', kind, startTime: now + (kind === 'S' ? 60 : 0), endTime: now + 3600,
+                    stages: levels.filter(level => level.catTwo === source.catTwo && pattern.test(level.catThree))
+                        .map(level => ({ id: level.stageId, code: level.catThree, name: level.name, levelId: level.levelId }))
+                })).filter(group => group.stages.length)
+            };
+        } else activityPreview = null;
+        const button = document.getElementById('prts-activity-preview');
+        if (button) {
+            button.textContent = activityPreview ? '结束模拟活动' : '模拟活动';
+            button.setAttribute('aria-pressed', String(Boolean(activityPreview)));
+        }
+        syncActivityShortcuts();
+        if (activityPreview) document.getElementById('prts-activity-shortcuts')?.querySelector('details').setAttribute('open', '');
+    }
+
+    function getActiveActivities(schedule, now = Math.floor(Date.now() / 1000)) {
+        return schedule.filter(activity => activity.startTime <= now && now <= activity.endTime).map(activity => ({
+            ...activity,
+            groups: activity.groups.map(group => ({ ...group,
+                state: now < group.startTime ? 'upcoming' : now > group.endTime ? 'ended' : 'open'
+            }))
+        }));
+    }
+
+    function formatActivityTime(timestamp) {
+        return new Intl.DateTimeFormat('zh-CN', {
+            timeZone: 'Asia/Shanghai', month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false
+        }).format(new Date(timestamp * 1000));
+    }
+
+    function collapseActivityShortcutsOnFocus(event) {
+        const panel = document.getElementById('prts-activity-shortcuts');
+        if (panel && !panel.contains(event.target)) panel.querySelector('details').open = false;
+    }
+
+    function syncActivityShortcuts() {
+        let panel = document.getElementById('prts-activity-shortcuts');
+        const filter = (CONFIG.activityShortcuts || activityPreview) && !isFilterDisabledPage() ? getStageFilter() : null;
+        const activities = filter ? getActiveActivities(activityPreview ? [activityPreview] : activitySchedule) : [];
+        if (!activities.length) {
+            panel?.remove();
+            return;
+        }
+        if (!panel) {
+            panel = document.createElement('aside');
+            panel.id = 'prts-activity-shortcuts';
+            panel.setAttribute('aria-label', '活动关卡快捷筛选');
+            const details = document.createElement('details');
+            details.open = window.innerWidth >= 640;
+            const summary = document.createElement('summary');
+            summary.textContent = '活动关卡';
+            details.appendChild(summary);
+            const body = document.createElement('div');
+            body.className = 'prts-activity-body';
+            details.appendChild(body);
+            panel.appendChild(details);
+            panel.appendChild(createPrtsButton({
+                className: 'prts-btn prts-activity-close', icon: 'close', ariaLabel: '关闭活动关卡快捷筛选',
+                title: '关闭后可在设置 → 页面增强中恢复', onClick: () => {
+                    if (activityPreview) {
+                        setActivityPreview(false);
+                        document.querySelector('.prts-float-btn')?.focus({ preventScroll: true });
+                        return;
+                    }
+                    CONFIG.activityShortcuts = false;
+                    saveConfig();
+                    refreshAccountControls();
+                    panel.remove();
+                    document.querySelector('.prts-float-btn')?.focus({ preventScroll: true });
+                    showPrtsToast('已关闭活动关卡快捷筛选', 'info', '可在设置 → 页面增强中重新开启。');
+                }
+            }));
+            document.body.appendChild(panel);
+        }
+        panel.classList.toggle('prts-activity-left', CONFIG.floatingPosition.isRight);
+        const levels = new Map(filter.levels.flatMap(level => [[level.stageId, level], [level.levelId, level]]));
+        const signature = JSON.stringify(activities);
+        const body = panel.querySelector('.prts-activity-body');
+        if (panel.dataset.signature !== signature) {
+            body.replaceChildren();
+            for (const activity of activities) {
+                const heading = document.createElement('h2');
+                heading.textContent = activity.name;
+                body.appendChild(heading);
+                const end = document.createElement('p');
+                end.className = 'prts-activity-time';
+                end.textContent = `至 ${formatActivityTime(activity.endTime)}（北京时间）`;
+                body.appendChild(end);
+                for (const group of activity.groups) {
+                    const section = document.createElement('section');
+                    const title = document.createElement('h3');
+                    const label = { NORMAL: '普通关', EX: 'EX 关', S: 'S 关', OTHER: '特殊关' }[group.kind];
+                    title.textContent = `${label}${group.name ? ` · ${group.name}` : ''}`;
+                    section.appendChild(title);
+                    const status = document.createElement('p');
+                    status.className = 'prts-activity-time';
+                    status.textContent = group.state === 'upcoming' ? `${formatActivityTime(group.startTime)} 开放（北京时间）`
+                        : group.state === 'ended' ? '已结束' : '已开放';
+                    section.appendChild(status);
+                    const buttons = document.createElement('div');
+                    buttons.className = 'prts-activity-stages';
+                    for (const stage of group.stages) {
+                        const button = createPrtsButton({
+                            text: stage.code, ariaLabel: `筛选关卡：${stage.code} ${stage.name}`,
+                            onClick: () => {
+                                const now = Math.floor(Date.now() / 1000);
+                                if ((!CONFIG.activityShortcuts && !activityPreview) || now < group.startTime || now > group.endTime) {
+                                    syncActivityShortcuts();
+                                    return;
+                                }
+                                if (applyStageFilter(button.dataset.stageId)) syncActivityShortcuts();
+                            }
+                        });
+                        button.dataset.activityStage = stage.id;
+                        buttons.appendChild(button);
+                    }
+                    section.appendChild(buttons);
+                    body.appendChild(section);
+                }
+            }
+            panel.dataset.signature = signature;
+        }
+        const groups = new Map(activities.flatMap(activity => activity.groups.flatMap(group =>
+            group.stages.map(stage => [stage.id, { group, stage }]))));
+        body.querySelectorAll('[data-activity-stage]').forEach(button => {
+            const { group, stage } = groups.get(button.dataset.activityStage);
+            const level = levels.get(stage.id) || levels.get(stage.levelId);
+            button.dataset.stageId = level?.stageId || stage.id;
+            button.disabled = group.state !== 'open' || !level;
+            button.title = `${stage.name}${group.state === 'upcoming' ? ' · 尚未开放'
+                : group.state === 'ended' ? ' · 已结束' : !level ? ' · 作业站尚未收录' : ''}`;
+            button.setAttribute('aria-pressed', String(Boolean(level) && filter.value === level.stageId));
+        });
     }
     const cardDiagnosticsCache = new WeakMap();
     function createCardDiagnostics(source = 'none') {
@@ -6473,6 +6728,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        syncActivityShortcuts();
+        updateActivitySchedule();
         syncOperationTypeButtons();
         syncOperatorMatchingSettings();
         if (isFilterDisabledPage()) {
@@ -6577,7 +6834,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
     function isScriptOwnedNode(node) {
         const element = node?.nodeType === 1 ? node : node?.parentElement;
-        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-popover-grid'));
+        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-popover-grid'));
     }
 
     function collectPageMutations(mutations) {
@@ -6611,6 +6868,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
     }
 
     function initPrtsPage() {
+        loadCachedActivitySchedule();
+        document.addEventListener('focusin', collapseActivityShortcutsOnFocus);
         syncPageScaffold();
         scheduleFilterUpdate(0);
         document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
@@ -6631,6 +6890,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         }, 3000);
         return () => {
             observer.disconnect();
+            document.removeEventListener('focusin', collapseActivityShortcutsOnFocus);
             clearInterval(fallbackTimer);
             filterUpdateCoordinator.dispose();
         };
@@ -6969,6 +7229,14 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }));
         });
         diagnostics.body.appendChild(updatePreviewActions);
+        diagnostics.body.appendChild(createPrtsButton({
+            id: 'prts-activity-preview', text: '模拟活动', pressed: false,
+            onClick: () => setActivityPreview(!activityPreview)
+        }));
+        const activityPreviewHint = document.createElement('p');
+        activityPreviewHint.className = 'prts-about-description';
+        activityPreviewHint.textContent = '普通关、EX 关立即开放，S 关一分钟后开放。点击关卡会应用到原站筛选；刷新页面结束模拟。';
+        diagnostics.body.appendChild(activityPreviewHint);
         aboutContent.appendChild(createPrtsButton({
             className: 'prts-btn prts-about-update', icon: 'checkUpdates', text: '检查脚本更新',
             onClick: () => checkScriptUpdates(true)

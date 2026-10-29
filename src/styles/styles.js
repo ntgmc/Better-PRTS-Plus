@@ -405,6 +405,7 @@
         --prts-duration-fast: 160ms;
         --prts-duration-base: 220ms;
         --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+        --prts-z-shortcuts: 19; /* 原站 Blueprint 弹窗使用 20，快捷栏留在遮罩下。 */
         --prts-z-float: 2147483644;
         --prts-z-toast: 2147483647;
         --prts-z-dialog: 2147483646;
@@ -870,6 +871,38 @@
         vertical-align: middle;
     }
     body.high-contrast-theme .prts-level-badge { border-color: var(--prts-color-primary); }
+    #prts-activity-shortcuts {
+        position: fixed; right: env(safe-area-inset-right, 0px); bottom: max(16px, env(safe-area-inset-bottom, 0px));
+        z-index: var(--prts-z-shortcuts); width: min(288px, calc(100vw - 24px));
+        border: 1px solid var(--prts-color-border); border-radius: var(--prts-radius-lg) 0 0 var(--prts-radius-lg);
+        background: var(--prts-color-surface); color: var(--prts-color-text); box-shadow: var(--prts-shadow-md);
+        font: 14px/1.5 var(--prts-font-sans);
+    }
+    #prts-activity-shortcuts.prts-activity-left {
+        left: env(safe-area-inset-left, 0px); right: auto; border-radius: 0 var(--prts-radius-lg) var(--prts-radius-lg) 0;
+    }
+    #prts-activity-shortcuts:has(details:not([open])) { width: 160px; }
+    #prts-activity-shortcuts summary {
+        min-height: 44px; padding: 12px 52px 12px 12px; cursor: pointer; font-weight: 600;
+    }
+    #prts-activity-shortcuts summary:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: -3px; }
+    #prts-activity-shortcuts .prts-activity-close {
+        position: absolute; top: 0; right: 0; width: 44px; min-height: 44px !important; margin: 0;
+    }
+    .prts-activity-body { max-height: min(55dvh, 520px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 12px; }
+    .prts-activity-body h2 { margin: 4px 0; color: inherit; font-size: 16px; overflow-wrap: anywhere; }
+    .prts-activity-body h3 { margin: 12px 0 4px; color: inherit; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+    .prts-activity-body section { border-top: 1px solid var(--prts-color-border-soft); margin-top: 12px; }
+    .prts-activity-time { margin: 4px 0 8px; color: var(--prts-color-text-muted); font-size: 12px; }
+    .prts-activity-stages { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+    #prts-activity-shortcuts .prts-activity-stages .prts-btn {
+        min-width: 0; min-height: 44px !important; padding: 4px !important; margin: 0; overflow-wrap: anywhere; font-size: 12px !important;
+    }
+    #prts-activity-shortcuts .prts-btn[aria-pressed='true'] {
+        border-color: var(--prts-color-primary) !important; background: var(--prts-color-primary-soft) !important;
+        color: var(--prts-color-primary-hover) !important; font-weight: 700;
+    }
+    #prts-activity-shortcuts .prts-btn:disabled { opacity: 0.55; cursor: not-allowed; }
     .prts-stage-filter { cursor: pointer; }
     .prts-stage-filter:hover { box-shadow: 0 0 0 2px var(--prts-color-ring); }
     .prts-stage-filter:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; }

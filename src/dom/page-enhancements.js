@@ -149,9 +149,23 @@
         for (let depth = 0; fiber && depth < 30; depth++, fiber = fiber.return) {
             const props = fiber.memoizedProps;
             if (Array.isArray(props?.items)) levels = props.items;
-            if (typeof props?.value === 'string' && typeof props.onChange === 'function') return { onChange: props.onChange, levels };
+            if (typeof props?.value === 'string' && typeof props.onChange === 'function') return { onChange: props.onChange, levels, value: props.value };
         }
         return null;
+    }
+
+    function applyStageFilter(stageName) {
+        const filter = getStageFilter();
+        if (!filter) {
+            showPrtsToast('无法应用关卡筛选', 'error', '请刷新页面后重试');
+            return false;
+        }
+        // 原站筛选器只列出普通关卡，突袭和磨难作业也应选中对应的普通关卡。
+        const normalStageName = stageName.replace(/#f#$/, '').replace('bossrush_tm', 'bossrush_');
+        const level = filter.levels.find(item => item.stageId === stageName || item.stageId === normalStageName ||
+            item.levelId === stageName || item.name === stageName || item.catThree === stageName);
+        filter.onChange(level?.stageId || stageName);
+        return true;
     }
 
     function syncCardStageFilters(cardInner) {
@@ -192,16 +206,7 @@
                 if (!CONFIG.clickStageFilter) return;
                 event.preventDefault();
                 event.stopPropagation();
-                const filter = getStageFilter();
-                if (!filter) {
-                    showPrtsToast('无法应用关卡筛选', 'error', '请刷新页面后重试');
-                    return;
-                }
-                // 原站筛选器只列出普通关卡，突袭和磨难作业也应选中对应的普通关卡。
-                const normalStageName = stageName.replace(/#f#$/, '').replace('bossrush_tm', 'bossrush_');
-                const level = filter.levels.find(item => item.stageId === stageName || item.stageId === normalStageName ||
-                    item.levelId === stageName || item.name === stageName || item.catThree === stageName);
-                filter.onChange(level?.stageId || stageName);
+                applyStageFilter(stageName);
             };
             target.onkeydown = event => {
                 if (event.key === 'Enter' || event.key === ' ') target.onclick(event);

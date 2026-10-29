@@ -31,6 +31,9 @@ jobs:
         shell: pwsh
         run: ./tool/update-operator-data.ps1
 
+      - name: Update activity schedules
+        run: node tool/update-activity-data.js
+
       - name: Run project checks
         shell: pwsh
         run: ./tool/check.ps1
@@ -38,12 +41,12 @@ jobs:
       - name: Commit changed resources
         shell: bash
         run: |
-          git add resources/data.json src/data/operators.generated.js src/data/module-types.generated.js tool/operator-data.generated.json tool/operator-data-update-summary.json Better-PRTS-Plus.user.js
+          git add resources/data.json resources/activities.json src/data/operators.generated.js src/data/module-types.generated.js tool/operator-data.generated.json tool/operator-data-update-summary.json Better-PRTS-Plus.user.js
           if git diff --cached --quiet; then
             echo "Resources are unchanged."
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git commit -m "chore(resources): update operator and module data"
+          git commit -m "chore(resources): update operator, module and activity data"
           git push origin HEAD:main

@@ -331,6 +331,14 @@
             }));
         });
         diagnostics.body.appendChild(updatePreviewActions);
+        diagnostics.body.appendChild(createPrtsButton({
+            id: 'prts-activity-preview', text: '模拟活动', pressed: false,
+            onClick: () => setActivityPreview(!activityPreview)
+        }));
+        const activityPreviewHint = document.createElement('p');
+        activityPreviewHint.className = 'prts-about-description';
+        activityPreviewHint.textContent = '普通关、EX 关立即开放，S 关一分钟后开放。点击关卡会应用到原站筛选；刷新页面结束模拟。';
+        diagnostics.body.appendChild(activityPreviewHint);
         aboutContent.appendChild(createPrtsButton({
             className: 'prts-btn prts-about-update', icon: 'checkUpdates', text: '检查脚本更新',
             onClick: () => checkScriptUpdates(true)

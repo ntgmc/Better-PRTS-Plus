@@ -989,6 +989,204 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
+function activityFixture() {
+  const { buildActivitySchedule } = require('./update-activity-data');
+  const basicInfo = { rerun: { name: '活动·复刻', hasStage: true, startTime: 1000, endTime: 4000, rewardEndTime: 5000 } };
+  const zoneToActivity = { normal: 'rerun', ex: 'rerun', special: 'rerun' };
+  const zones = Object.fromEntries(Object.keys(zoneToActivity).map(id => [id, { zoneNameSecond: id === 'special' ? 'RPG关卡（不展示）' : id }]));
+  const zoneValidInfo = { normal: { startTs: 1000, endTs: 4000 }, ex: { startTs: 2000, endTs: 4000 },
+    special: { startTs: 3000, endTs: 4000 } };
+  const stages = {};
+  for (const [id, code, zoneId] of [['old_10', 'AA-10', 'normal'], ['old_2', 'AA-2', 'normal'],
+    ['old_ex1', 'AA-EX-1', 'ex'], ['old_s1', 'AA-S-1', 'special'], ['old_mo1', 'AA-MO-1', 'special'],
+    ['story', 'AA-ST-1', 'normal'], ['old_ex1#f#', 'AA-EX-1', 'ex']]) {
+    stages[id] = { stageId: id, code, zoneId, name: code, difficulty: id.endsWith('#f#') ? 'FOUR_STAR' : 'NORMAL',
+      levelId: id === 'story' ? null : `Activities/OLD/level_${id}` };
+  }
+  const stageValidInfo = { old_10: { startTs: 1500, endTs: 3500 } };
+  return buildActivitySchedule({ basicInfo, zoneToActivity }, { zones, zoneValidInfo }, { stages, stageValidInfo });
+}
+
+function createActivityHarness(now = 2100, width = 1280) {
+  const body = createTestElement('body');
+  const all = node => [node, ...node.children.flatMap(all)];
+  const saved = new Map();
+  const calls = [], toasts = [];
+  let downloads = 0;
+  const data = activityFixture();
+  const filter = { value: '', levels: data.activities[0].groups.flatMap(group => group.stages)
+    .map(stage => ({ stageId: stage.id, levelId: stage.levelId })) };
+  const document = { body, getElementById: id => all(body).find(node => node.id === id) || null,
+    querySelector: () => null, createElement: tag => {
+      const element = createTestElement(tag);
+      element.querySelectorAll = selector => all(element).filter(node => selector === '[data-activity-stage]' && node.dataset.activityStage);
+      return element;
+    } };
+  const sandbox = { document, window: { innerWidth: width }, CONFIG: { activityShortcuts: true, floatingPosition: { isRight: true } },
+    Date: class extends Date { static now() { return now * 1000; } },
+    isPlainRecord: value => Boolean(value) && typeof value === 'object' && !Array.isArray(value),
+    RESOURCE_CHECK_INTERVAL_MS: 3600000, RESOURCE_URLS: ['https://example.com/data.json'],
+    GM_getValue: (key, fallback) => saved.get(key) ?? fallback, GM_setValue: (key, value) => saved.set(key, value),
+    console: { warn() {} }, getStageFilter: () => filter, isFilterDisabledPage: () => false,
+    refreshAccountControls() {}, saveConfig: () => saved.set('config', JSON.stringify(sandbox.CONFIG)),
+    showPrtsToast: (...args) => toasts.push(args),
+    applyStageFilter: id => { calls.push(id); filter.value = id; return true; },
+    createPrtsButton: options => {
+      const button = document.createElement('button'); button.className = options.className || 'prts-btn';
+      button.textContent = options.text || ''; button.onclick = options.onClick;
+      button.setAttribute('aria-label', options.ariaLabel); return button;
+    },
+    downloadFirstValidJson: async () => { downloads++; return data; }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(['src/data/activities.js', 'src/ui/activity-shortcuts.js'].map(file =>
+    fs.readFileSync(path.join(repoRoot, file), 'utf8')).join('\n'), sandbox);
+  sandbox.data = data;
+  vm.runInContext('activitySchedule = validateActivitySchedule(data).activities;', sandbox);
+  return { sandbox, body, all, saved, filter, calls, toasts, data, setNow: value => { now = value; }, getDownloads: () => downloads };
+}
+
+test('activity schedules use actual zone and stage times, classify EX/S, retain rerun IDs and exclude stories and challenges', () => {
+  const data = activityFixture();
+  const groups = data.activities[0].groups;
+  assert.strictEqual(data.activities[0].id, 'rerun');
+  assert.deepStrictEqual(groups.map(group => [group.kind, group.startTime, group.endTime]),
+    [['NORMAL', 1000, 4000], ['NORMAL', 1500, 3500], ['EX', 2000, 4000], ['S', 3000, 4000], ['OTHER', 3000, 4000]]);
+  assert.strictEqual(groups[2].stages[0].id, 'old_ex1');
+  assert.strictEqual(groups[3].name, '', 'internal zone labels stay out of the panel');
+  assert.strictEqual(groups.flatMap(group => group.stages).length, 5);
+  const { buildActivitySchedule } = require('./update-activity-data');
+  assert.throws(() => buildActivitySchedule({}, {}, {}), /Missing activity/);
+  const { sandbox } = createActivityHarness();
+  assert.strictEqual(sandbox.validateActivitySchedule(JSON.parse(fs.readFileSync(path.join(repoRoot, 'resources/activities.json'), 'utf8'))).schemaVersion, 1);
+  for (const mutate of [value => { value.schemaVersion = 2; }, value => { value.activities[0].endTime = 0; },
+    value => { value.activities[0].groups[0].startTime = 1; },
+    value => { value.activities[0].groups[0].stages.push(value.activities[0].groups[0].stages[0]); }]) {
+    const bad = JSON.parse(JSON.stringify(data)); mutate(bad); assert.throws(() => sandbox.validateActivitySchedule(bad));
+  }
+});
+
+test('activity time boundaries distinguish battle closing from rewards and unlock each group at its own time', () => {
+  const { sandbox, data } = createActivityHarness();
+  assert.strictEqual(sandbox.getActiveActivities(data.activities, 999).length, 0);
+  assert.strictEqual(sandbox.getActiveActivities(data.activities, 4001).length, 0);
+  assert.strictEqual(sandbox.getActiveActivities(data.activities, 4000).length, 1);
+  const boundary = createActivityHarness(4000.5);
+  assert.strictEqual(boundary.sandbox.getActiveActivities(data.activities).length, 1, 'game timestamps include the final whole second');
+  const states = time => Array.from(sandbox.getActiveActivities(data.activities, time)[0].groups, group => group.state);
+  assert.deepStrictEqual(states(1000), ['open', 'upcoming', 'upcoming', 'upcoming', 'upcoming']);
+  assert.deepStrictEqual(states(2000), ['open', 'open', 'open', 'upcoming', 'upcoming']);
+  assert.deepStrictEqual(states(3000), ['open', 'open', 'open', 'open', 'open']);
+  assert.deepStrictEqual(states(3501), ['open', 'ended', 'open', 'open', 'open']);
+  assert(sandbox.formatActivityTime(1704067200).includes('08:00'), 'opening times use China time regardless of the browser timezone');
+});
+
+test('activity panel preserves nodes on sync, selects canonical levels, locks unavailable stages and closes persistently', () => {
+  const { sandbox, body, all, saved, filter, calls, setNow } = createActivityHarness();
+  sandbox.syncActivityShortcuts();
+  const panel = body.firstChild;
+  const buttons = () => all(panel).filter(node => node.dataset.activityStage);
+  assert.strictEqual(panel.firstChild.open, true);
+  panel.contains = node => all(panel).includes(node);
+  sandbox.collapseActivityShortcutsOnFocus({ target: panel.firstChild });
+  assert.strictEqual(panel.firstChild.open, true);
+  sandbox.collapseActivityShortcutsOnFocus({ target: body });
+  assert.strictEqual(panel.firstChild.open, false);
+  panel.firstChild.open = true;
+  assert(panel.textContent.includes('S 关'));
+  assert(panel.textContent.includes('开放（北京时间）'));
+  const button = buttons().find(node => node.dataset.activityStage === 'old_ex1');
+  assert.strictEqual(button.disabled, false);
+  button.onclick();
+  assert.deepStrictEqual(calls, ['old_ex1']);
+  assert.strictEqual(button.attributes.get('aria-pressed'), 'true');
+  sandbox.syncActivityShortcuts();
+  assert.strictEqual(buttons().find(node => node.dataset.activityStage === 'old_ex1'), button);
+  const level = filter.levels.find(level => level.stageId === 'old_ex1');
+  level.stageId = 'canonical_ex1';
+  sandbox.syncActivityShortcuts(); button.onclick();
+  assert.strictEqual(calls.at(-1), 'canonical_ex1', 'rerun levels also match their original levelId');
+  filter.levels = [];
+  sandbox.syncActivityShortcuts();
+  assert(buttons().every(node => node.disabled));
+  assert(button.title.includes('尚未收录'));
+  setNow(4001); button.onclick();
+  assert.strictEqual(calls.length, 2, 'a stale button cannot select an ended activity');
+  assert.strictEqual(body.children.length, 0);
+  setNow(2100); sandbox.syncActivityShortcuts();
+  body.firstChild.lastChild.onclick();
+  assert.strictEqual(sandbox.CONFIG.activityShortcuts, false);
+  assert.strictEqual(JSON.parse(saved.get('config')).activityShortcuts, false);
+  sandbox.syncActivityShortcuts(); assert.strictEqual(body.children.length, 0);
+  sandbox.CONFIG.activityShortcuts = true; sandbox.syncActivityShortcuts();
+  assert.strictEqual(body.children.length, 1);
+  sandbox.isFilterDisabledPage = () => true; sandbox.syncActivityShortcuts();
+  assert.strictEqual(body.children.length, 0);
+  const mobile = createActivityHarness(2100, 320);
+  mobile.sandbox.syncActivityShortcuts(); assert.strictEqual(mobile.body.firstChild.firstChild.open, false);
+});
+
+test('diagnostic activity previews use real stage filters, unlock S after one minute and never persist mock data', () => {
+  const { sandbox, body, all, saved, filter, calls, data, setNow, toasts } = createActivityHarness();
+  const previewButton = createTestElement('button', '模拟活动');
+  previewButton.id = 'prts-activity-preview';
+  body.appendChild(previewButton);
+  const original = JSON.stringify(data);
+  const stages = data.activities[0].groups.flatMap(group => group.stages);
+  filter.levels.forEach(level => Object.assign(level, { catOne: '活动关卡', catTwo: '原站活动',
+    catThree: stages.find(stage => stage.id === level.stageId).code, name: level.stageId }));
+  sandbox.CONFIG.activityShortcuts = false;
+  sandbox.setActivityPreview(true);
+  const panel = sandbox.document.getElementById('prts-activity-shortcuts');
+  const buttons = () => all(panel).filter(node => node.dataset.activityStage);
+  assert(panel.textContent.includes('模拟活动 · 原站活动'));
+  assert.strictEqual(previewButton.attributes.get('aria-pressed'), 'true');
+  assert.strictEqual(previewButton.textContent, '结束模拟活动');
+  const ex = buttons().find(node => node.dataset.activityStage === 'old_ex1');
+  assert.strictEqual(ex.disabled, false);
+  ex.onclick();
+  assert.deepStrictEqual(calls, ['old_ex1']);
+  assert.strictEqual(buttons().find(node => node.dataset.activityStage === 'old_s1').disabled, true);
+  setNow(2159); sandbox.syncActivityShortcuts();
+  assert.strictEqual(buttons().find(node => node.dataset.activityStage === 'old_s1').disabled, true);
+  setNow(2160); sandbox.syncActivityShortcuts();
+  const special = buttons().find(node => node.dataset.activityStage === 'old_s1');
+  assert.strictEqual(special.disabled, false);
+  special.onclick();
+  assert.strictEqual(calls.at(-1), 'old_s1');
+  panel.lastChild.onclick();
+  assert.strictEqual(sandbox.document.getElementById('prts-activity-shortcuts'), null);
+  assert.strictEqual(sandbox.CONFIG.activityShortcuts, false, 'ending previews preserves the real display preference');
+  assert.strictEqual(previewButton.textContent, '模拟活动');
+  assert.strictEqual(previewButton.attributes.get('aria-pressed'), 'false');
+  assert.strictEqual(JSON.stringify(data), original);
+  assert.strictEqual(saved.size, 0, 'preview data and display overrides never reach storage');
+  sandbox.CONFIG.activityShortcuts = true;
+  sandbox.setActivityPreview(true);
+  sandbox.setActivityPreview(false);
+  assert(!sandbox.document.getElementById('prts-activity-shortcuts').textContent.includes('模拟活动'));
+  filter.levels = [];
+  sandbox.setActivityPreview(true);
+  assert.strictEqual(previewButton.attributes.get('aria-pressed'), 'false');
+  assert.strictEqual(toasts.at(-1)[0], '暂时无法模拟活动');
+});
+
+test('activity schedule cache loads, downloads deduplicate and failures retain the working schedule', async () => {
+  const { sandbox, saved, data, getDownloads } = createActivityHarness(10000);
+  saved.set('prts_plus_activity_schedule_v1', JSON.stringify({ data, checkedAt: 999999999 }));
+  sandbox.loadCachedActivitySchedule();
+  const first = sandbox.updateActivitySchedule();
+  assert.strictEqual(sandbox.updateActivitySchedule(), first);
+  assert.strictEqual(await first, true); assert.strictEqual(getDownloads(), 1);
+  assert.strictEqual(await sandbox.updateActivitySchedule(), false);
+  const failure = createActivityHarness(10000);
+  failure.sandbox.downloadFirstValidJson = async () => { throw new Error('offline'); };
+  assert.strictEqual(await failure.sandbox.updateActivitySchedule(), false);
+  assert.strictEqual(vm.runInContext('getActiveActivities(activitySchedule, 2100).length', failure.sandbox), 1);
+  failure.sandbox.CONFIG.activityShortcuts = false;
+  assert.strictEqual(await failure.sandbox.updateActivitySchedule(), false);
+});
+
 test('script icons cover semantic uses with distinct paths and accessible 16px SVGs', () => {
   const sandbox = {
     document: { createElement: createTestElement, createElementNS: (_namespace, tag) => createTestElement(tag) },
@@ -1052,6 +1250,7 @@ test('settings categories preserve controls and state while switching and collap
     saveConfig: () => { saves++; }, checkScriptUpdates: manual => { assert.strictEqual(manual, true); checks++; },
     refreshAccountControls() {}, syncPageScaffold() {}, enhancePopover() {}, requestFilterUpdate() {},
     getAccountIds: () => [1, 2, 3], addAccount() {},
+    activityPreview: null, setActivityPreview: enabled => { sandbox.activityPreview = enabled ? {} : null; actions.push(enabled ? 'preview' : 'stop-preview'); },
     handleImport: () => actions.push('import'), handleOpenSklandImport: () => actions.push('skland'),
     handleExportAccountsBackup: () => actions.push('export'), handleImportAccountsBackup: () => actions.push('restore'),
     ResizeObserver: class { observe() {} }
@@ -1146,6 +1345,12 @@ test('settings categories preserve controls and state while switching and collap
   const heading = all(body).find(node => node.className === 'prts-settings-heading');
   heading.events.get('click')({ shiftKey: true, preventDefault() {}, stopPropagation() {} });
   assert.strictEqual(categoryButtons[4].hidden, false);
+  const preview = document.getElementById('prts-activity-preview');
+  assert.strictEqual(preview.parentElement, categoryPanels[4].lastChild);
+  preview._prtsClickHandler();
+  assert.strictEqual(actions.at(-1), 'preview');
+  preview._prtsClickHandler();
+  assert.strictEqual(actions.at(-1), 'stop-preview');
   heading.events.get('click')({ shiftKey: true, preventDefault() {}, stopPropagation() {} });
   assert.strictEqual(categoryButtons[4].hidden, true);
   assert(categoryPanels.every(node => node.inert));
@@ -4016,7 +4221,9 @@ test('page observation enhances nested and delayed portals without rescanning th
   const { page, addCard } = createFilterPage('GRAY');
   const { card, inner } = addCard({ opers: [{ name: '阿米娅' }] });
   let callback, observed = 0, disconnected = false, scaffoldRuns = 0, enhancements = 0;
-  const timers = new Map();
+  const timers = new Map(), listeners = new Map();
+  page.document.addEventListener = (name, listener) => listeners.set(name, listener);
+  page.document.removeEventListener = (name, listener) => { assert.strictEqual(listeners.get(name), listener); listeners.delete(name); };
   page.Node = { ELEMENT_NODE: 1 };
   page.MutationObserver = class {
     constructor(fn) { callback = fn; }
@@ -4032,6 +4239,7 @@ test('page observation enhances nested and delayed portals without rescanning th
   inner.closest = selector => selector.includes('ul > li') ? card : null;
   const stop = page.initPrtsPage();
   assert.strictEqual(observed, 1);
+  assert(listeners.has('focusin'));
   callback([{ type: 'characterData', target: { nodeType: 3, parentElement: inner } }]);
   assert.strictEqual(scaffoldRuns, 1);
   const portal = { nodeType: 1, isConnected: true, closest: () => null, matches: () => true, querySelectorAll: () => [] };
@@ -4045,6 +4253,7 @@ test('page observation enhances nested and delayed portals without rescanning th
   stop();
   assert(disconnected);
   assert.strictEqual(timers.size, 0);
+  assert.strictEqual(listeners.size, 0);
 });
 
 test('immediate filtering keeps the pending frame, absorbs delays and avoids redundant runs', () => {

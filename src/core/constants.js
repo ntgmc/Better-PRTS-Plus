@@ -29,6 +29,7 @@
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
         hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'hidePrtsBadge', default: true, reloadOnDisable: true },
         trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'trainingPromptStyle', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
+        activityShortcuts: { group: '页面增强', label: '活动关卡快捷浮窗', icon: 'activityShortcuts', default: true },
         siteRedesign: { group: '页面增强', label: '全站样式优化', icon: 'siteRedesign', default: false },
         popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'popoverAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'hideSidebar', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
