@@ -2264,27 +2264,13 @@ Object.entries({
 
     /* 1. 描述容器 (Hover 展开) */
     .prts-desc-wrapper { position: relative; height: 24px; margin: 2px 0; width: 100%; z-index: 10; }
-    .prts-desc-wrapper:hover { z-index: 100; }
     .prts-desc-content {
         width: 100%; height: 24px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         font-size: 13px; color: #6b7280; line-height: 24px; border-radius: 4px; background-color: transparent;
     }
-    .prts-desc-wrapper:hover .prts-desc-content {
-        position: absolute; top: -4px; left: -8px; width: calc(100% + 16px); height: auto;
-        white-space: normal; overflow: visible; background-color: #ffffff; color: #374151;
-        padding: 4px 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.2); border: 1px solid #e5e7eb;
-    }
 
     body.dark .prts-desc-content { color: #8a9baa; }
     body.high-contrast-theme .prts-desc-content { color: #a1a1aa; }
-
-    body.dark .prts-desc-wrapper:hover .prts-desc-content {
-        background-color: #30404d; color: #f5f8fa; border-color: #415262;
-        box-shadow: 0 4px 16px rgba(0,0,0,0.5);
-    }
-    body.high-contrast-theme .prts-desc-wrapper:hover .prts-desc-content {
-        background-color: #18181c; border-color: #38383b;
-    }
 
     .prts-exact-time { font-size: 0 !important; }
     .prts-exact-time::after { content: attr(data-prts-exact-time); font-size: 0.875rem; }
@@ -3026,12 +3012,15 @@ Object.entries({
         border-radius: var(--prts-radius-sm);
     }
     .prts-training-more summary:active { color: var(--prts-color-primary-hover); }
-    .prts-desc-wrapper:focus {
+    .prts-desc-wrapper:focus-visible {
         outline: 2px solid var(--prts-color-primary);
         outline-offset: 2px;
         border-radius: var(--prts-radius-sm);
     }
-    .prts-desc-wrapper:hover .prts-desc-content, .prts-desc-wrapper:focus .prts-desc-content, .prts-desc-wrapper:focus-within .prts-desc-content {
+    body:not(:has(.bp4-overlay-open .bp4-overlay-backdrop, .bp6-overlay-open .bp6-overlay-backdrop))
+        .prts-desc-wrapper:is(:hover, :focus-visible:not(.prts-desc-dismissed), :has(:focus-visible):not(.prts-desc-dismissed)) { z-index: 100; }
+    body:not(:has(.bp4-overlay-open .bp4-overlay-backdrop, .bp6-overlay-open .bp6-overlay-backdrop))
+        .prts-desc-wrapper:is(:hover, :focus-visible:not(.prts-desc-dismissed), :has(:focus-visible):not(.prts-desc-dismissed)) .prts-desc-content {
         position: absolute;
         top: -4px;
         left: -8px;
@@ -5862,6 +5851,13 @@ ${formatSklandImportSummary(summary)}`, 'success');
         descContainer.style.width = '100%';
         descContainer.tabIndex = 0;
         descContainer.setAttribute('aria-label', '作业描述');
+        descContainer.onclick = event => {
+            if (!event.target.closest('a, button')) descContainer.classList.add('prts-desc-dismissed');
+        };
+        descContainer.onblur = event => {
+            // 原站关闭详情会还原焦点，此次还原不应重新展开描述。
+            if (!event.relatedTarget?.closest?.('.bp4-overlay, .bp6-overlay')) descContainer.classList.remove('prts-desc-dismissed');
+        };
     }
 
     function addStageBadge(cardInner) {

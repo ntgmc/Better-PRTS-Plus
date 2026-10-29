@@ -1880,6 +1880,27 @@ test('card badges, avatars, descriptions and links work independently and remain
   }
 });
 
+test('collapsed description clicks suppress restored focus expansion while preserving links and normal keyboard reentry', () => {
+  const sandbox = { CONFIG: { collapseDescription: true }, document: { createElement: createTestElement } };
+  vm.runInNewContext(fs.readFileSync(path.join(repoRoot, 'src/dom/page-enhancements.js'), 'utf8'), sandbox);
+  const desc = createTestElement();
+  desc.appendChild(createTestElement('p', '完整作业说明'));
+  sandbox.collapseCardDescription({ querySelector: () => desc });
+  desc.onclick({ target: desc.firstChild });
+  assert(desc.classList.contains('prts-desc-dismissed'));
+  desc.onblur({ relatedTarget: { closest: () => createTestElement('div') } });
+  assert(desc.classList.contains('prts-desc-dismissed'), 'moving focus into the native drawer preserves the dismissal');
+  assert.strictEqual(desc.tabIndex, 0, 'focus remains available for the native return path');
+  desc.onblur({ relatedTarget: createTestElement('button') });
+  assert(!desc.classList.contains('prts-desc-dismissed'), 'leaving the restored description allows normal keyboard reentry');
+  for (const tag of ['a', 'button']) {
+    const target = createTestElement(tag);
+    target.closest = () => target;
+    desc.onclick({ target });
+    assert(!desc.classList.contains('prts-desc-dismissed'), 'interactive content keeps its own click behavior');
+  }
+});
+
 test('mixed operator group popovers keep all original content and can retry when names become known', () => {
   const savedPopoverAvatars = CONFIG.popoverAvatars;
   const savedDocument = context.document;

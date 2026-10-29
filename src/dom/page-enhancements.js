@@ -94,6 +94,13 @@
         descContainer.style.width = '100%';
         descContainer.tabIndex = 0;
         descContainer.setAttribute('aria-label', '作业描述');
+        descContainer.onclick = event => {
+            if (!event.target.closest('a, button')) descContainer.classList.add('prts-desc-dismissed');
+        };
+        descContainer.onblur = event => {
+            // 原站关闭详情会还原焦点，此次还原不应重新展开描述。
+            if (!event.relatedTarget?.closest?.('.bp4-overlay, .bp6-overlay')) descContainer.classList.remove('prts-desc-dismissed');
+        };
     }
 
     function addStageBadge(cardInner) {
