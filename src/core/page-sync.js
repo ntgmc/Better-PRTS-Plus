@@ -60,13 +60,13 @@
         document.body?.classList.toggle('prts-site-redesign', isPrtsHost() && CONFIG.siteRedesign);
     }
 
-    function syncPageScaffold() {
+    function syncPageScaffold(restoreActivityExpansion = false) {
         syncSiteRedesign();
         applySidebarCollapse();
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
-        syncActivityShortcuts();
+        syncActivityShortcuts(restoreActivityExpansion);
         updateActivitySchedule();
         syncOperationTypeButtons();
         syncOperatorMatchingSettings();
@@ -165,7 +165,7 @@
         lastRouteKey = routeKey;
         filterUpdateCoordinator.dispose();
         renderFilterResults(null);
-        syncPageScaffold();
+        syncPageScaffold(true);
         scheduleFilterUpdate(120);
         return true;
     }

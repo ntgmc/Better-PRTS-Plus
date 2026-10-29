@@ -1091,8 +1091,7 @@ test('activity panel preserves nodes on sync, selects canonical levels, locks un
   sandbox.collapseActivityShortcutsOnFocus({ target: panel.firstChild });
   assert.strictEqual(panel.firstChild.open, true);
   sandbox.collapseActivityShortcutsOnFocus({ target: body });
-  assert.strictEqual(panel.firstChild.open, false);
-  panel.firstChild.open = true;
+  assert.strictEqual(panel.firstChild.open, true, 'pointer focus does not collapse the panel');
   assert(panel.textContent.includes('S 关'));
   assert(panel.textContent.includes('开放（北京时间）'));
   const button = buttons().find(node => node.dataset.activityStage === 'old_ex1');
@@ -1124,6 +1123,44 @@ test('activity panel preserves nodes on sync, selects canonical levels, locks un
   assert.strictEqual(body.children.length, 0);
   const mobile = createActivityHarness(2100, 320);
   mobile.sandbox.syncActivityShortcuts(); assert.strictEqual(mobile.body.firstChild.firstChild.open, false);
+});
+
+test('activity expansion survives route changes and remounts while keyboard focus only collapses actual overlaps', () => {
+  const { sandbox, body } = createActivityHarness();
+  sandbox.syncActivityShortcuts();
+  const panel = body.firstChild, details = panel.firstChild, summary = details.firstChild;
+  panel.contains = node => node === details;
+  panel.getBoundingClientRect = () => ({ left: 0, right: 288, top: 300, bottom: 850 });
+  const target = createTestElement('button');
+  target.matches = () => true;
+  target.getBoundingClientRect = () => ({ left: 400, right: 500, top: 400, bottom: 450 });
+  sandbox.collapseActivityShortcutsOnFocus({ target });
+  assert.strictEqual(details.open, true, 'unobscured keyboard focus leaves the panel open');
+  target.getBoundingClientRect = () => ({ left: 50, right: 150, top: 400, bottom: 450 });
+  target.closest = () => createTestElement('div');
+  sandbox.collapseActivityShortcutsOnFocus({ target });
+  assert.strictEqual(details.open, true, 'drawer and dialog focus does not change expansion');
+  target.closest = () => null;
+  sandbox.collapseActivityShortcutsOnFocus({ target });
+  assert.strictEqual(details.open, false, 'an obscured keyboard target temporarily collapses the panel');
+  sandbox.syncActivityShortcuts();
+  assert.strictEqual(details.open, false, 'ordinary sync preserves the temporary focus collapse');
+  sandbox.syncActivityShortcuts(true);
+  assert.strictEqual(details.open, true, 'returning to the list restores the intended expansion');
+  summary.onclick(); details.open = false;
+  sandbox.syncActivityShortcuts(true);
+  assert.strictEqual(details.open, false, 'manual collapse stays collapsed on return');
+  summary.onclick(); details.open = true;
+  sandbox.isFilterDisabledPage = () => true; sandbox.syncActivityShortcuts();
+  assert.strictEqual(body.children.length, 0);
+  sandbox.isFilterDisabledPage = () => false; sandbox.syncActivityShortcuts();
+  assert.strictEqual(body.firstChild.firstChild.open, true, 'recreated panels retain the last manual state');
+  const mobile = createActivityHarness(2100, 320);
+  mobile.sandbox.syncActivityShortcuts();
+  const mobileDetails = mobile.body.firstChild.firstChild;
+  mobileDetails.firstChild.onclick(); mobileDetails.open = true;
+  mobile.sandbox.syncActivityShortcuts(true);
+  assert.strictEqual(mobileDetails.open, true, 'mobile expansion is restored after opening it manually');
 });
 
 test('diagnostic activity previews use real stage filters, unlock S after one minute and never persist mock data', () => {
@@ -4215,6 +4252,18 @@ test('overlapping groups evaluate training once for each requirement entry', () 
     { 阿米娅: { elite: 2 }, W: { elite: 1 } }, true);
   assert.strictEqual(result.isAvailable, true);
   assert.strictEqual(evaluated.size, 3);
+});
+
+test('route changes request activity expansion restoration when opening and closing job details', () => {
+  const { page } = createFilterPage('GRAY');
+  const restores = [];
+  page.syncPageScaffold = restore => restores.push(restore);
+  page.scheduleFilterUpdate = () => {};
+  page.window.location.search = '?op=123';
+  assert.strictEqual(page.handleRouteChange(), true);
+  page.window.location.search = '';
+  assert.strictEqual(page.handleRouteChange(), true);
+  assert.deepStrictEqual(restores, [true, true]);
 });
 
 test('page observation enhances nested and delayed portals without rescanning the scaffold for card text', () => {

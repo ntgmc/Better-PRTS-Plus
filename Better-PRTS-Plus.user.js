@@ -2626,7 +2626,7 @@ Object.entries({
         --prts-duration-fast: 160ms;
         --prts-duration-base: 220ms;
         --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-        --prts-z-shortcuts: 19; /* 原站 Blueprint 弹窗使用 20，快捷栏留在遮罩下。 */
+        --prts-z-shortcuts: 101; /* 高于卡片悬浮内容（100），有遮罩时降回原站弹窗下方。 */
         --prts-z-float: 2147483644;
         --prts-z-toast: 2147483647;
         --prts-z-dialog: 2147483646;
@@ -3099,6 +3099,7 @@ Object.entries({
         background: var(--prts-color-surface); color: var(--prts-color-text); box-shadow: var(--prts-shadow-md);
         font: 14px/1.5 var(--prts-font-sans);
     }
+    body:has(.bp4-overlay-open .bp4-overlay-backdrop, .bp6-overlay-open .bp6-overlay-backdrop) #prts-activity-shortcuts { z-index: 19; }
     #prts-activity-shortcuts.prts-activity-left {
         left: env(safe-area-inset-left, 0px); right: auto; border-radius: 0 var(--prts-radius-lg) var(--prts-radius-lg) 0;
     }
@@ -6200,6 +6201,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         }
     }
     let activityPreview = null;
+    let activityShortcutsExpanded = null;
 
     function setActivityPreview(enabled) {
         if (enabled) {
@@ -6224,8 +6226,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
             button.textContent = activityPreview ? '结束模拟活动' : '模拟活动';
             button.setAttribute('aria-pressed', String(Boolean(activityPreview)));
         }
-        syncActivityShortcuts();
-        if (activityPreview) document.getElementById('prts-activity-shortcuts')?.querySelector('details').setAttribute('open', '');
+        if (activityPreview) activityShortcutsExpanded = true;
+        syncActivityShortcuts(Boolean(activityPreview));
     }
 
     function getActiveActivities(schedule, now = Math.floor(Date.now() / 1000)) {
@@ -6245,10 +6247,16 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
     function collapseActivityShortcutsOnFocus(event) {
         const panel = document.getElementById('prts-activity-shortcuts');
-        if (panel && !panel.contains(event.target)) panel.querySelector('details').open = false;
+        if (!panel || panel.contains(event.target) || !event.target.matches?.(':focus-visible') ||
+            event.target.closest?.('.bp4-overlay:has(.bp4-overlay-backdrop), .bp6-overlay:has(.bp6-overlay-backdrop)')) return;
+        const target = event.target.getBoundingClientRect();
+        const bounds = panel.getBoundingClientRect();
+        if (target.left < bounds.right && target.right > bounds.left && target.top < bounds.bottom && target.bottom > bounds.top) {
+            panel.querySelector('details').open = false;
+        }
     }
 
-    function syncActivityShortcuts() {
+    function syncActivityShortcuts(restoreExpanded = false) {
         let panel = document.getElementById('prts-activity-shortcuts');
         const filter = (CONFIG.activityShortcuts || activityPreview) && !isFilterDisabledPage() ? getStageFilter() : null;
         const activities = filter ? getActiveActivities(activityPreview ? [activityPreview] : activitySchedule) : [];
@@ -6261,9 +6269,11 @@ ${formatSklandImportSummary(summary)}`, 'success');
             panel.id = 'prts-activity-shortcuts';
             panel.setAttribute('aria-label', '活动关卡快捷筛选');
             const details = document.createElement('details');
-            details.open = window.innerWidth >= 640;
+            activityShortcutsExpanded ??= window.innerWidth >= 640;
+            details.open = activityShortcutsExpanded;
             const summary = document.createElement('summary');
             summary.textContent = '活动关卡';
+            summary.onclick = () => { activityShortcutsExpanded = !details.open; };
             details.appendChild(summary);
             const body = document.createElement('div');
             body.className = 'prts-activity-body';
@@ -6287,6 +6297,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             }));
             document.body.appendChild(panel);
         }
+        if (restoreExpanded) panel.querySelector('details').open = activityShortcutsExpanded;
         panel.classList.toggle('prts-activity-left', CONFIG.floatingPosition.isRight);
         const levels = new Map(filter.levels.flatMap(level => [[level.stageId, level], [level.levelId, level]]));
         const signature = JSON.stringify(activities);
@@ -6722,13 +6733,13 @@ ${formatSklandImportSummary(summary)}`, 'success');
         document.body?.classList.toggle('prts-site-redesign', isPrtsHost() && CONFIG.siteRedesign);
     }
 
-    function syncPageScaffold() {
+    function syncPageScaffold(restoreActivityExpansion = false) {
         syncSiteRedesign();
         applySidebarCollapse();
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
-        syncActivityShortcuts();
+        syncActivityShortcuts(restoreActivityExpansion);
         updateActivitySchedule();
         syncOperationTypeButtons();
         syncOperatorMatchingSettings();
@@ -6827,7 +6838,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         lastRouteKey = routeKey;
         filterUpdateCoordinator.dispose();
         renderFilterResults(null);
-        syncPageScaffold();
+        syncPageScaffold(true);
         scheduleFilterUpdate(120);
         return true;
     }

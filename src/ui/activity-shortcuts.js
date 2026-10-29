@@ -1,4 +1,5 @@
     let activityPreview = null;
+    let activityShortcutsExpanded = null;
 
     function setActivityPreview(enabled) {
         if (enabled) {
@@ -23,8 +24,8 @@
             button.textContent = activityPreview ? '结束模拟活动' : '模拟活动';
             button.setAttribute('aria-pressed', String(Boolean(activityPreview)));
         }
-        syncActivityShortcuts();
-        if (activityPreview) document.getElementById('prts-activity-shortcuts')?.querySelector('details').setAttribute('open', '');
+        if (activityPreview) activityShortcutsExpanded = true;
+        syncActivityShortcuts(Boolean(activityPreview));
     }
 
     function getActiveActivities(schedule, now = Math.floor(Date.now() / 1000)) {
@@ -44,10 +45,16 @@
 
     function collapseActivityShortcutsOnFocus(event) {
         const panel = document.getElementById('prts-activity-shortcuts');
-        if (panel && !panel.contains(event.target)) panel.querySelector('details').open = false;
+        if (!panel || panel.contains(event.target) || !event.target.matches?.(':focus-visible') ||
+            event.target.closest?.('.bp4-overlay:has(.bp4-overlay-backdrop), .bp6-overlay:has(.bp6-overlay-backdrop)')) return;
+        const target = event.target.getBoundingClientRect();
+        const bounds = panel.getBoundingClientRect();
+        if (target.left < bounds.right && target.right > bounds.left && target.top < bounds.bottom && target.bottom > bounds.top) {
+            panel.querySelector('details').open = false;
+        }
     }
 
-    function syncActivityShortcuts() {
+    function syncActivityShortcuts(restoreExpanded = false) {
         let panel = document.getElementById('prts-activity-shortcuts');
         const filter = (CONFIG.activityShortcuts || activityPreview) && !isFilterDisabledPage() ? getStageFilter() : null;
         const activities = filter ? getActiveActivities(activityPreview ? [activityPreview] : activitySchedule) : [];
@@ -60,9 +67,11 @@
             panel.id = 'prts-activity-shortcuts';
             panel.setAttribute('aria-label', '活动关卡快捷筛选');
             const details = document.createElement('details');
-            details.open = window.innerWidth >= 640;
+            activityShortcutsExpanded ??= window.innerWidth >= 640;
+            details.open = activityShortcutsExpanded;
             const summary = document.createElement('summary');
             summary.textContent = '活动关卡';
+            summary.onclick = () => { activityShortcutsExpanded = !details.open; };
             details.appendChild(summary);
             const body = document.createElement('div');
             body.className = 'prts-activity-body';
@@ -86,6 +95,7 @@
             }));
             document.body.appendChild(panel);
         }
+        if (restoreExpanded) panel.querySelector('details').open = activityShortcutsExpanded;
         panel.classList.toggle('prts-activity-left', CONFIG.floatingPosition.isRight);
         const levels = new Map(filter.levels.flatMap(level => [[level.stageId, level], [level.levelId, level]]));
         const signature = JSON.stringify(activities);

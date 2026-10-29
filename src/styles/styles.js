@@ -405,7 +405,7 @@
         --prts-duration-fast: 160ms;
         --prts-duration-base: 220ms;
         --prts-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
-        --prts-z-shortcuts: 19; /* 原站 Blueprint 弹窗使用 20，快捷栏留在遮罩下。 */
+        --prts-z-shortcuts: 101; /* 高于卡片悬浮内容（100），有遮罩时降回原站弹窗下方。 */
         --prts-z-float: 2147483644;
         --prts-z-toast: 2147483647;
         --prts-z-dialog: 2147483646;
@@ -878,6 +878,7 @@
         background: var(--prts-color-surface); color: var(--prts-color-text); box-shadow: var(--prts-shadow-md);
         font: 14px/1.5 var(--prts-font-sans);
     }
+    body:has(.bp4-overlay-open .bp4-overlay-backdrop, .bp6-overlay-open .bp6-overlay-backdrop) #prts-activity-shortcuts { z-index: 19; }
     #prts-activity-shortcuts.prts-activity-left {
         left: env(safe-area-inset-left, 0px); right: auto; border-radius: 0 var(--prts-radius-lg) var(--prts-radius-lg) 0;
     }
