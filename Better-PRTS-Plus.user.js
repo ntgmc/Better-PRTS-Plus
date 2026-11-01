@@ -3095,13 +3095,16 @@ Object.entries({
     }
     #prts-activity-shortcuts:has(details:not([open])) { width: 160px; }
     #prts-activity-shortcuts summary {
-        min-height: 44px; padding: 12px 52px 12px 12px; cursor: pointer; font-weight: 600;
+        box-sizing: border-box; min-height: 44px; padding: 12px 52px 12px 12px; cursor: pointer; font-weight: 600;
     }
     #prts-activity-shortcuts summary:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: -3px; }
     #prts-activity-shortcuts .prts-activity-close {
         position: absolute; top: 0; right: 0; width: 44px; min-height: 44px !important; margin: 0;
     }
-    .prts-activity-body { max-height: min(55dvh, 520px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 12px; }
+    .prts-activity-content { display: flex; flex-direction: column; max-height: min(65dvh, 600px); }
+    .prts-activity-picker:not([hidden]) { display: block; flex-shrink: 0; padding: 0 12px 12px; color: var(--prts-color-text-muted); font-size: 12px; }
+    .prts-activity-picker select { display: block; width: 100%; margin-top: 4px; }
+    .prts-activity-body { min-height: 0; max-height: min(55dvh, 520px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 12px; }
     .prts-activity-body h2 { margin: 4px 0; color: inherit; font-size: 16px; overflow-wrap: anywhere; }
     .prts-activity-body h3 { margin: 12px 0 4px; color: inherit; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
     .prts-activity-body section { border-top: 1px solid var(--prts-color-border-soft); margin-top: 12px; }
@@ -6199,24 +6202,27 @@ ${formatSklandImportSummary(summary)}`, 'success');
     }
     let activityPreview = null;
     let activityShortcutsExpanded = null;
+    let activityShortcutsSelectedId = null;
+    let activityShortcutsFilterValue = null;
 
     function setActivityPreview(enabled) {
         if (enabled) {
             const levels = (getStageFilter()?.levels || []).filter(level => level.catOne === '活动关卡');
-            const source = levels.find(level => /-S-\d+$/.test(level.catThree));
-            if (!source) {
+            const names = [...new Set(levels.filter(level => /^[A-Z\d]+-(?:(?:EX|S)-)?\d+$/.test(level.catThree))
+                .map(level => level.catTwo))].slice(0, 2);
+            if (!names.length) {
                 showPrtsToast('暂时无法模拟活动', 'warning', '请在作业列表加载关卡后重试。');
                 return;
             }
             const now = Math.floor(Date.now() / 1000);
-            activityPreview = {
-                id: 'diagnostic-preview', name: `模拟活动 · ${source.catTwo}`, startTime: now, endTime: now + 3600,
+            activityPreview = names.map((name, index) => ({
+                id: `diagnostic-preview-${index}`, name: `模拟活动 · ${name}`, startTime: now, endTime: now + 3600,
                 groups: [['NORMAL', /^[A-Z\d]+-\d+$/], ['EX', /-EX-\d+$/], ['S', /-S-\d+$/]].map(([kind, pattern]) => ({
                     id: `preview-${kind}`, name: '', kind, startTime: now + (kind === 'S' ? 60 : 0), endTime: now + 3600,
-                    stages: levels.filter(level => level.catTwo === source.catTwo && pattern.test(level.catThree))
+                    stages: levels.filter(level => level.catTwo === name && pattern.test(level.catThree))
                         .map(level => ({ id: level.stageId, code: level.catThree, name: level.name, levelId: level.levelId }))
                 })).filter(group => group.stages.length)
-            };
+            }));
         } else activityPreview = null;
         const button = document.getElementById('prts-activity-preview');
         if (button) {
@@ -6256,7 +6262,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
     function syncActivityShortcuts(restoreExpanded = false) {
         let panel = document.getElementById('prts-activity-shortcuts');
         const filter = (CONFIG.activityShortcuts || activityPreview) && !isFilterDisabledPage() ? getStageFilter() : null;
-        const activities = filter ? getActiveActivities(activityPreview ? [activityPreview] : activitySchedule) : [];
+        const activities = filter ? getActiveActivities(activityPreview || activitySchedule) : [];
         if (!activities.length) {
             panel?.remove();
             return;
@@ -6272,9 +6278,24 @@ ${formatSklandImportSummary(summary)}`, 'success');
             summary.textContent = '活动关卡';
             summary.onclick = () => { activityShortcutsExpanded = !details.open; };
             details.appendChild(summary);
+            const content = document.createElement('div');
+            content.className = 'prts-activity-content';
+            const picker = document.createElement('label');
+            picker.className = 'prts-activity-picker';
+            picker.appendChild(document.createElement('span'));
+            const select = document.createElement('select');
+            select.className = 'prts-account-select';
+            select.setAttribute('aria-label', '切换活动');
+            select.onchange = () => {
+                activityShortcutsSelectedId = select.value;
+                syncActivityShortcuts();
+            };
+            picker.appendChild(select);
+            content.appendChild(picker);
             const body = document.createElement('div');
             body.className = 'prts-activity-body';
-            details.appendChild(body);
+            content.appendChild(body);
+            details.appendChild(content);
             panel.appendChild(details);
             panel.appendChild(createPrtsButton({
                 className: 'prts-btn prts-activity-close', icon: 'close', ariaLabel: '关闭活动关卡快捷筛选',
@@ -6297,54 +6318,78 @@ ${formatSklandImportSummary(summary)}`, 'success');
         if (restoreExpanded) panel.querySelector('details').open = activityShortcutsExpanded;
         panel.classList.toggle('prts-activity-left', CONFIG.floatingPosition.isRight);
         const levels = new Map(filter.levels.flatMap(level => [[level.stageId, level], [level.levelId, level]]));
-        const signature = JSON.stringify(activities);
+        let activity = activities.find(item => item.id === activityShortcutsSelectedId);
+        if (!activity || filter.value !== activityShortcutsFilterValue) {
+            const matching = activities.filter(item => item.groups.some(group => group.stages.some(stage =>
+                (levels.get(stage.id) || levels.get(stage.levelId))?.stageId === filter.value)));
+            activity = matching.find(item => item.id === activity?.id) || matching[0] || activity || activities[0];
+        }
+        activityShortcutsSelectedId = activity.id;
+        activityShortcutsFilterValue = filter.value;
+        panel.querySelector('summary').textContent = activities.length > 1 ? `活动关卡 · ${activities.length}` : '活动关卡';
+        const picker = panel.querySelector('.prts-activity-picker');
+        picker.hidden = activities.length < 2;
+        picker.querySelector('span').textContent = `进行中活动（${activities.length}）`;
+        const select = picker.querySelector('select');
+        const optionsSignature = JSON.stringify(activities.map(item => [item.id, item.name]));
+        if (select.dataset.signature !== optionsSignature) {
+            select.replaceChildren(...activities.map(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = item.name;
+                return option;
+            }));
+            select.dataset.signature = optionsSignature;
+        }
+        if (select.value !== activity.id) select.value = activity.id;
+        const signature = JSON.stringify(activity);
         const body = panel.querySelector('.prts-activity-body');
         if (panel.dataset.signature !== signature) {
+            if (body.dataset.activityId !== activity.id) body.scrollTop = 0;
+            body.dataset.activityId = activity.id;
             body.replaceChildren();
-            for (const activity of activities) {
-                const heading = document.createElement('h2');
-                heading.textContent = activity.name;
-                body.appendChild(heading);
-                const end = document.createElement('p');
-                end.className = 'prts-activity-time';
-                end.textContent = `至 ${formatActivityTime(activity.endTime)}（北京时间）`;
-                body.appendChild(end);
-                for (const group of activity.groups) {
-                    const section = document.createElement('section');
-                    const title = document.createElement('h3');
-                    const label = { NORMAL: '普通关', EX: 'EX 关', S: 'S 关', OTHER: '特殊关' }[group.kind];
-                    title.textContent = `${label}${group.name ? ` · ${group.name}` : ''}`;
-                    section.appendChild(title);
-                    const status = document.createElement('p');
-                    status.className = 'prts-activity-time';
-                    status.textContent = group.state === 'upcoming' ? `${formatActivityTime(group.startTime)} 开放（北京时间）`
-                        : group.state === 'ended' ? '已结束' : '已开放';
-                    section.appendChild(status);
-                    const buttons = document.createElement('div');
-                    buttons.className = 'prts-activity-stages';
-                    for (const stage of group.stages) {
-                        const button = createPrtsButton({
-                            text: stage.code, ariaLabel: `筛选关卡：${stage.code} ${stage.name}`,
-                            onClick: () => {
-                                const now = Math.floor(Date.now() / 1000);
-                                if ((!CONFIG.activityShortcuts && !activityPreview) || now < group.startTime || now > group.endTime) {
-                                    syncActivityShortcuts();
-                                    return;
-                                }
-                                if (applyStageFilter(button.dataset.stageId)) syncActivityShortcuts();
+            const heading = document.createElement('h2');
+            heading.textContent = activity.name;
+            body.appendChild(heading);
+            const end = document.createElement('p');
+            end.className = 'prts-activity-time';
+            end.textContent = `至 ${formatActivityTime(activity.endTime)}（北京时间）`;
+            body.appendChild(end);
+            for (const group of activity.groups) {
+                const section = document.createElement('section');
+                const title = document.createElement('h3');
+                const label = { NORMAL: '普通关', EX: 'EX 关', S: 'S 关', OTHER: '特殊关' }[group.kind];
+                title.textContent = `${label}${group.name ? ` · ${group.name}` : ''}`;
+                section.appendChild(title);
+                const status = document.createElement('p');
+                status.className = 'prts-activity-time';
+                status.textContent = group.state === 'upcoming' ? `${formatActivityTime(group.startTime)} 开放（北京时间）`
+                    : group.state === 'ended' ? '已结束' : '已开放';
+                section.appendChild(status);
+                const buttons = document.createElement('div');
+                buttons.className = 'prts-activity-stages';
+                for (const stage of group.stages) {
+                    const button = createPrtsButton({
+                        text: stage.code, ariaLabel: `筛选关卡：${stage.code} ${stage.name}`,
+                        onClick: () => {
+                            const now = Math.floor(Date.now() / 1000);
+                            if ((!CONFIG.activityShortcuts && !activityPreview) || now < group.startTime || now > group.endTime) {
+                                syncActivityShortcuts();
+                                return;
                             }
-                        });
-                        button.dataset.activityStage = stage.id;
-                        buttons.appendChild(button);
-                    }
-                    section.appendChild(buttons);
-                    body.appendChild(section);
+                            if (applyStageFilter(button.dataset.stageId)) syncActivityShortcuts();
+                        }
+                    });
+                    button.dataset.activityStage = stage.id;
+                    buttons.appendChild(button);
                 }
+                section.appendChild(buttons);
+                body.appendChild(section);
             }
             panel.dataset.signature = signature;
         }
-        const groups = new Map(activities.flatMap(activity => activity.groups.flatMap(group =>
-            group.stages.map(stage => [stage.id, { group, stage }]))));
+        const groups = new Map(activity.groups.flatMap(group =>
+            group.stages.map(stage => [stage.id, { group, stage }])));
         body.querySelectorAll('[data-activity-stage]').forEach(button => {
             const { group, stage } = groups.get(button.dataset.activityStage);
             const level = levels.get(stage.id) || levels.get(stage.levelId);

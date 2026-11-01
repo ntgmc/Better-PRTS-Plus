@@ -989,6 +989,62 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
+test('resource upstream checks resolve both source branches to immutable GitHub commits', async () => {
+  const { getResourceUpstream } = require('./resource-upstream');
+  const requests = [];
+  const refs = await getResourceUpstream(async (url, options) => {
+    requests.push({ url, options });
+    return { ok: true, json: async () => ({ sha: (url.includes('ArknightsGameData') ? 'a' : 'b').repeat(40) }) };
+  });
+  assert.deepStrictEqual(refs, { game_sha: 'a'.repeat(40), operators_sha: 'b'.repeat(40) });
+  assert.deepStrictEqual(requests.map(request => request.url), [
+    'https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/master',
+    'https://api.github.com/repos/ZOOT-Plus/zoot-plus-frontend/commits/dev'
+  ]);
+  assert(requests.every(request => request.options.signal instanceof AbortSignal));
+});
+
+test('resource upstream failures and invalid commit IDs reject the sync instead of marking it current', async () => {
+  const { getResourceUpstream } = require('./resource-upstream');
+  await assert.rejects(getResourceUpstream(async () => ({ ok: false, status: 503 })), /HTTP 503/);
+  await assert.rejects(getResourceUpstream(async () => { throw new Error('offline'); }), /offline/);
+  for (const sha of [undefined, 'master', 'a'.repeat(39), 'a'.repeat(40) + '\n']) {
+    await assert.rejects(getResourceUpstream(async () => ({ ok: true, json: async () => ({ sha }) })), /Invalid upstream commit/);
+  }
+});
+
+test('activity downloads pin every table and fallback mirror to the resolved upstream commit', async () => {
+  const urls = [];
+  const writes = [];
+  const sha = 'c'.repeat(40);
+  const tables = {
+    activity: { basicInfo: { event: { name: '新活动', hasStage: true, startTime: 1000, endTime: 4000 } },
+      zoneToActivity: { normal: 'event' } },
+    zone: { zones: { normal: { zoneNameSecond: '普通关' } }, zoneValidInfo: { normal: { startTs: 1000, endTs: 4000 } } },
+    stage: { stageValidInfo: {}, stages: { stage: { stageId: 'stage', code: 'AA-1', zoneId: 'normal',
+      difficulty: 'NORMAL', name: '第一关', levelId: 'activities/level_stage' } } }
+  };
+  const sandbox = { module: { exports: {} }, __dirname, process: { argv: ['node', 'update-activity-data.js'], env: { GAME_DATA_REF: sha } },
+    console: { log() {} }, AbortSignal,
+    require: name => name === 'node:fs' ? { writeFileSync: (file, text) => writes.push({ file, text }) } : require(name),
+    fetch: async url => {
+      urls.push(url);
+      if (url.includes('raw.githubusercontent.com')) return { ok: false, status: 503 };
+      const name = url.match(/\/(activity|zone|stage)_table\.json$/)[1];
+      return { ok: true, json: async () => tables[name] };
+    }
+  };
+  vm.createContext(sandbox);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, 'update-activity-data.js'), 'utf8'), sandbox);
+  await sandbox.main();
+  assert.strictEqual(urls.length, 6);
+  assert(urls.every(url => url.includes(`/${sha}/`) || url.includes(`@${sha}/`)));
+  assert.strictEqual(writes.length, 1);
+  const schedule = JSON.parse(writes[0].text);
+  assert.strictEqual(schedule.activities[0].name, '新活动');
+  assert.strictEqual(schedule.activities[0].groups[0].stages[0].id, 'stage');
+});
+
 function activityFixture() {
   const { buildActivitySchedule } = require('./update-activity-data');
   const basicInfo = { rerun: { name: '活动·复刻', hasStage: true, startTime: 1000, endTime: 4000, rewardEndTime: 5000 } };
@@ -1007,14 +1063,30 @@ function activityFixture() {
   return buildActivitySchedule({ basicInfo, zoneToActivity }, { zones, zoneValidInfo }, { stages, stageValidInfo });
 }
 
-function createActivityHarness(now = 2100, width = 1280) {
+function concurrentActivityFixture() {
+  const data = activityFixture();
+  const next = structuredClone(data.activities[0]);
+  next.id = 'next'; next.name = '另一个同时开放的活动';
+  next.startTime += 500; next.endTime += 1000;
+  for (const group of next.groups) {
+    group.startTime += 500; group.endTime += 1000;
+    for (const stage of group.stages) {
+      stage.id = `next_${stage.id}`;
+      stage.code = stage.code.replace('AA', 'BB');
+      stage.levelId = `next/${stage.levelId}`;
+    }
+  }
+  data.activities.unshift(next);
+  return data;
+}
+
+function createActivityHarness(now = 2100, width = 1280, data = activityFixture()) {
   const body = createTestElement('body');
   const all = node => [node, ...node.children.flatMap(all)];
   const saved = new Map();
   const calls = [], toasts = [];
   let downloads = 0;
-  const data = activityFixture();
-  const filter = { value: '', levels: data.activities[0].groups.flatMap(group => group.stages)
+  const filter = { value: '', levels: data.activities.flatMap(activity => activity.groups.flatMap(group => group.stages))
     .map(stage => ({ stageId: stage.id, levelId: stage.levelId })) };
   const document = { body, getElementById: id => all(body).find(node => node.id === id) || null,
     querySelector: () => null, createElement: tag => {
@@ -1163,6 +1235,101 @@ test('activity expansion survives route changes and remounts while keyboard focu
   assert.strictEqual(mobileDetails.open, true, 'mobile expansion is restored after opening it manually');
 });
 
+test('concurrent activities show one event, preserve manual selection and follow external canonical stage filters', () => {
+  const { sandbox, body, all, filter, calls } = createActivityHarness(2600, 1280, concurrentActivityFixture());
+  sandbox.syncActivityShortcuts();
+  const panel = body.firstChild;
+  const picker = panel.querySelector('.prts-activity-picker');
+  const select = picker.querySelector('select');
+  const content = panel.querySelector('.prts-activity-body');
+  const buttons = () => all(content).filter(node => node.dataset.activityStage);
+  assert.strictEqual(picker.hidden, false);
+  assert.strictEqual(select.value, 'next', 'the newest active event is the default');
+  assert.strictEqual(select.children.length, 2);
+  assert.strictEqual(panel.querySelector('summary').textContent, '活动关卡 · 2');
+  assert(buttons().every(button => button.dataset.activityStage.startsWith('next_')));
+  assert.strictEqual(content.querySelector('h2').textContent, '另一个同时开放的活动');
+  assert(!content.textContent.includes('活动·复刻'), 'only the selected activity renders stage groups');
+  content.scrollTop = 80;
+  sandbox.syncActivityShortcuts();
+  assert.strictEqual(content.scrollTop, 80, 'routine sync preserves scrolling');
+  const option = select.firstChild;
+  select.value = 'rerun'; select.onchange();
+  assert.strictEqual(content.scrollTop, 0, 'switching events starts at the first stage group');
+  assert(buttons().every(button => !button.dataset.activityStage.startsWith('next_')));
+  buttons().find(button => button.dataset.activityStage === 'old_ex1').onclick();
+  assert.deepStrictEqual(calls, ['old_ex1']);
+  select.value = 'next'; select.onchange();
+  sandbox.syncActivityShortcuts();
+  assert.strictEqual(select.value, 'next', 'the unchanged original filter does not undo manual event selection');
+  assert.strictEqual(panel.querySelector('select'), select, 'the focused switcher survives rendering');
+  assert.strictEqual(select.firstChild, option, 'routine sync does not recreate options');
+  sandbox.isFilterDisabledPage = () => true; sandbox.syncActivityShortcuts();
+  sandbox.isFilterDisabledPage = () => false; sandbox.syncActivityShortcuts();
+  const remounted = body.firstChild.querySelector('select');
+  assert.strictEqual(remounted.value, 'next', 'event selection survives detail-page round trips');
+  const level = filter.levels.find(item => item.stageId === 'old_ex1');
+  level.stageId = 'canonical_ex1'; filter.value = 'canonical_ex1';
+  sandbox.syncActivityShortcuts();
+  assert.strictEqual(remounted.value, 'rerun', 'external filters locate events through the canonical level ID');
+  const selected = all(body).find(node => node.dataset.activityStage === 'old_ex1');
+  assert.strictEqual(selected.attributes.get('aria-pressed'), 'true');
+  filter.value = '1-7'; sandbox.syncActivityShortcuts();
+  assert.strictEqual(remounted.value, 'rerun', 'unrelated stages keep the chosen activity');
+});
+
+test('overlapping schedules isolate shared stage IDs and fall back as activities open and end', () => {
+  const data = concurrentActivityFixture();
+  for (const group of data.activities[0].groups) {
+    for (const stage of group.stages) {
+      stage.id = stage.id.replace('next_', '');
+      stage.levelId = stage.levelId.replace('next/', '');
+    }
+  }
+  const { sandbox, body, all, setNow } = createActivityHarness(1400, 1280, data);
+  sandbox.syncActivityShortcuts();
+  const panel = body.firstChild;
+  const picker = panel.querySelector('.prts-activity-picker');
+  const select = picker.querySelector('select');
+  const ex = () => all(panel).find(node => node.dataset.activityStage === 'old_ex1');
+  assert.strictEqual(picker.hidden, true, 'future events do not appear in the selector');
+  assert.strictEqual(select.value, 'rerun');
+  setNow(2100); sandbox.syncActivityShortcuts();
+  assert.strictEqual(picker.hidden, false);
+  assert.strictEqual(select.value, 'rerun', 'a newly opened activity does not steal selection');
+  assert.strictEqual(ex().disabled, false, 'the first event has opened EX stages');
+  ex().onclick();
+  assert.strictEqual(select.value, 'rerun', 'selecting a shared stage ID keeps the current activity');
+  select.value = 'next'; select.onchange();
+  assert.strictEqual(ex().disabled, true, 'a shared stage ID still uses the selected event opening time');
+  setNow(2500); sandbox.syncActivityShortcuts();
+  assert.strictEqual(ex().disabled, false);
+  select.value = 'rerun'; select.onchange();
+  setNow(4000); sandbox.syncActivityShortcuts();
+  assert.strictEqual(select.value, 'rerun', 'the final whole second is included');
+  setNow(4001); sandbox.syncActivityShortcuts();
+  assert.strictEqual(select.value, 'next');
+  assert.strictEqual(picker.hidden, true, 'a single remaining event needs no switcher');
+  assert.strictEqual(panel.querySelector('summary').textContent, '活动关卡');
+  assert.strictEqual(select.children.length, 1);
+  setNow(5001); sandbox.syncActivityShortcuts();
+  assert.strictEqual(body.children.length, 0);
+});
+
+test('initial stage filters choose their concurrent event and schedule refreshes retain selection by ID', () => {
+  const { sandbox, body, filter, data } = createActivityHarness(2600, 320, concurrentActivityFixture());
+  filter.value = 'old_ex1';
+  sandbox.syncActivityShortcuts();
+  const select = body.firstChild.querySelector('select');
+  assert.strictEqual(select.value, 'rerun');
+  assert.strictEqual(body.firstChild.firstChild.open, false, 'multi-event mobile panels still start collapsed');
+  data.activities.reverse(); data.activities[0].name = '复刻活动新名称';
+  sandbox.syncActivityShortcuts();
+  assert.strictEqual(select.value, 'rerun');
+  assert.strictEqual(select.firstChild.textContent, '复刻活动新名称');
+  assert.strictEqual(body.firstChild.querySelector('h2').textContent, '复刻活动新名称');
+});
+
 test('diagnostic activity previews use real stage filters, unlock S after one minute and never persist mock data', () => {
   const { sandbox, body, all, saved, filter, calls, data, setNow, toasts } = createActivityHarness();
   const previewButton = createTestElement('button', '模拟活动');
@@ -1206,6 +1373,31 @@ test('diagnostic activity previews use real stage filters, unlock S after one mi
   sandbox.setActivityPreview(true);
   assert.strictEqual(previewButton.attributes.get('aria-pressed'), 'false');
   assert.strictEqual(toasts.at(-1)[0], '暂时无法模拟活动');
+});
+
+test('diagnostic previews offer two real activities and allow switching without persisting either schedule', () => {
+  const { sandbox, body, all, filter, saved, calls, data } = createActivityHarness(2600, 1280, concurrentActivityFixture());
+  const original = JSON.stringify(data);
+  for (const activity of data.activities) {
+    for (const stage of activity.groups.flatMap(group => group.stages)) {
+      Object.assign(filter.levels.find(level => level.stageId === stage.id), {
+        catOne: '活动关卡', catTwo: activity.name, catThree: stage.code, name: stage.name
+      });
+    }
+  }
+  sandbox.setActivityPreview(true);
+  const select = body.firstChild.querySelector('select');
+  assert.strictEqual(select.children.length, 2);
+  assert(select.children.every(option => option.textContent.startsWith('模拟活动 · ')));
+  select.value = select.children[1].value; select.onchange();
+  const button = all(body).find(node => node.dataset.activityStage === 'old_ex1');
+  assert.strictEqual(button.disabled, false);
+  button.onclick();
+  assert.deepStrictEqual(calls, ['old_ex1']);
+  sandbox.setActivityPreview(false);
+  assert.strictEqual(body.firstChild.querySelector('select').value, 'rerun', 'ending preview returns to the current real activity');
+  assert.strictEqual(JSON.stringify(data), original);
+  assert.strictEqual(saved.size, 0);
 });
 
 test('activity schedule cache loads, downloads deduplicate and failures retain the working schedule', async () => {

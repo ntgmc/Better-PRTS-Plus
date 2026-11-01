@@ -874,13 +874,16 @@
     }
     #prts-activity-shortcuts:has(details:not([open])) { width: 160px; }
     #prts-activity-shortcuts summary {
-        min-height: 44px; padding: 12px 52px 12px 12px; cursor: pointer; font-weight: 600;
+        box-sizing: border-box; min-height: 44px; padding: 12px 52px 12px 12px; cursor: pointer; font-weight: 600;
     }
     #prts-activity-shortcuts summary:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: -3px; }
     #prts-activity-shortcuts .prts-activity-close {
         position: absolute; top: 0; right: 0; width: 44px; min-height: 44px !important; margin: 0;
     }
-    .prts-activity-body { max-height: min(55dvh, 520px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 12px; }
+    .prts-activity-content { display: flex; flex-direction: column; max-height: min(65dvh, 600px); }
+    .prts-activity-picker:not([hidden]) { display: block; flex-shrink: 0; padding: 0 12px 12px; color: var(--prts-color-text-muted); font-size: 12px; }
+    .prts-activity-picker select { display: block; width: 100%; margin-top: 4px; }
+    .prts-activity-body { min-height: 0; max-height: min(55dvh, 520px); overflow-y: auto; overscroll-behavior: contain; padding: 4px 12px 12px; }
     .prts-activity-body h2 { margin: 4px 0; color: inherit; font-size: 16px; overflow-wrap: anywhere; }
     .prts-activity-body h3 { margin: 12px 0 4px; color: inherit; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
     .prts-activity-body section { border-top: 1px solid var(--prts-color-border-soft); margin-top: 12px; }
