@@ -47,10 +47,11 @@ function buildActivitySchedule(activityTable, zoneTable, stageTable) {
 }
 
 async function main() {
+  const ref = process.env.GAME_DATA_REF || 'master';
   const tables = await Promise.all(['activity', 'zone', 'stage'].map(async name => {
     if (process.argv[2]) return JSON.parse(fs.readFileSync(path.join(process.argv[2], `${name}_table.json`), 'utf8'));
-    for (const base of ['https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/master/',
-      'https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@master/']) {
+    for (const base of [`https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/${ref}/`,
+      `https://cdn.jsdelivr.net/gh/Kengxxiao/ArknightsGameData@${ref}/`]) {
       try {
         const response = await fetch(`${base}zh_CN/gamedata/excel/${name}_table.json`, { signal: AbortSignal.timeout(30000) });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);

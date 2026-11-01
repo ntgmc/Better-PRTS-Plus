@@ -2,7 +2,9 @@ name: Update resources
 
 on:
   schedule:
-    - cron: '17 */6 * * *'
+    - cron: '7,22,37,52 * * * *'
+  repository_dispatch:
+    types: [upstream-resources-updated]
   workflow_dispatch:
 
 permissions:
@@ -27,18 +29,40 @@ jobs:
         with:
           node-version: 20
 
+      - name: Check upstream commits
+        id: upstream
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node tool/resource-upstream.js
+
+      - name: Restore successful upstream sync
+        id: upstream-cache
+        uses: actions/cache@v4
+        with:
+          path: .cache/resource-upstream
+          key: resource-upstream-v1-${{ hashFiles('tool/resource-upstream.js', 'tool/update-operator-data.ps1', 'tool/update-activity-data.js') }}-${{ steps.upstream.outputs.game_sha }}-${{ steps.upstream.outputs.operators_sha }}
+
       - name: Update operator and module resources
+        if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
         shell: pwsh
-        run: ./tool/update-operator-data.ps1
+        env:
+          OPERATOR_SOURCE_URL: https://raw.githubusercontent.com/ZOOT-Plus/zoot-plus-frontend/${{ steps.upstream.outputs.operators_sha }}/src/models/generated/operators.json
+          MODULE_SOURCE_URL: https://raw.githubusercontent.com/Kengxxiao/ArknightsGameData/${{ steps.upstream.outputs.game_sha }}/zh_CN/gamedata/excel/uniequip_table.json
+        run: ./tool/update-operator-data.ps1 -SourceUrl $env:OPERATOR_SOURCE_URL -ModuleSourceUrl $env:MODULE_SOURCE_URL
 
       - name: Update activity schedules
+        if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
+        env:
+          GAME_DATA_REF: ${{ steps.upstream.outputs.game_sha }}
         run: node tool/update-activity-data.js
 
       - name: Run project checks
+        if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
         shell: pwsh
         run: ./tool/check.ps1
 
       - name: Commit changed resources
+        if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           git add resources/data.json resources/activities.json src/data/operators.generated.js src/data/module-types.generated.js tool/operator-data.generated.json tool/operator-data-update-summary.json Better-PRTS-Plus.user.js
@@ -50,3 +74,10 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "chore(resources): update operator, module and activity data"
           git push origin HEAD:main
+
+      - name: Mark upstream sync successful
+        if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          mkdir -p .cache/resource-upstream
+          touch .cache/resource-upstream/success
