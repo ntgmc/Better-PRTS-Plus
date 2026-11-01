@@ -38,7 +38,6 @@
             const cache = JSON.parse(GM_getValue(ACTIVITY_CACHE_KEY, 'null'));
             if (!cache) return;
             activitySchedule = validateActivitySchedule(cache.data).activities;
-            activityCheckedAt = Number.isFinite(cache.checkedAt) && cache.checkedAt <= Date.now() ? cache.checkedAt : 0;
         } catch (error) {
             console.warn('[Better PRTS] 活动日程缓存读取失败', error);
         }

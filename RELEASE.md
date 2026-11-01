@@ -110,13 +110,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/upload-release.ps1 -Ver
 
 ## 资源更新
 
-`.github/workflows/update-resources.yml` 每 15 分钟检查一次上游提交，无变化时跳过下载和生成；也可手动运行，或发送 `repository_dispatch` 事件 `upstream-resources-updated` 立即触发完整同步。真正的上游推送通知需要发送方接入，配置方法见[跟随上游更新资源](docs/development.md#跟随上游更新资源)。工作流从 main 获取最新代码，固定上游提交下载干员、模组和活动日程，通过项目检查后将变化提交回 main；成功后才记录同步状态，失败会在下次检查时重试。数据没有变化时不提交，不修改脚本版本、不创建 tag 或 Release。GitHub 定时任务可能延迟，详见[定时任务说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
+`.github/workflows/update-resources.yml` 每 15 分钟检查一次上游提交，无变化时跳过下载和生成；也可手动运行，或发送 `repository_dispatch` 事件 `upstream-resources-updated` 立即触发完整同步。真正的上游推送通知需要发送方接入，配置方法见[跟随上游更新资源](docs/development.md#跟随上游更新资源)。工作流从 main 获取最新代码，固定上游提交下载干员、模组和活动日程，通过项目检查后将变化提交回 main；提交后刷新 jsDelivr 资源缓存，全部成功后才记录同步状态，失败会在下次检查时重试。数据没有变化时不提交，不修改脚本版本、不创建 tag 或 Release。GitHub 定时任务可能延迟，详见[定时任务说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
 
 CI 调用 `tool/update-operator-data.ps1`，生成 `resources/data.json`，同时同步内置数据和 userscript 构建产物。JSON 的 `schemaVersion` 为 1，包含干员 `operators`、模组分支 `moduleTypes` 和正整数 `resourceVersion`。资源版本从 1 开始，仅在干员或模组内容变化时递增；相同内容重复生成会保留版本，恢复历史内容也会产生新版本。该版本同时写入内置数据，与脚本的 `@version` 独立。数据格式的兼容变更应调整 schemaVersion 和脚本加载逻辑。
 
-安装支持热更新的脚本后，PRTS Plus 和森空岛页面启动时先加载油猴中的资源缓存，每小时检查 main 上的资源 JSON。缓存与下载均须通过版本校验：低于本页已加载版本的数据不会覆盖当前表，成功加载较新资源后也会提高版本下限。缺少版本的旧缓存会被忽略，并立即允许重新同步；旧格式下载响应同样不予采用。新增版本字段保留 schemaVersion 1，旧脚本可继续读取新资源。下载成功后更新本页数据和缓存，重新筛选作业并补齐已识别的新干员头像；全部下载源失败时保留已有数据。资源请求使用 `GM_xmlhttpRequest`，需要允许访问 `raw.githubusercontent.com`、`cdn.jsdelivr.net` 和 `gcore.jsdelivr.net`。[Tampermonkey 请求说明](https://www.tampermonkey.net/documentation.php#api:GM_xmlhttpRequest)
+安装支持热更新的脚本后，PRTS Plus 和森空岛页面启动时先加载油猴中的资源缓存，每小时检查 main 上的资源 JSON。缓存与下载均须通过版本校验：低于本页已加载版本的数据不会覆盖当前表，成功加载较新资源后也会提高版本下限。缺少版本的旧缓存会被忽略，并立即允许重新同步；旧格式下载响应同样不予采用。新增版本字段保留 schemaVersion 1，旧脚本可继续读取新资源。下载成功后更新本页数据和缓存，重新筛选作业并补齐已识别的新干员头像；全部下载源失败时保留已有数据。资源请求使用 `GM_xmlhttpRequest`，需要允许访问 `raw.githubusercontent.com` 和 `cdn.jsdelivr.net`。[Tampermonkey 请求说明](https://www.tampermonkey.net/documentation.php#api:GM_xmlhttpRequest)
 
-每次同步并发请求 GitHub Raw、jsDelivr 默认节点和 Gcore 节点，通过 `Promise.any` 使用首个返回 HTTP 200、文件大小合规、通过 JSON/schema 校验且版本不低于当前数据的响应，随后取消其余请求并清理计时器。每个请求保留 15 秒原生超时和独立计时器，不单独发送测速请求或保存节点排名。镜像读取同一仓库的 `main/resources/data.json`，分支内容可能受 CDN 缓存影响而延迟更新。实现参考 [kkocdko/user-scripts 的 race 片段（Unlicense）](https://github.com/kkocdko/user-scripts/blob/master/scripts/snippets/snippets.js)和 [sindresorhus/globals 的双源读取](https://github.com/sindresorhus/globals/blob/main/scripts/es-builtin.mjs)，复用并发择优和取消剩余请求的思路，沿用本项目的油猴请求、数据校验和缓存逻辑。
+每次同步并发请求 GitHub Raw 和 jsDelivr 默认节点，通过 `Promise.any` 使用首个返回 HTTP 200、文件大小合规、通过 JSON/schema 校验且版本不低于当前数据的响应，随后取消其余请求并清理计时器。每个请求保留 15 秒原生超时和独立计时器，不单独发送测速请求或保存节点排名。镜像读取同一仓库的 `main/resources/data.json`，资源工作流提交后主动刷新该镜像缓存；不使用未能同步刷新的 Gcore 节点。实现参考 [kkocdko/user-scripts 的 race 片段（Unlicense）](https://github.com/kkocdko/user-scripts/blob/master/scripts/snippets/snippets.js)和 [sindresorhus/globals 的双源读取](https://github.com/sindresorhus/globals/blob/main/scripts/es-builtin.mjs)，复用并发择优和取消剩余请求的思路，沿用本项目的油猴请求、数据校验和缓存逻辑。
 
 本地需要手动更新资源时仍可执行：
 
@@ -125,6 +125,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/update-operator-data.ps
 ```
 
 离线更新可通过 `-SourcePath` 和 `-ModuleSourcePath` 分别指定上游干员 JSON 和 `uniequip_table.json`。发布脚本不再接受 `-SkipOperatorDataUpdate`，也不会在线下载资源。
+
+活动日程同样使用这两个下载源。PRTS 页面启动时先显示已有缓存，并立即检查最新日程，不沿用上一页面的小时检查等待；当前页面之后每小时检查一次。
 
 ## 发布门禁
 

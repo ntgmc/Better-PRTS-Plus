@@ -254,9 +254,11 @@ test('resource hot update replaces live tables, persists cache and throttles dup
   assert.strictEqual(h.requests.length, h.api.RESOURCE_URLS.length);
   assert.strictEqual(h.requests[0].url, RESOURCE_URL);
   assert.deepStrictEqual(h.requests.map(request => request.url), hostObject(h.api.RESOURCE_URLS));
+  assert.deepStrictEqual(h.requests.map(request => new URL(request.url).hostname), ['raw.githubusercontent.com', 'cdn.jsdelivr.net']);
   const header = fs.readFileSync(path.join(repoRoot, 'src/meta/userscript-header.js'), 'utf8');
   for (const request of h.requests) {
     assert.strictEqual(request.anonymous, true);
+    assert.strictEqual(request.nocache, true);
     assert(header.includes(`// @connect      ${new URL(request.url).hostname}`));
   }
   assert.strictEqual(h.toasts.length, 1);
@@ -286,17 +288,19 @@ test('resource hot update replaces live tables, persists cache and throttles dup
 });
 
 test('invalid or unavailable sources do not block a valid mirror or origin', async () => {
-  for (const winner of [0, 1, 2]) {
-    const h = createResourceHarness();
-    const pending = h.api.updateResources();
-    const failures = h.requests.filter((_, index) => index !== winner);
-    h.respond({ ...updatedResource, schemaVersion: 2 }, 200, failures[0]);
-    failures[1].onerror();
-    h.respond(updatedResource, 200, h.requests[winner]);
-    assert.strictEqual(await pending, true);
-    assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
-    assert.strictEqual(h.refreshes, 1);
-    assert.strictEqual(h.timers.size, 0);
+  for (const winner of [0, 1]) {
+    for (const failure of ['invalid', 'onerror']) {
+      const h = createResourceHarness();
+      const pending = h.api.updateResources();
+      const losingRequest = h.requests[1 - winner];
+      if (failure === 'invalid') h.respond({ ...updatedResource, schemaVersion: 2 }, 200, losingRequest);
+      else losingRequest[failure]();
+      h.respond(updatedResource, 200, h.requests[winner]);
+      assert.strictEqual(await pending, true);
+      assert.strictEqual(h.sandbox.OP_ID_MAP.测试干员, 'char_999999_hotupdate');
+      assert.strictEqual(h.refreshes, 1);
+      assert.strictEqual(h.timers.size, 0);
+    }
   }
 });
 
@@ -1398,6 +1402,16 @@ test('diagnostic previews offer two real activities and allow switching without 
   assert.strictEqual(body.firstChild.querySelector('select').value, 'rerun', 'ending preview returns to the current real activity');
   assert.strictEqual(JSON.stringify(data), original);
   assert.strictEqual(saved.size, 0);
+});
+
+test('reopening a page shows cached activities immediately and rechecks recent cached schedules', async () => {
+  const { sandbox, saved, data, getDownloads } = createActivityHarness(10000);
+  saved.set('prts_plus_activity_schedule_v1', JSON.stringify({ data, checkedAt: 9999 * 1000 }));
+  sandbox.loadCachedActivitySchedule();
+  assert.strictEqual(vm.runInContext('activitySchedule[0].id', sandbox), 'rerun');
+  assert.strictEqual(await sandbox.updateActivitySchedule(), true, 'a recent cached check must not delay startup refresh');
+  assert.strictEqual(getDownloads(), 1);
+  assert.strictEqual(await sandbox.updateActivitySchedule(), false, 'hourly throttling still applies within this page');
 });
 
 test('activity schedule cache loads, downloads deduplicate and failures retain the working schedule', async () => {

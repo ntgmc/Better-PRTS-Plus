@@ -20,6 +20,7 @@
                     method: 'GET',
                     url,
                     anonymous: true,
+                    nocache: true,
                     timeout: 15000,
                     onload: response => {
                         try {

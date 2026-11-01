@@ -25,7 +25,6 @@
 // @connect      release-assets.githubusercontent.com
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
-// @connect      gcore.jsdelivr.net
 // @connect      gh-proxy.com
 // @connect      ghfast.top
 // @run-at       document-body

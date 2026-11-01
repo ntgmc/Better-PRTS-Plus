@@ -1,8 +1,7 @@
     const RESOURCE_URL = 'https://raw.githubusercontent.com/ntgmc/Better-PRTS-Plus/main/resources/data.json';
     const RESOURCE_URLS = [
         RESOURCE_URL,
-        'https://cdn.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json',
-        'https://gcore.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json'
+        'https://cdn.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json'
     ];
     const RESOURCE_CACHE_KEY = 'prts_plus_resources_v1';
     const RESOURCE_CHECK_INTERVAL_MS = 60 * 60 * 1000;

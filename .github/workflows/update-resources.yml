@@ -40,7 +40,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/resource-upstream
-          key: resource-upstream-v1-${{ hashFiles('tool/resource-upstream.js', 'tool/update-operator-data.ps1', 'tool/update-activity-data.js') }}-${{ steps.upstream.outputs.game_sha }}-${{ steps.upstream.outputs.operators_sha }}
+          key: resource-upstream-v1-${{ hashFiles('tool/resource-upstream.js', 'tool/update-operator-data.ps1', 'tool/update-activity-data.js', '.github/workflows/update-resources.yml') }}-${{ steps.upstream.outputs.game_sha }}-${{ steps.upstream.outputs.operators_sha }}
 
       - name: Update operator and module resources
         if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
@@ -74,6 +74,19 @@ jobs:
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m "chore(resources): update operator, module and activity data"
           git push origin HEAD:main
+
+      - name: Refresh resource mirrors
+        if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          for resource in data.json activities.json; do
+            curl --fail --show-error --silent --max-time 30 --retry 2 --retry-delay 3 \
+              "https://purge.jsdelivr.net/gh/${GITHUB_REPOSITORY}@main/resources/${resource}"
+            curl --fail --show-error --silent --max-time 30 --retry 2 --retry-delay 3 \
+              "https://cdn.jsdelivr.net/gh/${GITHUB_REPOSITORY}@main/resources/${resource}" \
+              --output "${RUNNER_TEMP}/${resource}"
+            cmp "resources/${resource}" "${RUNNER_TEMP}/${resource}"
+          done
 
       - name: Mark upstream sync successful
         if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'

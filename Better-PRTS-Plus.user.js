@@ -25,7 +25,6 @@
 // @connect      release-assets.githubusercontent.com
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
-// @connect      gcore.jsdelivr.net
 // @connect      gh-proxy.com
 // @connect      ghfast.top
 // @run-at       document-body
@@ -280,6 +279,7 @@ Object.entries({
                     method: 'GET',
                     url,
                     anonymous: true,
+                    nocache: true,
                     timeout: 15000,
                     onload: response => {
                         try {
@@ -306,8 +306,7 @@ Object.entries({
     const RESOURCE_URL = 'https://raw.githubusercontent.com/ntgmc/Better-PRTS-Plus/main/resources/data.json';
     const RESOURCE_URLS = [
         RESOURCE_URL,
-        'https://cdn.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json',
-        'https://gcore.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json'
+        'https://cdn.jsdelivr.net/gh/ntgmc/Better-PRTS-Plus@main/resources/data.json'
     ];
     const RESOURCE_CACHE_KEY = 'prts_plus_resources_v1';
     const RESOURCE_CHECK_INTERVAL_MS = 60 * 60 * 1000;
@@ -431,7 +430,6 @@ Object.entries({
             const cache = JSON.parse(GM_getValue(ACTIVITY_CACHE_KEY, 'null'));
             if (!cache) return;
             activitySchedule = validateActivitySchedule(cache.data).activities;
-            activityCheckedAt = Number.isFinite(cache.checkedAt) && cache.checkedAt <= Date.now() ? cache.checkedAt : 0;
         } catch (error) {
             console.warn('[Better PRTS] 活动日程缓存读取失败', error);
         }
