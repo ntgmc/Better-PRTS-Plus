@@ -110,7 +110,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tool/upload-release.ps1 -Ver
 
 ## 资源更新
 
-`.github/workflows/update-resources.yml` 每 6 小时运行一次（北京时间 02:17、08:17、14:17、20:17），也可在 GitHub Actions 的 **Update resources** 页面手动运行。定时任务从 main 获取最新代码，下载上游干员和模组表，通过项目检查后，将变化提交回 main。数据没有变化时不提交，不修改脚本版本、不创建 tag 或 Release。[GitHub 定时任务说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)
+`.github/workflows/update-resources.yml` 每 15 分钟检查一次上游提交，无变化时跳过下载和生成；也可手动运行，或发送 `repository_dispatch` 事件 `upstream-resources-updated` 立即触发完整同步。真正的上游推送通知需要发送方接入，配置方法见[跟随上游更新资源](docs/development.md#跟随上游更新资源)。工作流从 main 获取最新代码，固定上游提交下载干员、模组和活动日程，通过项目检查后将变化提交回 main；成功后才记录同步状态，失败会在下次检查时重试。数据没有变化时不提交，不修改脚本版本、不创建 tag 或 Release。GitHub 定时任务可能延迟，详见[定时任务说明](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule)。
 
 CI 调用 `tool/update-operator-data.ps1`，生成 `resources/data.json`，同时同步内置数据和 userscript 构建产物。JSON 的 `schemaVersion` 为 1，包含干员 `operators`、模组分支 `moduleTypes` 和正整数 `resourceVersion`。资源版本从 1 开始，仅在干员或模组内容变化时递增；相同内容重复生成会保留版本，恢复历史内容也会产生新版本。该版本同时写入内置数据，与脚本的 `@version` 独立。数据格式的兼容变更应调整 schemaVersion 和脚本加载逻辑。
 
