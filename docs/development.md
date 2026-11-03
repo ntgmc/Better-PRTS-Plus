@@ -94,4 +94,15 @@ node tool/test-core.js
 
 检查包括源码与安装文件一致性、JavaScript 语法、核心行为回归、README 版本号，以及 DOM 渲染和凭据持久化的安全边界。核心测试覆盖旧数据迁移、写入失败、跨页面账号更新、破坏性导入确认、阵容与练度、筛选统计、级联设置、资源及脚本更新、页面监听和筛选调度。
 
+筛选栏布局和卡片标题限高的范围见 [设计记录](../design.md)。修改后可使用本机已有的 Playwright 与 Chromium 运行真实页面回归：
+
+```sh
+PLAYWRIGHT_MODULE=/path/to/playwright \
+BROWSER_PATH=/path/to/chromium \
+PRTS_REVIEW_OUTPUT=/tmp/prts-style-review \
+node tool/check-site-redesign.js
+```
+
+已安装标准 Playwright 时可省略前两个变量。该检查会访问 `https://prts.plus` 的公开页面，使用隔离上下文和内存版 `GM_*`，阻止非只读请求；覆盖三种原站主题及 320、375、414、768、1024、1440px，核对筛选栏换行、卡片标题两行限高、设置和导入窗口的视口限制，以及搜索、作业集切换、取消和样式开关。默认与悬停状态分别对照开关前后的实际颜色、边框和阴影，确保局部布局不改动原有视觉。截图和 `report.json` 保存在输出目录，仍需实际查看关键截图。
+
 改动页面同步时，还应在浏览器验证搜索、加载更多、作业集抽屉、创建页往返和窄屏设置。真实页面验证可使用内存版 `GM_*` 接口；森空岛真实登录和油猴扩展环境需要单独验证。性能结论应依据对照测量，不能仅从减少函数调用推断整页耗时下降。历史试验见 [页面同步测量](page-sync-performance.md)。

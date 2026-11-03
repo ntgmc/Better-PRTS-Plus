@@ -8,6 +8,7 @@ tool/*
 !tool/update-activity-data.js
 !tool/resource-upstream.js
 !tool/test-core.js
+!tool/check-site-redesign.js
 !tool/operator-data-update-summary.json
 !tool/upload-release.ps1
 !tool/publish-release.ps1
