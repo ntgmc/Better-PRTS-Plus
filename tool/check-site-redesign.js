@@ -63,6 +63,7 @@ async function main() {
       for (const selector of ['body', '.bp6-navbar', '.bp6-navbar button:not(.bp6-minimal)', 'input[type="search"]', 'ul.grid > li .bp6-card', '.prts-account-select', '#btn-import', '.prts-float-btn']) {
         await checkVisuals(page, theme, selector);
       }
+      await checkAutoLoadMore(page, theme, 'operations', 'ul.grid > li');
       await captureList(page, theme, 'index', 'ul.grid > li .bp6-card h4 > .whitespace-nowrap');
       await page.setViewportSize({ width: 1440, height: 1000 });
       await page.locator('input[type="search"]').fill('1-7');
@@ -72,10 +73,12 @@ async function main() {
       await page.waitForTimeout(700);
       await page.getByRole('tab', { name: '作业集', exact: true }).click();
       await page.waitForSelector('.grid > .bp6-card');
+      await checkAutoLoadMore(page, theme, 'sets', '.grid > .bp6-card');
       await captureList(page, theme, 'sets', '.grid > .bp6-card > .flex:first-child h4');
       await page.getByRole('tab', { name: '作业', exact: true }).click();
       await page.waitForSelector('ul.grid > li .bp6-card');
       await page.setViewportSize({ width: 1440, height: 1000 });
+      await checkAutoLoadMoreSetting(page, theme);
 
       console.log(`${theme}: import and settings height limits`);
       await page.locator('#btn-import').click();
@@ -115,6 +118,49 @@ async function main() {
     await browser.close();
     console.log(`Layout review: ${report.layouts.length} layouts, ${report.visuals.length} visual comparisons. Evidence: ${output}`);
   }
+}
+
+async function checkAutoLoadMore(page, theme, name, selector) {
+  for (let round = 0; round < 2; round++) {
+    const before = await page.locator(selector).count();
+    await page.evaluate(() => window.scrollTo(0, document.scrollingElement.scrollHeight));
+    await page.waitForFunction(({ selector, before }) => document.querySelectorAll(selector).length > before, { selector, before });
+    report.interactions.push(`${theme}: ${name} scroll loads page ${round + 2} without clicking`);
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
+async function checkAutoLoadMoreSetting(page, theme) {
+  const openSetting = async () => {
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.locator('.prts-float-btn').click();
+    await page.getByRole('button', { name: '页面增强', exact: true }).click();
+    return page.getByRole('checkbox', { name: '滚动自动加载更多', exact: true });
+  };
+  const closeSettings = async () => {
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+  };
+  const toggle = await openSetting();
+  assert(await toggle.isChecked(), 'scroll loading defaults on');
+  await toggle.focus();
+  await page.keyboard.press('Space');
+  assert.equal(await toggle.isChecked(), false);
+  assert.equal(await page.evaluate(() => JSON.parse(GM_getValue('prts_plus_settings')).autoLoadMore), false);
+  await closeSettings();
+  const before = await page.locator('ul.grid > li').count();
+  await page.evaluate(() => window.scrollTo(0, document.scrollingElement.scrollHeight));
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('ul.grid > li').count(), before, 'disabled scroll loading leaves the list unchanged');
+  await page.getByRole('button', { name: '加载更多', exact: true }).click();
+  await page.waitForFunction(before => document.querySelectorAll('ul.grid > li').length > before, before);
+  const enabled = await openSetting();
+  await enabled.focus();
+  await page.keyboard.press('Space');
+  assert(await enabled.isChecked());
+  await closeSettings();
+  await checkAutoLoadMore(page, theme, 'reenabled operations', 'ul.grid > li');
+  report.interactions.push(`${theme}: scroll loading keyboard toggle, saved preference, manual loading while disabled and immediate reenabling`);
 }
 
 async function checkVisuals(page, theme, selector) {

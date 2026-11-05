@@ -4558,6 +4558,127 @@ test('route changes request activity expansion restoration when opening and clos
   assert.deepStrictEqual(restores, [true, true]);
 });
 
+function createAutoLoadMoreHarness() {
+  const page = createAccountPage(new Map(), 'prts.plus');
+  const observed = new Set();
+  let intersect;
+  page.IntersectionObserver = class {
+    constructor(callback) { intersect = callback; }
+    observe(button) { observed.add(button); }
+    unobserve(button) { observed.delete(button); }
+    disconnect() { observed.clear(); }
+  };
+  const button = {
+    textContent: '加载更多', isConnected: true, disabled: false, loading: false, clicks: 0,
+    previousElementSibling: { lastElementChild: {} },
+    matches() { return this.loading; },
+    click() { this.clicks++; }
+  };
+  page.document = { hidden: false, querySelectorAll: () => [button] };
+  const loader = page.createAutoLoadMoreObserver();
+  return { page, button, loader, observed, enter: (visible = true) => intersect([{ target: button, isIntersecting: visible }]) };
+}
+
+test('scroll loading requests each new page once, including when filtering keeps the button visible', () => {
+  const h = createAutoLoadMoreHarness();
+  h.loader.sync();
+  assert(h.observed.has(h.button));
+  h.enter(false);
+  assert.strictEqual(h.button.clicks, 0);
+  h.enter();
+  h.loader.sync();
+  h.enter();
+  h.enter();
+  assert.strictEqual(h.button.clicks, 1, 'unchanged content must not trigger duplicate requests or automatic retries');
+  h.button.previousElementSibling.lastElementChild = {};
+  h.loader.sync();
+  h.enter();
+  assert.strictEqual(h.button.clicks, 2, 'newly appended content allows loading the next page');
+  h.page.window.location.search = '?keyword=1-7';
+  h.loader.sync();
+  h.enter();
+  assert.strictEqual(h.button.clicks, 3, 'a new search can load even if React reuses the previous card');
+  h.loader.dispose();
+  assert.strictEqual(h.observed.size, 0);
+  h.enter();
+  assert.strictEqual(h.button.clicks, 3, 'queued observer callbacks do nothing after disposal');
+});
+
+test('scroll loading defaults on, persists in settings and backups, and switches immediately', () => {
+  assert.strictEqual(normalizeConfig({}).autoLoadMore, true);
+  assert.strictEqual(normalizeConfig({ autoLoadMore: 'false' }).autoLoadMore, true);
+  const h = createAutoLoadMoreHarness();
+  assert.strictEqual(h.page.__testExports.CONFIG.autoLoadMore, true);
+  h.loader.sync();
+  h.page.__testExports.CONFIG.autoLoadMore = false;
+  h.enter();
+  assert.strictEqual(h.button.clicks, 0, 'queued callbacks respect the disabled setting');
+  h.loader.sync();
+  assert.strictEqual(h.observed.size, 0);
+  h.page.saveConfig();
+  assert.strictEqual(h.page.needsSettingsReload(), false);
+  const backup = h.page.buildAccountsBackup();
+  assert.strictEqual(backup.preferences.config.autoLoadMore, false);
+  assert.strictEqual(h.page.parseAccountsBackup(backup).preferences.config.autoLoadMore, false);
+  const saved = h.page.GM_getValue(CONFIG_KEY);
+  const reopened = createAccountPage(new Map([[CONFIG_KEY, saved]]), 'prts.plus');
+  assert.strictEqual(reopened.__testExports.CONFIG.autoLoadMore, false);
+  h.button.click();
+  assert.strictEqual(h.button.clicks, 1, 'manual loading remains available while disabled');
+  h.page.__testExports.CONFIG.autoLoadMore = true;
+  h.loader.sync();
+  assert(h.observed.has(h.button));
+  h.enter();
+  assert.strictEqual(h.button.clicks, 2, 'enabling takes effect without reloading');
+});
+
+test('scroll loading skips busy buttons and hidden pages while preserving manual retry', () => {
+  const h = createAutoLoadMoreHarness();
+  h.loader.sync();
+  for (const [target, key] of [[h.button, 'disabled'], [h.button, 'loading'], [h.page.document, 'hidden']]) {
+    target[key] = true;
+    h.enter();
+    assert.strictEqual(h.button.clicks, 0);
+    target[key] = false;
+  }
+  h.enter();
+  assert.strictEqual(h.button.clicks, 1);
+  h.button.click();
+  h.button.previousElementSibling.lastElementChild = {};
+  h.loader.sync();
+  h.enter();
+  assert.strictEqual(h.button.clicks, 3, 'a successful manual retry restores automatic loading');
+});
+
+test('scroll loading follows English buttons, route exclusions, removed buttons and unsupported browsers', () => {
+  const h = createAutoLoadMoreHarness();
+  h.button.textContent = 'Load More';
+  h.loader.sync();
+  assert(h.observed.has(h.button));
+  h.page.window.location.pathname = '/create';
+  h.loader.sync();
+  assert.strictEqual(h.observed.size, 0);
+  h.enter();
+  assert.strictEqual(h.button.clicks, 0);
+  h.page.window.location.pathname = '/';
+  h.loader.sync();
+  h.enter();
+  assert.strictEqual(h.button.clicks, 1);
+  h.button.isConnected = false;
+  h.page.document.querySelectorAll = () => [];
+  h.loader.sync();
+  assert.strictEqual(h.observed.size, 0);
+  h.enter();
+  assert.strictEqual(h.button.clicks, 1);
+  h.button.isConnected = true;
+  h.button.textContent = '没有更多了';
+  h.page.document.querySelectorAll = () => [h.button];
+  h.loader.sync();
+  assert.strictEqual(h.observed.size, 0);
+  delete h.page.IntersectionObserver;
+  assert.strictEqual(h.page.createAutoLoadMoreObserver(), null);
+});
+
 test('page observation enhances nested and delayed portals without rescanning the scaffold for card text', () => {
   const { page, addCard } = createFilterPage('GRAY');
   const { card, inner } = addCard({ opers: [{ name: '阿米娅' }] });

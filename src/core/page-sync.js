@@ -1,4 +1,47 @@
     let lastRouteKey = getRouteKey();
+    let autoLoadMoreObserver = null;
+
+    function createAutoLoadMoreObserver() {
+        if (typeof IntersectionObserver === 'undefined') return null;
+        const buttons = new Map();
+        const observer = new IntersectionObserver(entries => {
+            for (const { target: button, isIntersecting } of entries) {
+                if (!CONFIG.autoLoadMore || !isIntersecting || document.hidden || !button.isConnected || !buttons.has(button) ||
+                    button.disabled || button.matches('.bp4-loading, .bp6-loading, [aria-disabled="true"]')) continue;
+                const content = button.previousElementSibling;
+                const end = content?.lastElementChild || content;
+                const route = getRouteKey();
+                const previous = buttons.get(button);
+                if (previous?.route === route && previous.end === end) continue;
+                // 内容未增加时不自动重试，避免请求失败后反复翻页。
+                buttons.set(button, { route, end });
+                button.click();
+            }
+        }, { rootMargin: '0px 0px 160px 0px' });
+
+        return {
+            sync() {
+                const candidates = new Set(!CONFIG.autoLoadMore || isFilterDisabledPage() ? [] :
+                    Array.from(document.querySelectorAll('button.bp4-button, button.bp6-button'))
+                        .filter(button => /^(加载更多|load more)$/i.test(button.textContent.trim())));
+                for (const button of buttons.keys()) {
+                    if (candidates.has(button)) continue;
+                    observer.unobserve(button);
+                    buttons.delete(button);
+                }
+                for (const button of candidates) {
+                    if (!buttons.has(button)) buttons.set(button, null);
+                    // 新内容被筛选隐藏时，按钮可能始终在视野内，需要重新检查交集。
+                    observer.unobserve(button);
+                    observer.observe(button);
+                }
+            },
+            dispose() {
+                observer.disconnect();
+                buttons.clear();
+            }
+        };
+    }
 
     function isFilterDisabledPage() {
         const path = window.location.pathname;
@@ -70,6 +113,7 @@
         updateActivitySchedule();
         syncOperationTypeButtons();
         syncOperatorMatchingSettings();
+        autoLoadMoreObserver?.sync();
         if (isFilterDisabledPage()) {
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
         } else {
@@ -206,6 +250,7 @@
     }
 
     function initPrtsPage() {
+        autoLoadMoreObserver = createAutoLoadMoreObserver();
         loadCachedActivitySchedule();
         document.addEventListener('focusin', collapseActivityShortcutsOnFocus);
         syncPageScaffold();
@@ -228,6 +273,8 @@
         }, 3000);
         return () => {
             observer.disconnect();
+            autoLoadMoreObserver?.dispose();
+            autoLoadMoreObserver = null;
             document.removeEventListener('focusin', collapseActivityShortcutsOnFocus);
             clearInterval(fallbackTimer);
             filterUpdateCoordinator.dispose();

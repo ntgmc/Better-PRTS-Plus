@@ -118,6 +118,7 @@
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
         hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'hidePrtsBadge', default: true, reloadOnDisable: true },
         trainingPromptStyle: { group: '作业卡片', label: '练度提示样式', icon: 'trainingPromptStyle', default: 'COMPACT', options: ['COMPACT', 'DETAILED'], optionLabels: { COMPACT: '缩略', DETAILED: '完整' } },
+        autoLoadMore: { group: '页面增强', label: '滚动自动加载更多', icon: 'autoLoadMore', default: true },
         activityShortcuts: { group: '页面增强', label: '活动关卡快捷浮窗', icon: 'activityShortcuts', default: true },
         siteRedesign: { group: '页面增强', label: '全站样式优化', icon: 'siteRedesign', default: false },
         popoverAvatars: { group: '页面增强', label: '干员组弹窗头像', icon: 'popoverAvatars', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
@@ -3720,6 +3721,7 @@ Object.entries({
         checkUpdates: 'M4 11h-.5C1.6 11 .5 9.5.5 7.7c0-1.7 1.1-3 2.7-3.3C4 .8 11.8.8 12.6 4.4c1.7.2 2.9 1.6 2.9 3.3 0 1.8-1.1 3.3-3 3.3H12V9.5h.5c.9 0 1.5-.7 1.5-1.8 0-1-.8-1.8-1.8-1.8h-.8l-.2-.8c-.6-2.8-5.8-2.8-6.4 0l-.2.8h-.8C2.8 5.9 2 6.7 2 7.7c0 1.1.6 1.8 1.5 1.8H4ZM7 7h2v5h2l-3 3-3-3h2Z',
         reload: 'M13.5 1v5.5H8L10 4.5a4.5 4.5 0 1 0 2.4 5H14A6 6 0 1 1 11.1 3.4Z',
         cards: 'M4 1h11v11h-1.5V2.5H4ZM1 4h11v11H1Zm1.5 1.5v8h8v-8ZM4 8h5v1.5H4Zm0 3h4v1.5H4Z',
+        autoLoadMore: 'M2 1h12v1.5H2Zm0 3h12v1.5H2Zm5.25 3h1.5v4.4l2.7-2.7 1.1 1.1L8 14.35l-4.55-4.55 1.1-1.1 2.7 2.7Z',
         activityShortcuts: 'M2 2h2V0h1.5v2h5V0H12v2h2v13H2Zm1.5 4v7.5h9V6Zm0-2.5v1h9v-1ZM5 8h2v2H5Zm4 0h2v2H9ZM5 11h2v1H5Z',
         pageEnhancements: 'M1 2h14v12H1Zm1.5 4v6.5h11V6Zm0-2.5v1h11v-1ZM8 6.5l.9 2.1L11 9.5l-2.1.9L8 12.5l-.9-2.1L5 9.5l2.1-.9Z',
         siteRedesign: 'M1 2h14v12H1Zm1.5 1.5v2h11v-2Zm0 3.5v5.5h3V7Zm4.5 0v5.5h6.5V7Zm1 1h4.5v1.5H8Zm0 2.5h3V12H8Z',
@@ -7201,6 +7203,49 @@ ${formatSklandImportSummary(summary)}`, 'success');
         }
     }
     let lastRouteKey = getRouteKey();
+    let autoLoadMoreObserver = null;
+
+    function createAutoLoadMoreObserver() {
+        if (typeof IntersectionObserver === 'undefined') return null;
+        const buttons = new Map();
+        const observer = new IntersectionObserver(entries => {
+            for (const { target: button, isIntersecting } of entries) {
+                if (!CONFIG.autoLoadMore || !isIntersecting || document.hidden || !button.isConnected || !buttons.has(button) ||
+                    button.disabled || button.matches('.bp4-loading, .bp6-loading, [aria-disabled="true"]')) continue;
+                const content = button.previousElementSibling;
+                const end = content?.lastElementChild || content;
+                const route = getRouteKey();
+                const previous = buttons.get(button);
+                if (previous?.route === route && previous.end === end) continue;
+                // 内容未增加时不自动重试，避免请求失败后反复翻页。
+                buttons.set(button, { route, end });
+                button.click();
+            }
+        }, { rootMargin: '0px 0px 160px 0px' });
+
+        return {
+            sync() {
+                const candidates = new Set(!CONFIG.autoLoadMore || isFilterDisabledPage() ? [] :
+                    Array.from(document.querySelectorAll('button.bp4-button, button.bp6-button'))
+                        .filter(button => /^(加载更多|load more)$/i.test(button.textContent.trim())));
+                for (const button of buttons.keys()) {
+                    if (candidates.has(button)) continue;
+                    observer.unobserve(button);
+                    buttons.delete(button);
+                }
+                for (const button of candidates) {
+                    if (!buttons.has(button)) buttons.set(button, null);
+                    // 新内容被筛选隐藏时，按钮可能始终在视野内，需要重新检查交集。
+                    observer.unobserve(button);
+                    observer.observe(button);
+                }
+            },
+            dispose() {
+                observer.disconnect();
+                buttons.clear();
+            }
+        };
+    }
 
     function isFilterDisabledPage() {
         const path = window.location.pathname;
@@ -7272,6 +7317,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         updateActivitySchedule();
         syncOperationTypeButtons();
         syncOperatorMatchingSettings();
+        autoLoadMoreObserver?.sync();
         if (isFilterDisabledPage()) {
             setCompatibilityDiagnostics({ totalCards: 0, fiberCards: 0, fallbackCards: 0, noDataCards: 0 });
         } else {
@@ -7408,6 +7454,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
     }
 
     function initPrtsPage() {
+        autoLoadMoreObserver = createAutoLoadMoreObserver();
         loadCachedActivitySchedule();
         document.addEventListener('focusin', collapseActivityShortcutsOnFocus);
         syncPageScaffold();
@@ -7430,6 +7477,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         }, 3000);
         return () => {
             observer.disconnect();
+            autoLoadMoreObserver?.dispose();
+            autoLoadMoreObserver = null;
             document.removeEventListener('focusin', collapseActivityShortcutsOnFocus);
             clearInterval(fallbackTimer);
             filterUpdateCoordinator.dispose();

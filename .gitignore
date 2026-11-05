@@ -17,6 +17,7 @@ tool/*
 !tool/prepare-release.js
 !tool/summarize-pr-changelog.js
 !tool/operator-data.generated.json
+/AGENTS.md
 /AI_CHANGE_SUMMARY.md
 /release-output/
 .idea
