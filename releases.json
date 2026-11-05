@@ -2,6 +2,11 @@
   "schemaVersion": 1,
   "releases": [
     {
+      "version": "4.3.0",
+      "level": "normal",
+      "notesFile": "release-notes/4.3.0.md"
+    },
+    {
       "version": "4.2.2",
       "level": "normal",
       "notesFile": "release-notes/4.2.2.md"
