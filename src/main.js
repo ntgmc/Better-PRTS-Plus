@@ -9,6 +9,8 @@
         registerAccountsDataChangeListener();
         if (isSklandHost()) createSklandImportPanel();
         else initPrtsPage();
+        registerSklandSyncChangeListener();
+        startSklandAutoRefresh();
     }
 
     if (document.body) init();

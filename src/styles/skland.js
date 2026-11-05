@@ -94,6 +94,9 @@
         --prts-shadow-lg: 0 18px 48px rgba(0, 0, 0, 0.6);
     }
     #prts-skland-import-panel {
+        display: flex;
+        flex-direction: column;
+        max-height: calc(100dvh - 108px);
         border-color: var(--prts-color-border-soft) !important;
         border-radius: var(--prts-radius-lg) !important;
         background: var(--prts-color-surface) !important;
@@ -101,7 +104,8 @@
         box-shadow: var(--prts-shadow-lg) !important;
         font-family: var(--prts-font-sans) !important;
     }
-    .prts-skland-head { border-color: var(--prts-color-border-soft) !important; }
+    .prts-skland-head { flex-shrink: 0; border-color: var(--prts-color-border-soft) !important; }
+    .prts-skland-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
     .prts-skland-title { color: var(--prts-color-text) !important; }
     .prts-skland-subtitle, .prts-skland-label, .prts-skland-binding-intro { color: var(--prts-color-text-muted) !important; }
     #prts-modal-backdrop { background: rgba(15, 23, 42, 0.52) !important; }
@@ -207,7 +211,7 @@
         box-shadow: 0 0 0 4px var(--prts-color-ring);
     }
     @media (max-width: 520px) {
-        #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; }
+        #prts-skland-import-panel { left: 12px; right: 12px; top: auto; bottom: max(12px, env(safe-area-inset-bottom)); width: auto; max-height: calc(100dvh - 24px); }
         #prts-modal-backdrop { align-items: flex-end; padding: 12px; }
         #prts-modal { width: calc(100vw - 24px); max-height: calc(100vh - 24px); border-radius: var(--prts-radius-lg) var(--prts-radius-lg) 0 0 !important; }
         .prts-modal-actions { flex-direction: column-reverse; }

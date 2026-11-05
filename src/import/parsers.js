@@ -143,7 +143,7 @@
         const separator = options.compact ? ' ' : '：';
         const lines = [timeText ? `来自森空岛 · 上次同步${separator}${timeText}` : '来自森空岛'];
         if (options.includeDetail) {
-            lines.push(`${skland.nickname || '博士'} / UID ${skland.uid || '未知'} / ${skland.operatorCount} 名干员`);
+            lines.push(`${skland.nickname || '博士'} / UID ${maskSklandUid(skland.uid)} / ${skland.operatorCount} 名干员`);
         }
         return lines.join('\n');
     }

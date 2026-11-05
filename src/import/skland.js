@@ -10,6 +10,23 @@
         return Boolean(error && typeof error === 'object' && error.code === SKLAND_IMPORT_CANCELLED_CODE);
     }
 
+    function getSklandImportErrorMessage(error) {
+        const message = error instanceof Error ? error.message : '';
+        const allowed = [
+            '无法读取森空岛网页存储，请确认浏览器允许脚本访问 localStorage。',
+            '未找到森空岛登录凭据，请先在当前页面登录森空岛。',
+            '森空岛登录凭据已失效，请刷新页面或重新登录森空岛。',
+            '森空岛登录验证暂时失败，请稍后重试。',
+            '读取森空岛绑定角色失败，请稍后重试。', '未找到该森空岛账号绑定的明日方舟角色。',
+            '选择的森空岛角色无效，请重试。', '读取森空岛干员数据失败，请稍后重试。',
+            '读取森空岛干员练度失败，请稍后重试。', '森空岛干员数据为空，请确认账号已绑定明日方舟角色。',
+            '森空岛接口返回格式异常，请稍后重试。', '森空岛接口请求超时，请稍后重试。',
+            '油猴网络接口不可用，请检查脚本扩展权限。', '目标账号已删除，请重新选择账号。'
+        ];
+        return allowed.includes(message) || /^森空岛接口请求失败：HTTP \d{3}$/.test(message)
+            ? message : '森空岛导入失败，未能完成操作，请稍后重试。';
+    }
+
     function readSklandCredentialFromStorage() {
         let raw = '';
         try {
@@ -82,23 +99,31 @@
         const training = convertSklandPlayerInfoToTraining(playerInfo, cultivateInfo);
         const importedAt = new Date().toISOString();
         const confirmed = await confirmOperatorImport(
-            targetAccountId, names, training, `森空岛 · ${binding.nickname || '博士'} / UID ${binding.uid}`
+            targetAccountId, names, training, `森空岛 · ${binding.nickname || '博士'} / UID ${maskSklandUid(binding.uid)}`
         );
         if (!confirmed) throw createSklandImportCancelledError();
-        return commitSklandImport({
+        const summary = commitSklandImport({
             accountId: targetAccountId,
             names,
             training,
             binding,
             importedAt
         });
+        try {
+            await saveSklandCredentialForAccount(summary, credential);
+        } catch (_error) {
+            summary.credentialSaveFailed = true;
+        }
+        refreshSklandSyncControls();
+        return summary;
     }
 
-    function commitSklandImport(importData) {
+    function commitSklandImport(importData, { preserveActiveAccount = false } = {}) {
         // 以提交时的共享存储为基准，避免旧页面回写其他账号的数据。
         const resolved = resolveStoredAccountState(readAccountStorageSnapshot());
         reportAccountStateDiagnostics(resolved.diagnostics);
         const result = createSklandImportState(resolved.state, importData);
+        if (preserveActiveAccount) result.state.activeAccountId = resolved.state.activeAccountId;
         commitAccountState(result.state);
         try {
             GM_setValue(SKLAND_LAST_IMPORT_KEY, JSON.stringify(result.summary));
@@ -116,8 +141,17 @@
             method: 'GET',
             headers: buildSklandHeaders(timestamp, sign, { cred: credential })
         });
-        if (data.code !== 0 || data.message !== 'OK' || !isPlainRecord(data.data) || typeof data.data.token !== 'string') {
-            throw new Error('森空岛登录凭据已失效，请刷新页面或重新登录森空岛。');
+        if (!isPlainRecord(data)) throw new Error('森空岛接口返回格式异常，请稍后重试。');
+        if (data.code !== 0) {
+            const expired = [10001, 10002].includes(data.code)
+                || /登录|登陆|凭据|凭证|认证|credential|token/i.test(String(data.message || ''));
+            const error = new Error(expired ? '森空岛登录凭据已失效，请刷新页面或重新登录森空岛。'
+                : '森空岛登录验证暂时失败，请稍后重试。');
+            if (expired) error.code = 'SKLAND_AUTH_EXPIRED';
+            throw error;
+        }
+        if (data.message !== 'OK' || !isPlainRecord(data.data) || typeof data.data.token !== 'string' || !data.data.token) {
+            throw new Error('森空岛接口返回格式异常，请稍后重试。');
         }
         return {
             token: data.data.token,
@@ -261,30 +295,9 @@
         const method = init.method || 'GET';
         const headers = init.headers || {};
         const body = init.body;
-        let fetchError = null;
-
-        if (typeof fetch === 'function') {
-            const controller = typeof AbortController === 'function' ? new AbortController() : null;
-            const timeoutId = controller ? window.setTimeout(() => controller.abort(), SKLAND_REQUEST_TIMEOUT_MS) : null;
-            try {
-                const response = await fetch(url, {
-                    method,
-                    headers,
-                    body,
-                    signal: controller?.signal,
-                    credentials: 'omit'
-                });
-                if (!response.ok) throw new Error(`森空岛接口请求失败：HTTP ${response.status}`);
-                return await response.json();
-            } catch (error) {
-                fetchError = error;
-            } finally {
-                if (timeoutId !== null) window.clearTimeout(timeoutId);
-            }
-        }
-
+        // 凭据请求只走油猴沙箱通道，不交给页面可替换的 fetch。
         if (typeof GM_xmlhttpRequest !== 'function') {
-            throw fetchError instanceof Error ? fetchError : new Error('森空岛接口请求失败，请稍后重试。');
+            throw new Error('油猴网络接口不可用，请检查脚本扩展权限。');
         }
 
         return new Promise((resolve, reject) => {
@@ -295,6 +308,7 @@
                 data: body,
                 timeout: SKLAND_REQUEST_TIMEOUT_MS,
                 responseType: 'json',
+                anonymous: true,
                 onload: response => {
                     if (response.status < 200 || response.status >= 300) {
                         reject(new Error(`森空岛接口请求失败：HTTP ${response.status}`));

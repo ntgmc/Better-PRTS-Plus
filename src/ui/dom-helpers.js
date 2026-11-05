@@ -311,6 +311,7 @@
         cancelValue = null,
         extraAction = null,
         tone = '',
+        acknowledgement = '',
         input = null
     } = {}) {
         return new Promise(resolve => {
@@ -385,6 +386,18 @@
             confirmBtn.className = `prts-import-action primary${tone ? ` ${tone}` : ''}`;
             confirmBtn.textContent = confirmText;
 
+            if (acknowledgement) {
+                const label = document.createElement('label');
+                label.className = 'prts-skland-sync-acknowledgement';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                confirmBtn.disabled = true;
+                checkbox.onchange = () => { confirmBtn.disabled = !checkbox.checked; };
+                label.appendChild(checkbox);
+                label.appendChild(document.createTextNode(acknowledgement));
+                body.appendChild(label);
+            }
+
             if (extraAction) {
                 const extraBtn = document.createElement('button');
                 extraBtn.type = 'button';
@@ -414,7 +427,7 @@
                     if (focusable.length === 0) return;
                     const first = focusable[0];
                     const last = focusable[focusable.length - 1];
-                    if (event.shiftKey && document.activeElement === first) {
+                    if (event.shiftKey && (document.activeElement === first || document.activeElement === titleEl)) {
                         event.preventDefault();
                         last.focus();
                     } else if (!event.shiftKey && document.activeElement === last) {
@@ -430,7 +443,9 @@
 
             closeBtn.onclick = () => finish(null);
             cancelBtn.onclick = () => finish(cancelValue);
-            confirmBtn.onclick = () => finish(inputEl ? inputEl.value : true);
+            confirmBtn.onclick = () => {
+                if (!confirmBtn.disabled) finish(inputEl ? inputEl.value : true);
+            };
             backdrop.addEventListener('click', event => {
                 if (event.target === backdrop) finish(null);
             });
@@ -444,7 +459,8 @@
             };
 
             document.body.appendChild(backdrop);
-            window.setTimeout(() => (inputEl || (tone === 'danger' ? cancelBtn : confirmBtn)).focus(), 0);
+            if (acknowledgement) titleEl.tabIndex = -1;
+            window.setTimeout(() => (acknowledgement ? titleEl : inputEl || (tone === 'danger' ? cancelBtn : confirmBtn)).focus(), 0);
         });
     }
 

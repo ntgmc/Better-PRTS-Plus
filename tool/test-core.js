@@ -96,9 +96,12 @@ const context = {
   setTimeout,
   clearTimeout,
   TextEncoder,
+  TextDecoder,
+  crypto: require('node:crypto').webcrypto,
   Uint8Array,
   ArrayBuffer,
   DataView,
+  document: { querySelectorAll: () => [] },
   window: {
     location: { hostname: 'prts.plus', pathname: '/', search: '' },
     BetterPRTSPlusDebug: {},
@@ -1492,6 +1495,7 @@ test('settings categories preserve controls and state while switching and collap
     RELEASE_LEVELS: { normal: '普通更新', important: '重要更新', urgent: '紧急更新' }, BP_SELECTORS: {},
     saveConfig: () => { saves++; }, checkScriptUpdates: manual => { assert.strictEqual(manual, true); checks++; },
     refreshAccountControls() {}, syncPageScaffold() {}, enhancePopover() {}, requestFilterUpdate() {},
+    createSklandSyncControls: () => createTestElement(), refreshSklandSyncControls() {},
     getAccountIds: () => [1, 2, 3], addAccount() {},
     activityPreview: null, setActivityPreview: enabled => { sandbox.activityPreview = enabled ? {} : null; actions.push(enabled ? 'preview' : 'stop-preview'); },
     handleImport: () => actions.push('import'), handleOpenSklandImport: () => actions.push('skland'),
@@ -1769,6 +1773,9 @@ test('Skland sync reports success, failure and cancellation and restores control
       getAccountLabel: id => `账号 ${id}`,
       formatAccountSklandTitle: () => '',
       getAccountSklandImportSummary: () => null,
+      isSklandSyncEnabled: () => false,
+      getSklandImportErrorMessage: () => '森空岛导入失败',
+      createSklandSyncControls: () => createTestElement(), refreshSklandSyncControls() {},
       createPrtsIcon: () => createTestElement('svg'),
       showPrtsToast: (...args) => { messages.push(args); return (...next) => messages.push(next); },
       importSklandOperatorsToAccount: () => new Promise((resolve, reject) => {
@@ -3562,6 +3569,7 @@ test('createSklandImportState commits a complete transition and preserves manual
 function createAccountPage(sharedStorage, hostname) {
   const page = vm.createContext({
     ...context,
+    document: { querySelectorAll: () => [] },
     window: { ...context.window, location: { ...context.window.location, hostname } },
     GM_getValue: (key, fallback) => sharedStorage.has(key) ? sharedStorage.get(key) : fallback,
     GM_setValue: (key, value) => sharedStorage.set(key, value),
@@ -4228,7 +4236,7 @@ test('Skland import from a stale page preserves other accounts updated during th
   sklandPage.showPrtsConfirm = async preview => {
     assert.strictEqual(preview.tone, 'danger');
     assert(preview.message.includes('最新手动昵称（账号 1）'));
-    assert(preview.message.includes('森空岛 · 导入博士 / UID 111'));
+    assert(preview.message.includes('森空岛 · 导入博士 / UID ••••'));
     assert(preview.message.includes('将移除 1 名干员：凯尔希'));
     return true;
   };
@@ -4411,7 +4419,8 @@ test('initialization waits for a body and initializes only the active host inter
       isSklandHost: () => skland, isPrtsHost: () => !skland,
       RESOURCE_CHECK_INTERVAL_MS: 3600000, setInterval() {},
       ...Object.fromEntries(['loadCachedResources', 'updateResources', 'checkScriptUpdates', 'loadOwnedOps',
-        'registerAccountsDataChangeListener', 'createSklandImportPanel', 'initPrtsPage']
+        'registerAccountsDataChangeListener', 'createSklandImportPanel', 'initPrtsPage',
+        'registerSklandSyncChangeListener', 'startSklandAutoRefresh']
         .map(name => [name, () => calls.push(name)]))
     };
     vm.runInNewContext('(function() {\n' + main, page);
@@ -4419,7 +4428,8 @@ test('initialization waits for a body and initializes only the active host inter
     page.document.body = {};
     ready();
     assert.deepStrictEqual(calls, ['loadCachedResources', 'updateResources', 'checkScriptUpdates', 'loadOwnedOps',
-      'registerAccountsDataChangeListener', skland ? 'createSklandImportPanel' : 'initPrtsPage']);
+      'registerAccountsDataChangeListener', skland ? 'createSklandImportPanel' : 'initPrtsPage',
+      'registerSklandSyncChangeListener', 'startSklandAutoRefresh']);
   }
 });
 
@@ -4551,6 +4561,8 @@ test('immediate filtering keeps the pending frame, absorbs delays and avoids red
   assert.strictEqual(work.processAll, false);
   assert.strictEqual(work.cards.length, 0);
 });
+
+require('./test-skland-sync')({ assert, test, createAccountState, serializeAccountState, createAccountPage, hostObject, hostArray });
 
 (async () => {
   for (const { name, fn } of tests) {

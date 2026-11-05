@@ -223,15 +223,17 @@
                 if (getAccountIds(state.accountsData).length <= 1) throw new Error('至少需要保留一个账号。');
                 const confirmed = await showPrtsConfirm({
                     title: '删除账号',
-                    message: `确认删除 ${state.accountMeta[id].label}（账号 ${id}）？该账号的干员名单（${state.accountsData[id].length} 名）、练度和同步记录将一并删除，无法撤销。`,
+                    message: `确认删除 ${state.accountMeta[id].label}（账号 ${id}）？该账号的干员名单（${state.accountsData[id].length} 名）、练度、同步记录及保存的森空岛登录凭据将一并删除，无法撤销。`,
                     confirmText: '确认删除', cancelText: '取消', tone: 'danger'
                 });
                 if (!confirmed) return;
                 const latest = resolveStoredAccountState(readAccountStorageSnapshot()).state;
                 if (['accountsData', 'accountsTraining', 'accountMeta'].some(key =>
                     JSON.stringify(state[key][id]) !== JSON.stringify(latest[key][id]))) continue;
+                clearSklandSavedAccounts(id);
                 commitAccountState(createRemovedAccountState(latest, id));
                 refreshAccountStateUi(true);
+                refreshSklandSyncControls();
                 document.getElementById('prts-add-account')?.focus({ preventScroll: true });
                 showPrtsToast('账号已删除', 'success');
                 return;
@@ -282,9 +284,7 @@
 
     function refreshOwnedOpsFromStorage() {
         loadOwnedOps();
-        if (isSklandHost()) {
-            refreshAccountControls();
-            return;
-        }
-        refreshAccountStateUi();
+        if (isSklandHost()) refreshAccountControls();
+        else refreshAccountStateUi();
+        refreshSklandSyncControls();
     }

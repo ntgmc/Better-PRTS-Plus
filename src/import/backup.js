@@ -100,7 +100,7 @@
 
     function formatAccountsBackupSummary(backup) {
         const lines = [
-            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称和脚本设置。`,
+            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称和脚本设置，并清除当前保存的森空岛凭据。`,
             `导入后将切换到：${backup.accountMeta[backup.activeAccountId].label}`,
             ''
         ];
@@ -117,11 +117,13 @@
         const nextState = createAccountState(backup);
         const preferences = normalizeBackupPreferences(backup.preferences);
         const nextConfig = normalizeConfig({ ...preferences.config, ...preferences });
+        clearSklandSavedAccounts();
         commitAccountState(nextState);
         Object.assign(CONFIG, nextConfig);
         saveConfig();
 
         refreshAccountStateUi(true);
+        refreshSklandSyncControls();
         syncPageScaffold();
         document.querySelectorAll(BP_SELECTORS.portal).forEach(enhancePopover);
     }

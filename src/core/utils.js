@@ -23,6 +23,11 @@
         if (typeof value === 'number' && Number.isFinite(value)) return String(value);
         return '';
     }
+    function maskSklandUid(value) {
+        const uid = stringValue(value);
+        return uid.length > 6 ? `${uid.slice(0, 2)}••••${uid.slice(-2)}` : '••••';
+    }
+
     function parseFloatingPosition(rawValue) {
         const fallback = { top: '40%', isRight: true };
         const parsed = typeof rawValue === 'string' ? safeJsonParse(rawValue, fallback) : rawValue;

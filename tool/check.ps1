@@ -33,8 +33,9 @@ if ($userScript -match "\.innerHTML\s*=|\.outerHTML\s*=|insertAdjacentHTML") {
 if ($userScript -match "\b(?:alert|prompt|confirm)\s*\(") {
     throw "Blocking browser dialogs should be replaced with Toast/Modal feedback"
 }
-if ($userScript -match "GM_setValue\([^\r\n]*(?:cred|credential|token)") {
-    throw "Skland credentials or tokens must not be persisted"
+if ($userScript -match "(?:localStorage|sessionStorage)\.setItem\([^\r\n]*(?:cred|credential|token)") {
+    throw "Skland credentials must only be persisted in the opt-in userscript store"
 }
+# Core tests verify consent gating, independent credential storage and credential-free backups.
 
 Write-Host "All checks passed for Better-PRTS-Plus $version"

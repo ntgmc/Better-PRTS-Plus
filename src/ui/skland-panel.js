@@ -63,9 +63,14 @@
         link.rel = 'noopener noreferrer';
         link.textContent = '打开 PRTS Plus';
         body.appendChild(link);
+        body.appendChild(createSklandSyncControls());
 
         importBtn.onclick = async () => {
             const accountId = Number(accountSelect.value);
+            if (isSklandSyncEnabled() && !isSklandVaultUnlocked()) {
+                await handleSklandVaultUnlock();
+                if (!isSklandVaultUnlocked()) return;
+            }
             const progressText = `正在读取森空岛数据，完成后请核对 ${getAccountLabel(accountId)} 的导入预览。`;
             const updateToast = showPrtsToast('正在读取森空岛干员…', 'loading', progressText, 0);
             importBtn.disabled = true;
@@ -79,15 +84,15 @@
                 createAccountSelect(accountSelect.id, summary.accountId, accountSelect.onchange);
                 const detail = formatSklandImportSummary(summary);
                 setSklandPanelStatus(status, detail, 'success');
-                updateToast('森空岛干员导入成功', 'success', detail);
+                updateToast('森空岛干员导入成功', summary.credentialSaveFailed ? 'warning' : 'success', detail);
             } catch (error) {
                 if (isSklandImportCancelledError(error)) {
                     setSklandPanelStatus(status, '已取消导入，未修改账号数据。', '');
                     updateToast('已取消森空岛导入', 'info', '未修改账号数据。');
                     return;
                 }
-                console.error('[Better PRTS] 森空岛导入失败', error instanceof Error ? error.message : error);
-                const detail = error instanceof Error ? error.message : '森空岛导入失败，请稍后重试。';
+                console.error('[Better PRTS] 森空岛导入失败');
+                const detail = getSklandImportErrorMessage(error);
                 setSklandPanelStatus(status, detail, 'error');
                 updateToast('森空岛干员导入失败', 'error', detail);
             } finally {
@@ -101,6 +106,7 @@
 
         panel.appendChild(body);
         document.body.appendChild(panel);
+        refreshSklandSyncControls();
     }
 
     async function showSklandBindingPicker(bindings, preferredUid, accountId) {
@@ -143,7 +149,7 @@
             input.type = 'radio';
             input.name = 'prts-skland-binding';
             input.className = 'prts-skland-binding-radio';
-            input.value = binding.uid;
+            input.value = String(index);
             input.checked = binding.uid === selectedBinding.uid;
             input.onchange = () => selectByIndex(index);
             input.onkeydown = event => {
@@ -179,7 +185,7 @@
 
             const meta = document.createElement('span');
             meta.className = 'prts-skland-binding-meta';
-            meta.textContent = `UID ${binding.uid} / ${binding.channelName || '官方'}`;
+            meta.textContent = `UID ${maskSklandUid(binding.uid)} / ${binding.channelName || '官方'}`;
 
             textWrap.appendChild(nameRow);
             textWrap.appendChild(meta);
@@ -232,9 +238,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const accountLabel = normalized.accountLabel || getAccountLabel(normalized.accountId);
         const lines = [
             `${accountLabel} 已导入 ${normalized.operatorCount} 名干员。`,
-            `${normalized.nickname || '博士'} / UID ${normalized.uid || '未知'}`
+            `${normalized.nickname || '博士'} / UID ${maskSklandUid(normalized.uid)}`
         ];
         if (timeText) lines.push(timeText);
+        if (summary.credentialSaveFailed) lines.push('干员数据已导入，但登录凭据保存失败，请检查脚本存储后重新导入。');
         return lines.join('\n');
     }
 

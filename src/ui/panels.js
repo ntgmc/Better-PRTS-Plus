@@ -372,6 +372,7 @@
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         accounts.body.appendChild(sklandBtn);
+        accounts.body.appendChild(createSklandSyncControls());
 
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
@@ -389,6 +390,7 @@
         container.appendChild(btn);
         document.body.appendChild(container);
         refreshAccountControls();
+        refreshSklandSyncControls();
         updateFloatingLayout();
         window.addEventListener('resize', updateFloatingLayout);
         window.visualViewport?.addEventListener('resize', updateFloatingLayout);
