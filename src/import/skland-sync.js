@@ -1,5 +1,6 @@
     const SKLAND_SYNC_KEY = 'prts_plus_skland_sync';
     const SKLAND_SYNC_CONSENT_VERSION = 2;
+    const SKLAND_PLAINTEXT_CONSENT_VERSION = 1;
     const SKLAND_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
     const SKLAND_RETRY_MS = 60 * 60 * 1000;
     let sklandSyncRunning = false;
@@ -7,20 +8,26 @@
     function readSklandSyncStore() {
         const raw = GM_getValue(SKLAND_SYNC_KEY);
         const value = typeof raw === 'string' ? safeJsonParse(raw, null) : raw;
-        const store = { consentVersion: 0, autoRefresh: false, vault: null, accounts: {} };
+        const store = { consentVersion: 0, mode: 'encrypted', autoRefresh: false, vault: null, accounts: {} };
         if (!isPlainRecord(value) || ![1, SKLAND_SYNC_CONSENT_VERSION].includes(value.consentVersion)) return store;
+        const mode = value.mode === undefined ? 'encrypted' : value.mode;
+        if (!['encrypted', 'plaintext'].includes(mode)) return store;
+        if (mode === 'plaintext' && (value.consentVersion !== SKLAND_SYNC_CONSENT_VERSION
+            || value.plaintextConsentVersion !== SKLAND_PLAINTEXT_CONSENT_VERSION)) return store;
+        store.mode = mode;
+        if (mode === 'plaintext') store.plaintextConsentVersion = SKLAND_PLAINTEXT_CONSENT_VERSION;
         store.consentVersion = value.consentVersion;
-        store.vault = normalizeSklandVault(value.vault);
+        store.vault = mode === 'encrypted' ? normalizeSklandVault(value.vault) : null;
         store.autoRefresh = value.autoRefresh === true;
         for (const [id, entry] of Object.entries(isPlainRecord(value.accounts) ? value.accounts : {})) {
             if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)) || !isPlainRecord(entry)) continue;
-            const legacy = store.consentVersion === 1;
-            if (legacy ? typeof entry.credential !== 'string' || !/^[A-Za-z0-9._-]{12,2048}$/.test(entry.credential)
+            const plaintext = store.consentVersion === 1 || store.mode === 'plaintext';
+            if (plaintext ? typeof entry.credential !== 'string' || !/^[A-Za-z0-9._-]{12,2048}$/.test(entry.credential)
                 : !isSklandSealedValue(entry.sealedCredential)) continue;
             const uid = normalizeSklandSyncText(entry.uid);
             if (!uid) continue;
             store.accounts[id] = {
-                ...(legacy ? { credential: entry.credential } : { sealedCredential: {
+                ...(plaintext ? { credential: entry.credential } : { sealedCredential: {
                     iv: entry.sealedCredential.iv, ciphertext: entry.sealedCredential.ciphertext
                 } }), uid,
                 lastAttemptAt: Number.isFinite(entry.lastAttemptAt) && entry.lastAttemptAt > 0 ? entry.lastAttemptAt : 0,
@@ -36,33 +43,52 @@
     }
 
     function isSklandSyncEnabled(store = readSklandSyncStore()) {
-        return store.consentVersion === SKLAND_SYNC_CONSENT_VERSION && Boolean(store.vault);
+        return store.consentVersion === SKLAND_SYNC_CONSENT_VERSION
+            && (store.mode === 'plaintext' ? store.plaintextConsentVersion === SKLAND_PLAINTEXT_CONSENT_VERSION : Boolean(store.vault));
     }
 
-    async function setSklandSyncEnabled(enabled, passphrase) {
+    function canUseSklandSavedCredentials(store = readSklandSyncStore()) {
+        return isSklandSyncEnabled(store) && (store.mode === 'plaintext' || isSklandVaultUnlocked(store));
+    }
+
+    async function setSklandSyncEnabled(enabled, passphrase, mode = 'encrypted') {
         if (!enabled) {
-            writeSklandSyncStore({ consentVersion: 0, autoRefresh: false, vault: null, accounts: {} });
+            writeSklandSyncStore({ consentVersion: 0, mode: 'encrypted', autoRefresh: false, vault: null, accounts: {} });
             lockSklandVault();
             return;
         }
+        if (!['encrypted', 'plaintext'].includes(mode)) throw new Error('请选择有效的凭据保存方式。');
         const previous = GM_getValue(SKLAND_SYNC_KEY);
-        const legacy = readSklandSyncStore();
-        requireSklandWebCrypto();
-        const salt = sklandBytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-        const key = await deriveSklandVaultKey(passphrase, salt);
-        const store = { consentVersion: SKLAND_SYNC_CONSENT_VERSION, autoRefresh: true, accounts: {},
-            vault: { version: SKLAND_VAULT_VERSION, salt, check: await sealSklandValue(key, SKLAND_VAULT_CHECK, 'check') }
-        };
-        if (legacy.consentVersion === 1) {
-            for (const [id, entry] of Object.entries(legacy.accounts)) {
-                const { credential, ...metadata } = entry;
-                store.accounts[id] = { ...metadata, sealedCredential: await sealSklandValue(key, credential, `${id}:${entry.uid}`) };
-            }
-            store.autoRefresh = legacy.autoRefresh;
+        const source = readSklandSyncStore();
+        const previouslyEnabled = isSklandSyncEnabled(source);
+        if (previouslyEnabled && source.mode === mode) return;
+        if (previouslyEnabled && !canUseSklandSavedCredentials(source)) throw new Error('请先解锁，再切换保存方式。');
+        let key = null;
+        let salt = '';
+        let vault = null;
+        if (mode === 'encrypted') {
+            requireSklandWebCrypto();
+            salt = sklandBytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+            key = await deriveSklandVaultKey(passphrase, salt);
+            vault = { version: SKLAND_VAULT_VERSION, salt, check: await sealSklandValue(key, SKLAND_VAULT_CHECK, 'check') };
         }
-        if (GM_getValue(SKLAND_SYNC_KEY) !== previous) throw new Error('凭据设置已更改，请重试。');
+        const store = { consentVersion: SKLAND_SYNC_CONSENT_VERSION, mode, vault, accounts: {},
+            autoRefresh: previouslyEnabled || source.consentVersion === 1 ? source.autoRefresh : true,
+            ...(mode === 'plaintext' ? { plaintextConsentVersion: SKLAND_PLAINTEXT_CONSENT_VERSION } : {})
+        };
+        if (previouslyEnabled || source.consentVersion === 1) {
+            for (const [id, entry] of Object.entries(source.accounts)) {
+                const { credential, sealedCredential, ...metadata } = entry;
+                const raw = credential ?? await decryptSklandCredential(id, entry);
+                store.accounts[id] = { ...metadata, ...(mode === 'plaintext' ? { credential: raw }
+                    : { sealedCredential: await sealSklandValue(key, raw, `${id}:${entry.uid}`) }) };
+            }
+        }
+        if (GM_getValue(SKLAND_SYNC_KEY) !== previous || (previouslyEnabled && !canUseSklandSavedCredentials())) {
+            throw new Error('凭据设置已更改，请重试。');
+        }
         writeSklandSyncStore(store);
-        sklandVaultSession = { key, salt };
+        sklandVaultSession = key ? { key, salt } : null;
     }
 
     function clearSklandSavedAccounts(accountId = null) {
@@ -78,10 +104,12 @@
         if (typeof credential !== 'string' || !/^[A-Za-z0-9._-]{12,2048}$/.test(credential)) {
             throw new Error('登录凭据格式不支持保存，请重新登录森空岛后重试。');
         }
-        if (!isSklandVaultUnlocked(store)) throw new Error('凭据已锁定，请解锁后重新导入以保存凭据。');
-        const sealedCredential = await sealSklandValue(sklandVaultSession.key, credential, `${summary.accountId}:${summary.uid}`);
+        if (!canUseSklandSavedCredentials(store)) throw new Error('凭据已锁定，请解锁后重新导入以保存凭据。');
+        const savedCredential = store.mode === 'plaintext' ? { credential }
+            : { sealedCredential: await sealSklandValue(sklandVaultSession.key, credential, `${summary.accountId}:${summary.uid}`) };
         const latest = readSklandSyncStore();
-        if (!isSklandVaultUnlocked(latest) || latest.vault.salt !== store.vault.salt) {
+        if (!canUseSklandSavedCredentials(latest) || latest.mode !== store.mode
+            || JSON.stringify(latest.vault) !== JSON.stringify(store.vault)) {
             throw new Error('凭据设置已更改，请重试。');
         }
         const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
@@ -89,7 +117,7 @@
         if (state.accountMeta[summary.accountId]?.skland?.uid !== summary.uid) throw new Error('账号角色已更改，请重试。');
         const now = Date.now();
         latest.accounts[summary.accountId] = {
-            sealedCredential, uid: summary.uid, lastAttemptAt: now, lastSuccessAt: now, status: ''
+            ...savedCredential, uid: summary.uid, lastAttemptAt: now, lastSuccessAt: now, status: ''
         };
         writeSklandSyncStore(latest);
     }
@@ -100,10 +128,15 @@
             && now - entry.lastAttemptAt >= SKLAND_RETRY_MS;
     }
 
+    function hasSameSklandCredential(entry, expected) {
+        return Boolean(entry) && entry.uid === expected.uid && entry.credential === expected.credential
+            && JSON.stringify(entry.sealedCredential) === JSON.stringify(expected.sealedCredential);
+    }
+
     function requireSavedSklandAccount(accountId, expected) {
         const store = readSklandSyncStore();
         const entry = store.accounts[accountId];
-        if (!isSklandVaultUnlocked(store) || !entry || JSON.stringify(entry.sealedCredential) !== JSON.stringify(expected.sealedCredential) || entry.uid !== expected.uid) {
+        if (!canUseSklandSavedCredentials(store) || !hasSameSklandCredential(entry, expected)) {
             throw new Error('保存的凭据已移除或更改，本次刷新已停止。');
         }
         const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
@@ -116,7 +149,7 @@
 
     async function refreshSavedSklandAccount(accountId, entry, automatic) {
         requireSavedSklandAccount(accountId, entry);
-        const credential = await decryptSklandCredential(accountId, entry);
+        const credential = entry.credential ?? await decryptSklandCredential(accountId, entry);
         requireSavedSklandAccount(accountId, entry);
         const refreshed = await refreshSklandToken(credential);
         requireSavedSklandAccount(accountId, entry);
@@ -150,7 +183,7 @@
         if (sklandSyncRunning || (automatic && document.visibilityState !== 'visible')) return;
         const run = async () => {
             const store = readSklandSyncStore();
-            if (!isSklandVaultUnlocked(store) || (automatic && !store.autoRefresh)) return;
+            if (!canUseSklandSavedCredentials(store) || (automatic && !store.autoRefresh)) return;
             const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
             const ids = getAccountIds(state.accountsData).filter(id => store.accounts[id]
                 && (!automatic || isSklandAccountRefreshDue(store.accounts[id])));
@@ -161,7 +194,9 @@
                 refreshSklandSyncControls();
                 for (const id of ids) {
                     const latest = readSklandSyncStore();
-                    if (!isSklandVaultUnlocked(latest) || (automatic && (!latest.autoRefresh || document.visibilityState !== 'visible'))) break;
+                    if (!canUseSklandSavedCredentials(latest) || latest.mode !== store.mode
+                        || JSON.stringify(latest.vault) !== JSON.stringify(store.vault)
+                        || (automatic && (!latest.autoRefresh || document.visibilityState !== 'visible'))) break;
                     const entry = latest.accounts[id];
                     if (!entry || (automatic && !isSklandAccountRefreshDue(entry))) continue;
                     const label = resolveStoredAccountState(readAccountStorageSnapshot()).state.accountMeta[id]?.label || `账号 ${id}`;
@@ -177,7 +212,7 @@
                     }
                     const current = readSklandSyncStore();
                     const saved = current.accounts[id];
-                    if (saved && JSON.stringify(saved.sealedCredential) === JSON.stringify(entry.sealedCredential) && saved.uid === entry.uid) {
+                    if (hasSameSklandCredential(saved, entry)) {
                         saved.status = status;
                         if (!status) saved.lastSuccessAt = Date.now();
                         writeSklandSyncStore(current);

@@ -67,9 +67,9 @@
 
         importBtn.onclick = async () => {
             const accountId = Number(accountSelect.value);
-            if (isSklandSyncEnabled() && !isSklandVaultUnlocked()) {
+            if (isSklandSyncEnabled() && !canUseSklandSavedCredentials()) {
                 await handleSklandVaultUnlock();
-                if (!isSklandVaultUnlocked()) return;
+                if (!canUseSklandSavedCredentials()) return;
             }
             const progressText = `正在读取森空岛数据，完成后请核对 ${getAccountLabel(accountId)} 的导入预览。`;
             const updateToast = showPrtsToast('正在读取森空岛干员…', 'loading', progressText, 0);

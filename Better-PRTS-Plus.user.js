@@ -1712,7 +1712,7 @@ Object.entries({
     }
 
     function isSklandVaultUnlocked(store = readSklandSyncStore()) {
-        return isSklandSyncEnabled(store) && Boolean(sklandVaultSession)
+        return isSklandSyncEnabled(store) && store.mode === 'encrypted' && Boolean(sklandVaultSession)
             && sklandVaultSession.salt === store.vault.salt;
     }
 
@@ -1722,7 +1722,7 @@ Object.entries({
 
     async function unlockSklandVault(passphrase) {
         const store = readSklandSyncStore();
-        if (!isSklandSyncEnabled(store)) throw new Error('请先开启凭据保存并设置加密口令。');
+        if (!isSklandSyncEnabled(store) || store.mode !== 'encrypted') throw new Error('请先开启口令加密保存。');
         const key = await deriveSklandVaultKey(passphrase, store.vault.salt);
         const check = await openSklandValue(key, store.vault.check, 'check');
         if (check !== SKLAND_VAULT_CHECK) throw new Error('加密数据校验失败，请重新设置。');
@@ -1741,6 +1741,7 @@ Object.entries({
     }
     const SKLAND_SYNC_KEY = 'prts_plus_skland_sync';
     const SKLAND_SYNC_CONSENT_VERSION = 2;
+    const SKLAND_PLAINTEXT_CONSENT_VERSION = 1;
     const SKLAND_AUTO_REFRESH_MS = 24 * 60 * 60 * 1000;
     const SKLAND_RETRY_MS = 60 * 60 * 1000;
     let sklandSyncRunning = false;
@@ -1748,20 +1749,26 @@ Object.entries({
     function readSklandSyncStore() {
         const raw = GM_getValue(SKLAND_SYNC_KEY);
         const value = typeof raw === 'string' ? safeJsonParse(raw, null) : raw;
-        const store = { consentVersion: 0, autoRefresh: false, vault: null, accounts: {} };
+        const store = { consentVersion: 0, mode: 'encrypted', autoRefresh: false, vault: null, accounts: {} };
         if (!isPlainRecord(value) || ![1, SKLAND_SYNC_CONSENT_VERSION].includes(value.consentVersion)) return store;
+        const mode = value.mode === undefined ? 'encrypted' : value.mode;
+        if (!['encrypted', 'plaintext'].includes(mode)) return store;
+        if (mode === 'plaintext' && (value.consentVersion !== SKLAND_SYNC_CONSENT_VERSION
+            || value.plaintextConsentVersion !== SKLAND_PLAINTEXT_CONSENT_VERSION)) return store;
+        store.mode = mode;
+        if (mode === 'plaintext') store.plaintextConsentVersion = SKLAND_PLAINTEXT_CONSENT_VERSION;
         store.consentVersion = value.consentVersion;
-        store.vault = normalizeSklandVault(value.vault);
+        store.vault = mode === 'encrypted' ? normalizeSklandVault(value.vault) : null;
         store.autoRefresh = value.autoRefresh === true;
         for (const [id, entry] of Object.entries(isPlainRecord(value.accounts) ? value.accounts : {})) {
             if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(Number(id)) || !isPlainRecord(entry)) continue;
-            const legacy = store.consentVersion === 1;
-            if (legacy ? typeof entry.credential !== 'string' || !/^[A-Za-z0-9._-]{12,2048}$/.test(entry.credential)
+            const plaintext = store.consentVersion === 1 || store.mode === 'plaintext';
+            if (plaintext ? typeof entry.credential !== 'string' || !/^[A-Za-z0-9._-]{12,2048}$/.test(entry.credential)
                 : !isSklandSealedValue(entry.sealedCredential)) continue;
             const uid = normalizeSklandSyncText(entry.uid);
             if (!uid) continue;
             store.accounts[id] = {
-                ...(legacy ? { credential: entry.credential } : { sealedCredential: {
+                ...(plaintext ? { credential: entry.credential } : { sealedCredential: {
                     iv: entry.sealedCredential.iv, ciphertext: entry.sealedCredential.ciphertext
                 } }), uid,
                 lastAttemptAt: Number.isFinite(entry.lastAttemptAt) && entry.lastAttemptAt > 0 ? entry.lastAttemptAt : 0,
@@ -1777,33 +1784,52 @@ Object.entries({
     }
 
     function isSklandSyncEnabled(store = readSklandSyncStore()) {
-        return store.consentVersion === SKLAND_SYNC_CONSENT_VERSION && Boolean(store.vault);
+        return store.consentVersion === SKLAND_SYNC_CONSENT_VERSION
+            && (store.mode === 'plaintext' ? store.plaintextConsentVersion === SKLAND_PLAINTEXT_CONSENT_VERSION : Boolean(store.vault));
     }
 
-    async function setSklandSyncEnabled(enabled, passphrase) {
+    function canUseSklandSavedCredentials(store = readSklandSyncStore()) {
+        return isSklandSyncEnabled(store) && (store.mode === 'plaintext' || isSklandVaultUnlocked(store));
+    }
+
+    async function setSklandSyncEnabled(enabled, passphrase, mode = 'encrypted') {
         if (!enabled) {
-            writeSklandSyncStore({ consentVersion: 0, autoRefresh: false, vault: null, accounts: {} });
+            writeSklandSyncStore({ consentVersion: 0, mode: 'encrypted', autoRefresh: false, vault: null, accounts: {} });
             lockSklandVault();
             return;
         }
+        if (!['encrypted', 'plaintext'].includes(mode)) throw new Error('请选择有效的凭据保存方式。');
         const previous = GM_getValue(SKLAND_SYNC_KEY);
-        const legacy = readSklandSyncStore();
-        requireSklandWebCrypto();
-        const salt = sklandBytesToHex(crypto.getRandomValues(new Uint8Array(16)));
-        const key = await deriveSklandVaultKey(passphrase, salt);
-        const store = { consentVersion: SKLAND_SYNC_CONSENT_VERSION, autoRefresh: true, accounts: {},
-            vault: { version: SKLAND_VAULT_VERSION, salt, check: await sealSklandValue(key, SKLAND_VAULT_CHECK, 'check') }
-        };
-        if (legacy.consentVersion === 1) {
-            for (const [id, entry] of Object.entries(legacy.accounts)) {
-                const { credential, ...metadata } = entry;
-                store.accounts[id] = { ...metadata, sealedCredential: await sealSklandValue(key, credential, `${id}:${entry.uid}`) };
-            }
-            store.autoRefresh = legacy.autoRefresh;
+        const source = readSklandSyncStore();
+        const previouslyEnabled = isSklandSyncEnabled(source);
+        if (previouslyEnabled && source.mode === mode) return;
+        if (previouslyEnabled && !canUseSklandSavedCredentials(source)) throw new Error('请先解锁，再切换保存方式。');
+        let key = null;
+        let salt = '';
+        let vault = null;
+        if (mode === 'encrypted') {
+            requireSklandWebCrypto();
+            salt = sklandBytesToHex(crypto.getRandomValues(new Uint8Array(16)));
+            key = await deriveSklandVaultKey(passphrase, salt);
+            vault = { version: SKLAND_VAULT_VERSION, salt, check: await sealSklandValue(key, SKLAND_VAULT_CHECK, 'check') };
         }
-        if (GM_getValue(SKLAND_SYNC_KEY) !== previous) throw new Error('凭据设置已更改，请重试。');
+        const store = { consentVersion: SKLAND_SYNC_CONSENT_VERSION, mode, vault, accounts: {},
+            autoRefresh: previouslyEnabled || source.consentVersion === 1 ? source.autoRefresh : true,
+            ...(mode === 'plaintext' ? { plaintextConsentVersion: SKLAND_PLAINTEXT_CONSENT_VERSION } : {})
+        };
+        if (previouslyEnabled || source.consentVersion === 1) {
+            for (const [id, entry] of Object.entries(source.accounts)) {
+                const { credential, sealedCredential, ...metadata } = entry;
+                const raw = credential ?? await decryptSklandCredential(id, entry);
+                store.accounts[id] = { ...metadata, ...(mode === 'plaintext' ? { credential: raw }
+                    : { sealedCredential: await sealSklandValue(key, raw, `${id}:${entry.uid}`) }) };
+            }
+        }
+        if (GM_getValue(SKLAND_SYNC_KEY) !== previous || (previouslyEnabled && !canUseSklandSavedCredentials())) {
+            throw new Error('凭据设置已更改，请重试。');
+        }
         writeSklandSyncStore(store);
-        sklandVaultSession = { key, salt };
+        sklandVaultSession = key ? { key, salt } : null;
     }
 
     function clearSklandSavedAccounts(accountId = null) {
@@ -1819,10 +1845,12 @@ Object.entries({
         if (typeof credential !== 'string' || !/^[A-Za-z0-9._-]{12,2048}$/.test(credential)) {
             throw new Error('登录凭据格式不支持保存，请重新登录森空岛后重试。');
         }
-        if (!isSklandVaultUnlocked(store)) throw new Error('凭据已锁定，请解锁后重新导入以保存凭据。');
-        const sealedCredential = await sealSklandValue(sklandVaultSession.key, credential, `${summary.accountId}:${summary.uid}`);
+        if (!canUseSklandSavedCredentials(store)) throw new Error('凭据已锁定，请解锁后重新导入以保存凭据。');
+        const savedCredential = store.mode === 'plaintext' ? { credential }
+            : { sealedCredential: await sealSklandValue(sklandVaultSession.key, credential, `${summary.accountId}:${summary.uid}`) };
         const latest = readSklandSyncStore();
-        if (!isSklandVaultUnlocked(latest) || latest.vault.salt !== store.vault.salt) {
+        if (!canUseSklandSavedCredentials(latest) || latest.mode !== store.mode
+            || JSON.stringify(latest.vault) !== JSON.stringify(store.vault)) {
             throw new Error('凭据设置已更改，请重试。');
         }
         const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
@@ -1830,7 +1858,7 @@ Object.entries({
         if (state.accountMeta[summary.accountId]?.skland?.uid !== summary.uid) throw new Error('账号角色已更改，请重试。');
         const now = Date.now();
         latest.accounts[summary.accountId] = {
-            sealedCredential, uid: summary.uid, lastAttemptAt: now, lastSuccessAt: now, status: ''
+            ...savedCredential, uid: summary.uid, lastAttemptAt: now, lastSuccessAt: now, status: ''
         };
         writeSklandSyncStore(latest);
     }
@@ -1841,10 +1869,15 @@ Object.entries({
             && now - entry.lastAttemptAt >= SKLAND_RETRY_MS;
     }
 
+    function hasSameSklandCredential(entry, expected) {
+        return Boolean(entry) && entry.uid === expected.uid && entry.credential === expected.credential
+            && JSON.stringify(entry.sealedCredential) === JSON.stringify(expected.sealedCredential);
+    }
+
     function requireSavedSklandAccount(accountId, expected) {
         const store = readSklandSyncStore();
         const entry = store.accounts[accountId];
-        if (!isSklandVaultUnlocked(store) || !entry || JSON.stringify(entry.sealedCredential) !== JSON.stringify(expected.sealedCredential) || entry.uid !== expected.uid) {
+        if (!canUseSklandSavedCredentials(store) || !hasSameSklandCredential(entry, expected)) {
             throw new Error('保存的凭据已移除或更改，本次刷新已停止。');
         }
         const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
@@ -1857,7 +1890,7 @@ Object.entries({
 
     async function refreshSavedSklandAccount(accountId, entry, automatic) {
         requireSavedSklandAccount(accountId, entry);
-        const credential = await decryptSklandCredential(accountId, entry);
+        const credential = entry.credential ?? await decryptSklandCredential(accountId, entry);
         requireSavedSklandAccount(accountId, entry);
         const refreshed = await refreshSklandToken(credential);
         requireSavedSklandAccount(accountId, entry);
@@ -1891,7 +1924,7 @@ Object.entries({
         if (sklandSyncRunning || (automatic && document.visibilityState !== 'visible')) return;
         const run = async () => {
             const store = readSklandSyncStore();
-            if (!isSklandVaultUnlocked(store) || (automatic && !store.autoRefresh)) return;
+            if (!canUseSklandSavedCredentials(store) || (automatic && !store.autoRefresh)) return;
             const state = resolveStoredAccountState(readAccountStorageSnapshot()).state;
             const ids = getAccountIds(state.accountsData).filter(id => store.accounts[id]
                 && (!automatic || isSklandAccountRefreshDue(store.accounts[id])));
@@ -1902,7 +1935,9 @@ Object.entries({
                 refreshSklandSyncControls();
                 for (const id of ids) {
                     const latest = readSklandSyncStore();
-                    if (!isSklandVaultUnlocked(latest) || (automatic && (!latest.autoRefresh || document.visibilityState !== 'visible'))) break;
+                    if (!canUseSklandSavedCredentials(latest) || latest.mode !== store.mode
+                        || JSON.stringify(latest.vault) !== JSON.stringify(store.vault)
+                        || (automatic && (!latest.autoRefresh || document.visibilityState !== 'visible'))) break;
                     const entry = latest.accounts[id];
                     if (!entry || (automatic && !isSklandAccountRefreshDue(entry))) continue;
                     const label = resolveStoredAccountState(readAccountStorageSnapshot()).state.accountMeta[id]?.label || `账号 ${id}`;
@@ -1918,7 +1953,7 @@ Object.entries({
                     }
                     const current = readSklandSyncStore();
                     const saved = current.accounts[id];
-                    if (saved && JSON.stringify(saved.sealedCredential) === JSON.stringify(entry.sealedCredential) && saved.uid === entry.uid) {
+                    if (hasSameSklandCredential(saved, entry)) {
                         saved.status = status;
                         if (!status) saved.lastSuccessAt = Date.now();
                         writeSklandSyncStore(current);
@@ -3438,8 +3473,8 @@ Object.entries({
         transform: translateX(var(--prts-submenu-offset, -20px)) scale(0.95);
         transform-origin: var(--prts-submenu-origin, top left);
     }
-    .prts-submenu-left { --prts-submenu-offset: 20px; --prts-submenu-origin: top right; }
-    .prts-submenu-panel.is-open { z-index: 5; visibility: visible; opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); }
+    .prts-submenu-panel.prts-submenu-left { --prts-submenu-offset: 20px; --prts-submenu-origin: top right; }
+    .prts-submenu-panel.is-open { z-index: calc(4 + var(--prts-submenu-depth, 1)); visibility: visible; opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); }
     .prts-submenu-panel * { box-sizing: border-box; }
     .prts-submenu-panel > .prts-modal-head { flex-shrink: 0; align-items: center; padding: var(--prts-space-2) var(--prts-space-3); }
     .prts-submenu-panel .prts-modal-title { font-size: 14px; }
@@ -3449,7 +3484,7 @@ Object.entries({
     .prts-submenu-button { flex-shrink: 0; width: 100%; min-height: 44px !important; justify-content: flex-start !important; margin: 0 !important; }
     .prts-submenu-button[hidden] { display: none !important; }
     .prts-submenu-arrow { margin-left: auto; }
-    .prts-submenu-left .prts-submenu-arrow, .prts-submenu-left .prts-submenu-close .prts-icon { transform: rotate(180deg); }
+    .prts-submenu-button.prts-submenu-left .prts-submenu-arrow, .prts-submenu-panel.prts-submenu-left .prts-submenu-close .prts-icon { transform: rotate(180deg); }
     #prts-float-container .prts-submenu-button[aria-expanded='true'] { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary-hover) !important; }
     .prts-about-name { margin: var(--prts-space-2) 0; color: var(--prts-color-text); font-size: 17px; overflow-wrap: anywhere; }
     .prts-about-version { margin: 0 0 var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
@@ -3636,6 +3671,8 @@ Object.entries({
     const sklandSyncStyles = `
     .prts-skland-sync { margin-top: 16px; color: var(--prts-color-text); font-size: 13px; line-height: 1.55; }
     .prts-skland-sync h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+    .prts-skland-sync-modes { min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
+    .prts-skland-sync-modes legend { margin-bottom: 4px; padding: 0; font-weight: 600; }
     .prts-skland-sync-option, .prts-skland-sync-acknowledgement { display: flex; align-items: flex-start; gap: 8px; min-height: 32px; cursor: pointer; }
     .prts-skland-sync-option input, .prts-skland-sync-acknowledgement input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0; accent-color: var(--prts-color-primary); }
     .prts-skland-sync-hint { margin: 0 0 12px; color: var(--prts-color-text-muted); font-size: 12px; }
@@ -5730,7 +5767,7 @@ Object.entries({
         form.appendChild(hint);
         const pending = showPrtsModal({
             title: create ? '设置凭据加密口令' : '解锁森空岛凭据', message: form,
-            confirmText: create ? '设置口令并开启' : '解锁当前页面', cancelText: '取消'
+            confirmText: create ? '设置口令并保存' : '解锁当前页面', cancelText: '取消'
         });
         const confirm = document.querySelector('#prts-modal .primary');
         const validate = () => {
@@ -5760,13 +5797,53 @@ Object.entries({
         refreshSklandSyncControls();
     }
 
-    function createSklandSyncControls() {
+    async function handleSklandStorageMode(mode) {
+        const plaintext = mode === 'plaintext';
+        const confirmed = await showPrtsConfirm({
+            title: plaintext ? '免口令保存凭据：更高风险' : '保存森空岛登录凭据的风险',
+            message: [
+                '登录凭据（cred，也常被称为 token）能用来访问你的森空岛账号。凭据泄露后，别人可能读取你的账号和游戏资料，或执行这份凭据允许的其他操作。',
+                plaintext
+                    ? '免口令模式会把凭据以明文保存在油猴脚本存储中，刷新或新开页面都不用解锁。如果有人读取了脚本存储、油猴备份或同步数据，就可能直接拿到并使用凭据，风险比口令加密更高。请勿在共用或不可信的设备上使用。即使以后切回加密模式，旧备份中的明文也不会被清除。'
+                    : '凭据会用独立口令加密，再存入油猴脚本存储。脚本不会保存口令或解密密钥，每次打开页面都需解锁一次；已有明文凭据会在设置口令后一起加密。加密无法防止凭据在解锁期间被窃取，也无法防范被入侵的设备或恶意扩展；弱口令仍可能被破解。请勿在共用或不可信的设备上开启。',
+                '凭据不会写入本项目的配置备份，也不会上传到本项目服务器。脚本只用它向森空岛官方接口读取角色、干员和练度。',
+                `首次开启本功能时，默认也会开启自动刷新，你可以单独关闭。每个账号每 24 小时最多自动刷新一次，只在 PRTS Plus 页面可见${plaintext ? '' : '且已解锁'}时运行，也可手动刷新。脚本通过非官方方式接入，接口或平台规则变化可能让功能失效，也可能遇到访问限制或账号异常。`,
+                '切换保存方式会保留账号关联和刷新时间。关闭功能会清除脚本保存的全部凭据，停止后续刷新，但会保留已导入的干员数据。清除本地凭据不会撤销登录。如果怀疑凭据泄露，请通过森空岛官方渠道处理账号安全问题。'
+            ].join('\n\n'),
+            acknowledgement: plaintext
+                ? '我理解明文保存的更高风险，同意免口令保存登录凭据。'
+                : '我已阅读并理解上述风险，同意在此浏览器加密保存登录凭据。',
+            confirmText: plaintext ? '同意风险并免口令保存' : '同意风险并继续', cancelText: '取消', tone: 'danger'
+        });
+        if (!confirmed) return;
+        try {
+            const store = readSklandSyncStore();
+            if (isSklandSyncEnabled(store) && !canUseSklandSavedCredentials(store)) {
+                await handleSklandVaultUnlock();
+                if (!canUseSklandSavedCredentials()) return;
+            }
+            if (!plaintext) requireSklandWebCrypto();
+            const passphrase = plaintext ? null : await requestSklandVaultPassphrase(true);
+            if (!plaintext && passphrase === null) return;
+            await setSklandSyncEnabled(true, passphrase, mode);
+        } catch (_error) {
+            showPrtsToast('设置未保存', 'error', '无法转换凭据或写入脚本存储，原设置已保留。请检查口令、浏览器加密支持及扩展权限后重试。');
+        } finally {
+            refreshSklandSyncControls();
+        }
+    }
+
+    let sklandSyncControlsCount = 0;
+
+    function createSklandSyncControls({ showHeading = true } = {}) {
         const section = document.createElement('section');
         section.className = 'prts-skland-sync';
         section.setAttribute('aria-label', '森空岛快捷刷新');
-        const heading = document.createElement('h3');
-        heading.textContent = '森空岛快捷刷新';
-        section.appendChild(heading);
+        if (showHeading) {
+            const heading = document.createElement('h3');
+            heading.textContent = '森空岛快捷刷新';
+            section.appendChild(heading);
+        }
 
         const toggleLabel = document.createElement('label');
         toggleLabel.className = 'prts-skland-sync-option';
@@ -5781,6 +5858,32 @@ Object.entries({
         hint.textContent = '开启后，逐个登录森空岛并读取导入一次，即可在这里刷新全部已保存账号。关闭会清除全部凭据。';
         section.appendChild(hint);
 
+        const modes = document.createElement('fieldset');
+        modes.className = 'prts-skland-sync-modes';
+        const legend = document.createElement('legend');
+        legend.textContent = '凭据保存方式';
+        modes.appendChild(legend);
+        const modeName = `prts-skland-storage-mode-${++sklandSyncControlsCount}`;
+        for (const [value, text] of [['encrypted', '口令加密（默认）'], ['plaintext', '免口令保存（高风险）']]) {
+            const label = document.createElement('label');
+            label.className = 'prts-skland-sync-option';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = modeName;
+            radio.value = value;
+            radio.className = 'prts-skland-sync-mode';
+            radio.checked = value === 'encrypted';
+            radio.onchange = async () => {
+                if (!radio.checked || !isSklandSyncEnabled()) return;
+                refreshSklandSyncControls();
+                await handleSklandStorageMode(value);
+            };
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(text));
+            modes.appendChild(label);
+        }
+        section.appendChild(modes);
+
         const autoLabel = document.createElement('label');
         autoLabel.className = 'prts-skland-sync-option';
         const auto = document.createElement('input');
@@ -5790,8 +5893,7 @@ Object.entries({
         autoLabel.appendChild(document.createTextNode('自动刷新（每 24 小时）'));
         section.appendChild(autoLabel);
         const autoHint = document.createElement('p');
-        autoHint.className = 'prts-skland-sync-hint';
-        autoHint.textContent = '仅在当前页面已解锁且 PRTS Plus 页面可见时检查，到期才刷新；失败后至少间隔 1 小时重试。';
+        autoHint.className = 'prts-skland-sync-hint prts-skland-sync-auto-hint';
         section.appendChild(autoHint);
 
         const vaultStatus = document.createElement('p');
@@ -5805,8 +5907,8 @@ Object.entries({
         vaultAction.classList.add('prts-skland-vault-action');
         section.appendChild(vaultAction);
         const refresh = createPrtsButton({ text: '刷新全部已保存账号', icon: 'reload', onClick: async () => {
-            if (!isSklandVaultUnlocked()) await handleSklandVaultUnlock();
-            if (!isSklandVaultUnlocked()) return;
+            if (!canUseSklandSavedCredentials()) await handleSklandVaultUnlock();
+            if (!canUseSklandSavedCredentials()) return;
             try { await refreshSavedSklandAccounts(); }
             catch (_error) { showPrtsToast('森空岛刷新未完成', 'error', '无法保存刷新状态，请检查脚本存储后重试。'); }
         } });
@@ -5820,31 +5922,15 @@ Object.entries({
 
         toggle.onchange = async () => {
             const enabled = toggle.checked;
-            toggle.checked = isSklandSyncEnabled();
+            const mode = section.querySelector('.prts-skland-sync-mode:checked').value;
+            refreshSklandSyncControls();
             if (enabled) {
-                const confirmed = await showPrtsConfirm({
-                    title: '保存森空岛登录凭据的风险',
-                    message: [
-                        '登录凭据（cred，常称 token）可用于访问你的森空岛账号。泄露后，他人可能读取账号和游戏资料，或执行该凭据权限内的其他操作。',
-                        '凭据使用独立口令加密后保存在油猴脚本存储中，口令和解密密钥不落盘，不进入本项目配置备份或上传至本项目服务器。每次打开页面需解锁一次；旧版明文凭据会在设置口令后加密迁移。加密不能保护正在解锁的页面、被入侵的设备或恶意扩展，弱口令也可能被破解。请勿在共用或不可信设备上开启。',
-                        '脚本使用保存的凭据向森空岛官方接口读取角色、干员和练度。开启本功能后默认启用自动刷新，可单独关闭。每个账号最多每 24 小时自动刷新一次，仅在当前页面已解锁且 PRTS Plus 页面可见时运行；也可随时手动刷新。非官方接入可能因接口或平台规则变化而失效，并存在访问限制或账号异常的风险。',
-                        '关闭此功能会清除脚本保存的全部凭据并停止后续刷新，已导入的干员数据会保留。清除本地凭据不等于撤销登录；如怀疑泄露，请通过森空岛官方渠道处理账号安全。'
-                    ].join('\n\n'),
-                    acknowledgement: '我已阅读并理解上述风险，同意在此浏览器保存登录凭据。',
-                    confirmText: '同意风险并开启', cancelText: '暂不开启', tone: 'danger'
-                });
-                if (!confirmed) return;
+                await handleSklandStorageMode(mode);
+                return;
             }
-            try {
-                if (enabled) requireSklandWebCrypto();
-                const passphrase = enabled ? await requestSklandVaultPassphrase(true) : null;
-                if (enabled && passphrase === null) return;
-                await setSklandSyncEnabled(enabled, passphrase);
-                refreshSklandSyncControls();
-            } catch (_error) {
-                showPrtsToast('设置未保存', 'error', '无法启用加密或写入脚本存储，请检查浏览器支持及扩展权限后重试。');
-                refreshSklandSyncControls();
-            }
+            try { await setSklandSyncEnabled(false); }
+            catch (_error) { showPrtsToast('设置未保存', 'error', '无法写入脚本存储，请重试。'); }
+            refreshSklandSyncControls();
         };
         auto.onchange = () => {
             try {
@@ -5867,13 +5953,21 @@ Object.entries({
         document.querySelectorAll('.prts-skland-sync').forEach(section => {
             const toggle = section.querySelector('.prts-skland-sync-enabled');
             toggle.checked = enabled;
+            section.querySelectorAll('.prts-skland-sync-mode').forEach(radio => {
+                radio.checked = radio.value === store.mode;
+                radio.disabled = sklandSyncRunning;
+            });
+            section.querySelector('.prts-skland-sync-auto-hint').textContent = store.mode === 'plaintext'
+                ? '仅在 PRTS Plus 页面可见时检查，无需解锁；到期才刷新，失败后至少间隔 1 小时重试。'
+                : '仅在当前页面已解锁且 PRTS Plus 页面可见时检查，到期才刷新；失败后至少间隔 1 小时重试。';
             const vaultStatus = section.querySelector('.prts-skland-vault-status');
             vaultStatus.textContent = store.consentVersion === 1
-                ? '旧版凭据尚未加密，已暂停刷新。请开启并设置加密口令以迁移，或移除旧凭据。'
-                : enabled ? unlocked ? '凭据已加密 · 当前页面已解锁' : '凭据已加密 · 已锁定，自动刷新暂停'
-                    : '口令和解密密钥不会保存到浏览器。';
+                ? '旧版凭据已暂停刷新。请阅读风险告示并选择保存方式以继续，或移除旧凭据。'
+                : enabled ? store.mode === 'plaintext' ? '凭据以明文保存 · 无需解锁，风险较高'
+                    : unlocked ? '凭据已加密 · 当前页面已解锁' : '凭据已加密 · 已锁定，自动刷新暂停'
+                    : '默认使用口令加密。免口令模式会明文保存凭据，风险更高，需另外阅读告示并同意。';
             const vaultAction = section.querySelector('.prts-skland-vault-action');
-            vaultAction.hidden = !enabled;
+            vaultAction.hidden = !enabled || store.mode === 'plaintext';
             vaultAction.querySelector('.bp4-button-text').textContent = unlocked ? '立即锁定' : '解锁凭据';
             const auto = section.querySelector('.prts-skland-sync-auto');
             auto.checked = store.autoRefresh;
@@ -5974,9 +6068,9 @@ Object.entries({
 
         importBtn.onclick = async () => {
             const accountId = Number(accountSelect.value);
-            if (isSklandSyncEnabled() && !isSklandVaultUnlocked()) {
+            if (isSklandSyncEnabled() && !canUseSklandSavedCredentials()) {
                 await handleSklandVaultUnlock();
-                if (!isSklandVaultUnlocked()) return;
+                if (!canUseSklandSavedCredentials()) return;
             }
             const progressText = `正在读取森空岛数据，完成后请核对 ${getAccountLabel(accountId)} 的导入预览。`;
             const updateToast = showPrtsToast('正在读取森空岛干员…', 'loading', progressText, 0);
@@ -7380,9 +7474,11 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         container.classList.toggle('prts-submenu-left', savedPos.isRight);
         container.querySelectorAll('.prts-submenu-panel').forEach(submenu => {
-            const roomLeft = panelLeft - left - 12;
-            const roomRight = left + width - 12 - panelLeft - panel.offsetWidth;
-            let opensLeft = savedPos.isRight;
+            const parent = document.getElementById(submenu.dataset.parentPanelId) || panel;
+            const parentLeft = ballLeft + parseFloat(parent.style.left);
+            const roomLeft = parentLeft - left - 12;
+            const roomRight = left + width - 12 - parentLeft - parent.offsetWidth;
+            let opensLeft = parent === panel ? savedPos.isRight : parent.classList.contains('prts-submenu-left');
             submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, width - 48)}px`);
             submenu.style.maxHeight = `${Math.max(0, height - 24)}px`;
             const fitsLeft = roomLeft >= submenu.offsetWidth + 8;
@@ -7390,17 +7486,18 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (opensLeft ? !fitsLeft && fitsRight : !fitsRight && fitsLeft) opensLeft = !opensLeft;
             let submenuLeft;
             if (fitsLeft || fitsRight) {
-                submenuLeft = opensLeft ? panelLeft - submenu.offsetWidth - 8 : panelLeft + panel.offsetWidth + 8;
+                submenuLeft = opensLeft ? parentLeft - submenu.offsetWidth - 8 : parentLeft + parent.offsetWidth + 8;
             } else {
                 // 窄屏保留上一级的 24px 边缘，仍按同一方向逐层展开。
-                submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, panel.offsetWidth - 24)}px`);
-                submenuLeft = opensLeft ? panelLeft + panel.offsetWidth - submenu.offsetWidth - 24 : panelLeft + 24;
+                submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, parent.offsetWidth - 24)}px`);
+                submenuLeft = opensLeft ? parentLeft + parent.offsetWidth - submenu.offsetWidth - 24 : parentLeft + 24;
             }
             const entryTop = document.getElementById(submenu.dataset.triggerId).getBoundingClientRect().top;
             const submenuTop = Math.max(top + 12, Math.min(entryTop, top + height - submenu.offsetHeight - 12));
             submenu.style.left = `${submenuLeft - ballLeft}px`;
             submenu.style.top = `${submenuTop - ballTop}px`;
-            container.classList.toggle('prts-submenu-left', opensLeft);
+            submenu.classList.toggle('prts-submenu-left', opensLeft);
+            document.getElementById(submenu.dataset.triggerId).classList.toggle('prts-submenu-left', opensLeft);
         });
     }
 
@@ -7489,26 +7586,28 @@ ${formatSklandImportSummary(summary)}`, 'success');
         let activeSubmenu = null;
         const setSubmenuOpen = (next, restoreFocus = true) => {
             const previous = activeSubmenu;
-            if (previous) {
-                previous.panel.classList.remove('is-open');
-                previous.panel.inert = true;
-                previous.panel.setAttribute('aria-hidden', 'true');
-                previous.button.setAttribute('aria-expanded', 'false');
-            }
+            const path = [];
+            for (let submenu = next; submenu; submenu = submenu.parent) path.push(submenu);
+            submenus.forEach(submenu => {
+                const open = path.includes(submenu);
+                submenu.panel.classList.toggle('is-open', open);
+                submenu.panel.inert = !open;
+                submenu.panel.setAttribute('aria-hidden', String(!open));
+                submenu.button.setAttribute('aria-expanded', String(open));
+            });
             activeSubmenu = next;
-            if (next) {
-                next.panel.inert = false;
-                next.panel.setAttribute('aria-hidden', 'false');
-                next.button.setAttribute('aria-expanded', 'true');
-                updateFloatingLayout();
-                next.panel.classList.add('is-open');
-                next.close.focus({ preventScroll: true });
-            } else if (restoreFocus && previous) previous.button.focus({ preventScroll: true });
+            if (next) updateFloatingLayout();
+            if (restoreFocus) {
+                const focus = previous?.parent === next ? previous.button : next?.close || previous?.button;
+                focus?.focus({ preventScroll: true });
+            }
         };
-        const createSubmenu = (id, label, icon) => {
+        const createSubmenu = (id, label, icon, parent = null) => {
             const submenuPanel = document.createElement('div');
             submenuPanel.id = `prts-${id}-panel`;
             submenuPanel.className = 'prts-submenu-panel';
+            submenuPanel.dataset.parentPanelId = parent ? parent.panel.id : panel.id;
+            submenuPanel.style.setProperty('--prts-submenu-depth', parent ? 2 : 1);
             submenuPanel.inert = true;
             submenuPanel.setAttribute('aria-hidden', 'true');
             submenuPanel.setAttribute('role', 'region');
@@ -7522,7 +7621,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             head.appendChild(heading);
             const close = createPrtsButton({
                 className: 'prts-btn prts-submenu-close', icon: 'collapsePanel', ariaLabel: `收起${label}`,
-                onClick: () => setSubmenuOpen(null)
+                onClick: () => setSubmenuOpen(parent)
             });
             head.appendChild(close);
             submenuPanel.appendChild(head);
@@ -7532,15 +7631,18 @@ ${formatSklandImportSummary(summary)}`, 'success');
             const button = createPrtsButton({
                 id: `prts-settings-${id}-button`, className: 'prts-btn prts-submenu-button',
                 icon, text: label, ariaControls: submenuPanel.id, expanded: false,
-                onClick: () => setSubmenuOpen(activeSubmenu === submenu ? null : submenu)
+                onClick: () => setSubmenuOpen(submenuPanel.classList.contains('is-open') ? parent : submenu)
             });
             const arrow = createPrtsIcon('expandSubmenu');
             arrow.classList.add('prts-submenu-arrow');
             button.appendChild(arrow);
-            content.appendChild(button);
+            (parent ? parent.body : content).appendChild(button);
             submenuPanel.dataset.triggerId = button.id;
-            submenuPanel.onclick = event => event.stopPropagation();
-            const submenu = { panel: submenuPanel, body, button, close };
+            submenuPanel.onclick = event => {
+                event.stopPropagation();
+                if (!event.target.closest?.('.prts-submenu-button') && activeSubmenu?.parent === submenu) setSubmenuOpen(submenu, false);
+            };
+            const submenu = { panel: submenuPanel, body, button, close, parent };
             submenus.push(submenu);
             return submenu;
         };
@@ -7716,7 +7818,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         accounts.body.appendChild(sklandBtn);
-        accounts.body.appendChild(createSklandSyncControls());
+        const sklandSync = createSubmenu('skland-sync', '森空岛快捷刷新', 'reload', accounts);
+        sklandSync.body.appendChild(createSklandSyncControls({ showHeading: false }));
 
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
@@ -7741,7 +7844,10 @@ ${formatSklandImportSummary(summary)}`, 'success');
         window.visualViewport?.addEventListener('scroll', updateFloatingLayout);
         const panelObserver = new ResizeObserver(updateFloatingLayout);
         panelObserver.observe(panel);
-        submenus.forEach(submenu => panelObserver.observe(submenu.panel));
+        submenus.forEach(submenu => {
+            panelObserver.observe(submenu.panel);
+            submenu.body.addEventListener('scroll', updateFloatingLayout);
+        });
         content.addEventListener('scroll', updateFloatingLayout);
 
         let isDragging = false;
@@ -7841,7 +7947,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
                 document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) return;
             event.preventDefault();
-            if (activeSubmenu) setSubmenuOpen(null);
+            if (activeSubmenu) setSubmenuOpen(activeSubmenu.parent);
             else {
                 setFloatOpen(false);
                 btn.focus({ preventScroll: true });

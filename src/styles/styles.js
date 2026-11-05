@@ -1083,8 +1083,8 @@
         transform: translateX(var(--prts-submenu-offset, -20px)) scale(0.95);
         transform-origin: var(--prts-submenu-origin, top left);
     }
-    .prts-submenu-left { --prts-submenu-offset: 20px; --prts-submenu-origin: top right; }
-    .prts-submenu-panel.is-open { z-index: 5; visibility: visible; opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); }
+    .prts-submenu-panel.prts-submenu-left { --prts-submenu-offset: 20px; --prts-submenu-origin: top right; }
+    .prts-submenu-panel.is-open { z-index: calc(4 + var(--prts-submenu-depth, 1)); visibility: visible; opacity: 1; pointer-events: auto; transform: translateX(0) scale(1); }
     .prts-submenu-panel * { box-sizing: border-box; }
     .prts-submenu-panel > .prts-modal-head { flex-shrink: 0; align-items: center; padding: var(--prts-space-2) var(--prts-space-3); }
     .prts-submenu-panel .prts-modal-title { font-size: 14px; }
@@ -1094,7 +1094,7 @@
     .prts-submenu-button { flex-shrink: 0; width: 100%; min-height: 44px !important; justify-content: flex-start !important; margin: 0 !important; }
     .prts-submenu-button[hidden] { display: none !important; }
     .prts-submenu-arrow { margin-left: auto; }
-    .prts-submenu-left .prts-submenu-arrow, .prts-submenu-left .prts-submenu-close .prts-icon { transform: rotate(180deg); }
+    .prts-submenu-button.prts-submenu-left .prts-submenu-arrow, .prts-submenu-panel.prts-submenu-left .prts-submenu-close .prts-icon { transform: rotate(180deg); }
     #prts-float-container .prts-submenu-button[aria-expanded='true'] { background: var(--prts-color-primary-soft) !important; color: var(--prts-color-primary-hover) !important; }
     .prts-about-name { margin: var(--prts-space-2) 0; color: var(--prts-color-text); font-size: 17px; overflow-wrap: anywhere; }
     .prts-about-version { margin: 0 0 var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; overflow-wrap: anywhere; }
@@ -1281,6 +1281,8 @@
     const sklandSyncStyles = `
     .prts-skland-sync { margin-top: 16px; color: var(--prts-color-text); font-size: 13px; line-height: 1.55; }
     .prts-skland-sync h3 { margin: 0 0 8px; font-size: 14px; font-weight: 600; }
+    .prts-skland-sync-modes { min-width: 0; margin: 0 0 12px; padding: 0; border: 0; }
+    .prts-skland-sync-modes legend { margin-bottom: 4px; padding: 0; font-weight: 600; }
     .prts-skland-sync-option, .prts-skland-sync-acknowledgement { display: flex; align-items: flex-start; gap: 8px; min-height: 32px; cursor: pointer; }
     .prts-skland-sync-option input, .prts-skland-sync-acknowledgement input { flex: 0 0 auto; width: 18px; height: 18px; margin: 2px 0; accent-color: var(--prts-color-primary); }
     .prts-skland-sync-hint { margin: 0 0 12px; color: var(--prts-color-text-muted); font-size: 12px; }

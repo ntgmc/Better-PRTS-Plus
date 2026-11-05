@@ -72,7 +72,7 @@
     }
 
     function isSklandVaultUnlocked(store = readSklandSyncStore()) {
-        return isSklandSyncEnabled(store) && Boolean(sklandVaultSession)
+        return isSklandSyncEnabled(store) && store.mode === 'encrypted' && Boolean(sklandVaultSession)
             && sklandVaultSession.salt === store.vault.salt;
     }
 
@@ -82,7 +82,7 @@
 
     async function unlockSklandVault(passphrase) {
         const store = readSklandSyncStore();
-        if (!isSklandSyncEnabled(store)) throw new Error('请先开启凭据保存并设置加密口令。');
+        if (!isSklandSyncEnabled(store) || store.mode !== 'encrypted') throw new Error('请先开启口令加密保存。');
         const key = await deriveSklandVaultKey(passphrase, store.vault.salt);
         const check = await openSklandValue(key, store.vault.check, 'check');
         if (check !== SKLAND_VAULT_CHECK) throw new Error('加密数据校验失败，请重新设置。');

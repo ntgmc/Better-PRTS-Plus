@@ -25,8 +25,8 @@ function createSavedSklandPage(sharedStorage = new Map()) {
     return { data: { chars: [{ id: 'char_002_amiya', name: uid === '111' ? '阿米娅' : 'W', evolvePhase: 2, level: 80 }] } };
   };
   page.getSklandGameCultivateInfo = async () => ({ data: { characters: [] } });
-  const save = async () => {
-    await page.setSklandSyncEnabled(true, passphrase);
+  const save = async (mode = 'encrypted') => {
+    await page.setSklandSyncEnabled(true, passphrase, mode);
     for (const id of [1, 2]) await page.saveSklandCredentialForAccount({ accountId: id, uid: `${id}11` },
       id === 1 ? 'first-test-credential' : 'second-test-credential');
     const store = page.readSklandSyncStore();
@@ -97,16 +97,16 @@ test('Skland auth distinguishes expired credentials from transient and malformed
   }
 });
 
-test('Skland auto refresh is per-account, waits 24 hours after success and one hour after failure', async () => {
+for (const mode of ['encrypted', 'plaintext']) test(`Skland ${mode} auto refresh is per-account, waits 24 hours after success and one hour after failure`, async () => {
   const h = createSavedSklandPage();
-  await h.save();
+  await h.save(mode);
   await h.page.refreshSavedSklandAccounts(true);
   assert.strictEqual(h.requests.filter(([type]) => type === 'auth').length, 2);
   assert.strictEqual(h.page.getCurrentAccountState().activeAccountId, 2);
   assert.strictEqual(h.page.getCurrentAccountState().accountsTraining[1]['阿米娅'].level, 80);
   await h.page.refreshSavedSklandAccounts(true);
   const secondPage = createSavedSklandPage(h.sharedStorage);
-  await secondPage.page.unlockSklandVault(passphrase);
+  if (mode === 'encrypted') await secondPage.page.unlockSklandVault(passphrase);
   await secondPage.page.refreshSavedSklandAccounts(true);
   assert.strictEqual(h.requests.length, 4);
   assert.strictEqual(secondPage.requests.length, 0, 'reloads share the persisted throttle');
@@ -119,9 +119,9 @@ test('Skland auto refresh is per-account, waits 24 hours after success and one h
   for (const status of ['expired', 'review']) assert(!h.page.isSklandAccountRefreshDue({ ...entry, status }, now));
 });
 
-test('Skland auto refresh skips hidden pages and disabled preference; manual refresh still works', async () => {
+for (const mode of ['encrypted', 'plaintext']) test(`Skland ${mode} auto refresh skips hidden pages and disabled preference; manual refresh still works`, async () => {
   const h = createSavedSklandPage();
-  await h.save();
+  await h.save(mode);
   h.page.document.visibilityState = 'hidden';
   await h.page.refreshSavedSklandAccounts(true);
   assert.strictEqual(h.requests.length, 0);
@@ -136,10 +136,10 @@ test('Skland auto refresh skips hidden pages and disabled preference; manual ref
   assert.strictEqual(h.toasts.at(-1)[1], 'success');
 });
 
-test('Skland refresh isolates expired and failed accounts and never logs or displays credentials', async () => {
+for (const mode of ['encrypted', 'plaintext']) test(`Skland ${mode} refresh isolates expired and failed accounts and never logs or displays credentials`, async () => {
   for (const expired of [false, true]) {
     const h = createSavedSklandPage();
-    await h.save();
+    await h.save(mode);
     h.page.refreshSklandToken = async credential => {
       h.requests.push(['auth', credential]);
       if (credential.includes('first')) {
@@ -208,9 +208,9 @@ test('Skland auto refresh holds lower and missing training for manual review', a
   }
 });
 
-test('Skland disabling during a request prevents further requests, commits and credential resurrection', async () => {
+for (const mode of ['encrypted', 'plaintext']) test(`Skland ${mode} disabling during a request prevents further requests, commits and credential resurrection`, async () => {
   const h = createSavedSklandPage();
-  await h.save();
+  await h.save(mode);
   const before = h.sharedStorage.get('prts_plus_accounts_data');
   let release;
   h.page.refreshSklandToken = () => new Promise(resolve => { release = resolve; });
@@ -264,9 +264,9 @@ test('Skland scheduler checks on visibility and once per minute only on PRTS hos
   }
 });
 
-test('Skland saved credentials are cleared on account deletion and backup restore', async () => {
+for (const mode of ['encrypted', 'plaintext']) test(`Skland ${mode} saved credentials are cleared on account deletion and backup restore`, async () => {
   const h = createSavedSklandPage();
-  await h.save();
+  await h.save(mode);
   h.page.document.getElementById = () => null;
   await h.page.removeAccount(1);
   assert.strictEqual(h.page.readSklandSyncStore().accounts[1], undefined);
@@ -409,6 +409,154 @@ test('Skland lock during a request prevents the next request and operator commit
   await pending;
   assert.strictEqual(h.requests.length, 0);
   assert.strictEqual(h.sharedStorage.get('prts_plus_accounts_data'), before);
+});
+
+test('Skland encrypted storage is the default for new and existing users; plaintext requires explicit versioned consent', async () => {
+  const h = createSavedSklandPage();
+  assert.strictEqual(h.page.readSklandSyncStore().mode, 'encrypted');
+  await h.save();
+  const original = h.page.readSklandSyncStore();
+  delete original.mode;
+  h.page.writeSklandSyncStore(original);
+  const existing = createSavedSklandPage(h.sharedStorage);
+  assert.strictEqual(existing.page.readSklandSyncStore().mode, 'encrypted');
+  assert(existing.page.isSklandSyncEnabled());
+  assert(!existing.page.canUseSklandSavedCredentials());
+  for (const invalid of [{ mode: 'plaintext' }, { mode: 'plaintext', plaintextConsentVersion: 999 }, { mode: 'unknown' }]) {
+    h.page.writeSklandSyncStore({ consentVersion: 2, autoRefresh: true, accounts: {
+      1: { credential: 'first-test-credential', uid: '111' }
+    }, ...invalid });
+    assert(!h.page.isSklandSyncEnabled());
+    await h.page.refreshSavedSklandAccounts(true);
+    assert.strictEqual(h.requests.length, 0);
+  }
+});
+
+test('Skland explicit plaintext mode works without crypto, persists across pages, stays out of backups and clears on disable', async () => {
+  const h = createSavedSklandPage();
+  h.page.crypto = {};
+  await h.save('plaintext');
+  const store = h.page.readSklandSyncStore();
+  assert.strictEqual(store.mode, 'plaintext');
+  assert.strictEqual(store.plaintextConsentVersion, 1);
+  assert.strictEqual(store.vault, null);
+  assert.strictEqual(store.accounts[1].sealedCredential, undefined);
+  assert.strictEqual(store.accounts[1].credential, 'first-test-credential');
+  assert(h.page.canUseSklandSavedCredentials());
+  assert(!h.page.isSklandVaultUnlocked());
+  await assert.rejects(h.page.unlockSklandVault(passphrase), /口令加密保存/);
+  assert(!/credential|token|prts_plus_skland_sync|plaintextConsentVersion/.test(JSON.stringify(h.page.buildAccountsBackup())));
+  assert(!h.sharedStorage.get('prts_plus_accounts_data').includes('credential'));
+  await assert.rejects(h.page.saveSklandCredentialForAccount({ accountId: 1, uid: '111' }, 'bad\r\ncredential'), /格式/);
+  const reload = createSavedSklandPage(h.sharedStorage);
+  await reload.page.refreshSavedSklandAccounts(true);
+  assert.strictEqual(reload.requests.length, 4);
+  await reload.page.setSklandSyncEnabled(false);
+  assert(!reload.page.canUseSklandSavedCredentials());
+  assert.strictEqual(reload.page.readSklandSyncStore().mode, 'encrypted');
+  assert(!h.sharedStorage.get('prts_plus_skland_sync').includes('credential'));
+  assert.strictEqual(reload.page.getCurrentAccountState().accountsTraining[1]['阿米娅'].level, 80);
+});
+
+test('Skland modes migrate all credentials atomically while preserving roles, timestamps, preferences and operator data', async () => {
+  const h = createSavedSklandPage();
+  await h.save();
+  const source = h.page.readSklandSyncStore();
+  source.autoRefresh = false;
+  source.accounts[1].lastSuccessAt = 123;
+  source.accounts[1].lastAttemptAt = 456;
+  source.accounts[2].status = 'expired';
+  h.page.writeSklandSyncStore(source);
+  const accountState = h.sharedStorage.get('prts_plus_accounts_data');
+  await h.page.setSklandSyncEnabled(true, null, 'plaintext');
+  assert(!h.page.isSklandVaultUnlocked());
+  assert(h.sharedStorage.get('prts_plus_skland_sync').includes('first-test-credential'));
+  await h.page.setSklandSyncEnabled(true, passphrase, 'encrypted');
+  const result = h.page.readSklandSyncStore();
+  assert.strictEqual(result.mode, 'encrypted');
+  assert.strictEqual(result.autoRefresh, false);
+  assert.strictEqual(result.plaintextConsentVersion, undefined);
+  assert.strictEqual(result.accounts[1].lastSuccessAt, 123);
+  assert.strictEqual(result.accounts[1].lastAttemptAt, 456);
+  assert.strictEqual(result.accounts[2].status, 'expired');
+  for (const id of [1, 2]) {
+    assert.strictEqual(result.accounts[id].uid, `${id}11`);
+    assert.strictEqual(result.accounts[id].credential, undefined);
+    assert.strictEqual(await h.page.decryptSklandCredential(id, result.accounts[id]), id === 1 ? 'first-test-credential' : 'second-test-credential');
+  }
+  assert(!h.sharedStorage.get('prts_plus_skland_sync').includes('test-credential'));
+  assert.strictEqual(h.sharedStorage.get('prts_plus_accounts_data'), accountState);
+});
+
+test('Skland mode switching preserves the original store on a locked vault, wrong password, tampering or write failure', async () => {
+  const h = createSavedSklandPage();
+  await h.save();
+  const original = h.sharedStorage.get('prts_plus_skland_sync');
+  h.page.lockSklandVault();
+  await assert.rejects(h.page.setSklandSyncEnabled(true, null, 'plaintext'), /请先解锁/);
+  await assert.rejects(h.page.unlockSklandVault('wrong-test-passphrase'));
+  assert.strictEqual(h.sharedStorage.get('prts_plus_skland_sync'), original);
+  await h.page.unlockSklandVault(passphrase);
+  const tampered = h.page.readSklandSyncStore();
+  tampered.accounts[2].sealedCredential.ciphertext = '00'.repeat(32);
+  h.page.writeSklandSyncStore(tampered);
+  const corrupted = h.sharedStorage.get('prts_plus_skland_sync');
+  await assert.rejects(h.page.setSklandSyncEnabled(true, null, 'plaintext'), /加密数据已损坏/);
+  assert.strictEqual(h.sharedStorage.get('prts_plus_skland_sync'), corrupted, 'no partial plaintext migration');
+  h.sharedStorage.set('prts_plus_skland_sync', original);
+  const write = h.page.GM_setValue;
+  h.page.GM_setValue = () => { throw new Error('storage failed'); };
+  await assert.rejects(h.page.setSklandSyncEnabled(true, null, 'plaintext'), /storage failed/);
+  assert.strictEqual(h.sharedStorage.get('prts_plus_skland_sync'), original);
+  assert(h.page.isSklandVaultUnlocked());
+  h.page.GM_setValue = write;
+  await h.page.setSklandSyncEnabled(true, null, 'plaintext');
+  const plaintext = h.sharedStorage.get('prts_plus_skland_sync');
+  h.page.GM_setValue = () => { throw new Error('storage failed'); };
+  await assert.rejects(h.page.setSklandSyncEnabled(true, passphrase), /storage failed/);
+  assert.strictEqual(h.sharedStorage.get('prts_plus_skland_sync'), plaintext);
+  assert(h.page.canUseSklandSavedCredentials());
+  assert(!h.page.isSklandVaultUnlocked());
+});
+
+test('Skland legacy plaintext stays paused until explicitly choosing a supported mode', async () => {
+  const h = createSavedSklandPage();
+  h.sharedStorage.set('prts_plus_skland_sync', JSON.stringify({ consentVersion: 1, autoRefresh: false, accounts: {
+    1: { credential: 'first-test-credential', uid: '111', lastSuccessAt: 123 }
+  } }));
+  assert.strictEqual(h.page.readSklandSyncStore().mode, 'encrypted');
+  assert(!h.page.canUseSklandSavedCredentials());
+  await h.page.refreshSavedSklandAccounts(true);
+  assert.strictEqual(h.requests.length, 0);
+  await h.page.setSklandSyncEnabled(true, null, 'plaintext');
+  assert(h.page.canUseSklandSavedCredentials());
+  assert.strictEqual(h.page.readSklandSyncStore().accounts[1].lastSuccessAt, 123);
+  assert.strictEqual(h.page.readSklandSyncStore().autoRefresh, false);
+});
+
+test('Skland mode changes during a request stop further requests and operator commits', async () => {
+  for (const mode of ['encrypted', 'plaintext']) {
+    const h = createSavedSklandPage();
+    await h.save(mode);
+    const before = h.sharedStorage.get('prts_plus_accounts_data');
+    let release;
+    h.page.refreshSklandToken = async credential => {
+      if (release) {
+        h.requests.push(['unexpected-auth', credential]);
+        return { token: 'temporary', timestamp: '1' };
+      }
+      return new Promise(resolve => { release = resolve; });
+    };
+    const pending = h.page.refreshSavedSklandAccounts();
+    while (!release) await new Promise(resolve => setImmediate(resolve));
+    await h.page.setSklandSyncEnabled(true, passphrase, mode === 'encrypted' ? 'plaintext' : 'encrypted');
+    const converted = h.sharedStorage.get('prts_plus_skland_sync');
+    release({ token: 'temporary', timestamp: '1' });
+    await pending;
+    assert.strictEqual(h.requests.length, 0);
+    assert.strictEqual(h.sharedStorage.get('prts_plus_accounts_data'), before);
+    assert.strictEqual(h.sharedStorage.get('prts_plus_skland_sync'), converted);
+  }
 });
 
 test('Skland transport only uses the userscript channel and never exposes raw errors', async () => {

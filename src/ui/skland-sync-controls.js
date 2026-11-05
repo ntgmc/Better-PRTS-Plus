@@ -32,7 +32,7 @@
         form.appendChild(hint);
         const pending = showPrtsModal({
             title: create ? '设置凭据加密口令' : '解锁森空岛凭据', message: form,
-            confirmText: create ? '设置口令并开启' : '解锁当前页面', cancelText: '取消'
+            confirmText: create ? '设置口令并保存' : '解锁当前页面', cancelText: '取消'
         });
         const confirm = document.querySelector('#prts-modal .primary');
         const validate = () => {
@@ -62,13 +62,53 @@
         refreshSklandSyncControls();
     }
 
-    function createSklandSyncControls() {
+    async function handleSklandStorageMode(mode) {
+        const plaintext = mode === 'plaintext';
+        const confirmed = await showPrtsConfirm({
+            title: plaintext ? '免口令保存凭据：更高风险' : '保存森空岛登录凭据的风险',
+            message: [
+                '登录凭据（cred，也常被称为 token）能用来访问你的森空岛账号。凭据泄露后，别人可能读取你的账号和游戏资料，或执行这份凭据允许的其他操作。',
+                plaintext
+                    ? '免口令模式会把凭据以明文保存在油猴脚本存储中，刷新或新开页面都不用解锁。如果有人读取了脚本存储、油猴备份或同步数据，就可能直接拿到并使用凭据，风险比口令加密更高。请勿在共用或不可信的设备上使用。即使以后切回加密模式，旧备份中的明文也不会被清除。'
+                    : '凭据会用独立口令加密，再存入油猴脚本存储。脚本不会保存口令或解密密钥，每次打开页面都需解锁一次；已有明文凭据会在设置口令后一起加密。加密无法防止凭据在解锁期间被窃取，也无法防范被入侵的设备或恶意扩展；弱口令仍可能被破解。请勿在共用或不可信的设备上开启。',
+                '凭据不会写入本项目的配置备份，也不会上传到本项目服务器。脚本只用它向森空岛官方接口读取角色、干员和练度。',
+                `首次开启本功能时，默认也会开启自动刷新，你可以单独关闭。每个账号每 24 小时最多自动刷新一次，只在 PRTS Plus 页面可见${plaintext ? '' : '且已解锁'}时运行，也可手动刷新。脚本通过非官方方式接入，接口或平台规则变化可能让功能失效，也可能遇到访问限制或账号异常。`,
+                '切换保存方式会保留账号关联和刷新时间。关闭功能会清除脚本保存的全部凭据，停止后续刷新，但会保留已导入的干员数据。清除本地凭据不会撤销登录。如果怀疑凭据泄露，请通过森空岛官方渠道处理账号安全问题。'
+            ].join('\n\n'),
+            acknowledgement: plaintext
+                ? '我理解明文保存的更高风险，同意免口令保存登录凭据。'
+                : '我已阅读并理解上述风险，同意在此浏览器加密保存登录凭据。',
+            confirmText: plaintext ? '同意风险并免口令保存' : '同意风险并继续', cancelText: '取消', tone: 'danger'
+        });
+        if (!confirmed) return;
+        try {
+            const store = readSklandSyncStore();
+            if (isSklandSyncEnabled(store) && !canUseSklandSavedCredentials(store)) {
+                await handleSklandVaultUnlock();
+                if (!canUseSklandSavedCredentials()) return;
+            }
+            if (!plaintext) requireSklandWebCrypto();
+            const passphrase = plaintext ? null : await requestSklandVaultPassphrase(true);
+            if (!plaintext && passphrase === null) return;
+            await setSklandSyncEnabled(true, passphrase, mode);
+        } catch (_error) {
+            showPrtsToast('设置未保存', 'error', '无法转换凭据或写入脚本存储，原设置已保留。请检查口令、浏览器加密支持及扩展权限后重试。');
+        } finally {
+            refreshSklandSyncControls();
+        }
+    }
+
+    let sklandSyncControlsCount = 0;
+
+    function createSklandSyncControls({ showHeading = true } = {}) {
         const section = document.createElement('section');
         section.className = 'prts-skland-sync';
         section.setAttribute('aria-label', '森空岛快捷刷新');
-        const heading = document.createElement('h3');
-        heading.textContent = '森空岛快捷刷新';
-        section.appendChild(heading);
+        if (showHeading) {
+            const heading = document.createElement('h3');
+            heading.textContent = '森空岛快捷刷新';
+            section.appendChild(heading);
+        }
 
         const toggleLabel = document.createElement('label');
         toggleLabel.className = 'prts-skland-sync-option';
@@ -83,6 +123,32 @@
         hint.textContent = '开启后，逐个登录森空岛并读取导入一次，即可在这里刷新全部已保存账号。关闭会清除全部凭据。';
         section.appendChild(hint);
 
+        const modes = document.createElement('fieldset');
+        modes.className = 'prts-skland-sync-modes';
+        const legend = document.createElement('legend');
+        legend.textContent = '凭据保存方式';
+        modes.appendChild(legend);
+        const modeName = `prts-skland-storage-mode-${++sklandSyncControlsCount}`;
+        for (const [value, text] of [['encrypted', '口令加密（默认）'], ['plaintext', '免口令保存（高风险）']]) {
+            const label = document.createElement('label');
+            label.className = 'prts-skland-sync-option';
+            const radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = modeName;
+            radio.value = value;
+            radio.className = 'prts-skland-sync-mode';
+            radio.checked = value === 'encrypted';
+            radio.onchange = async () => {
+                if (!radio.checked || !isSklandSyncEnabled()) return;
+                refreshSklandSyncControls();
+                await handleSklandStorageMode(value);
+            };
+            label.appendChild(radio);
+            label.appendChild(document.createTextNode(text));
+            modes.appendChild(label);
+        }
+        section.appendChild(modes);
+
         const autoLabel = document.createElement('label');
         autoLabel.className = 'prts-skland-sync-option';
         const auto = document.createElement('input');
@@ -92,8 +158,7 @@
         autoLabel.appendChild(document.createTextNode('自动刷新（每 24 小时）'));
         section.appendChild(autoLabel);
         const autoHint = document.createElement('p');
-        autoHint.className = 'prts-skland-sync-hint';
-        autoHint.textContent = '仅在当前页面已解锁且 PRTS Plus 页面可见时检查，到期才刷新；失败后至少间隔 1 小时重试。';
+        autoHint.className = 'prts-skland-sync-hint prts-skland-sync-auto-hint';
         section.appendChild(autoHint);
 
         const vaultStatus = document.createElement('p');
@@ -107,8 +172,8 @@
         vaultAction.classList.add('prts-skland-vault-action');
         section.appendChild(vaultAction);
         const refresh = createPrtsButton({ text: '刷新全部已保存账号', icon: 'reload', onClick: async () => {
-            if (!isSklandVaultUnlocked()) await handleSklandVaultUnlock();
-            if (!isSklandVaultUnlocked()) return;
+            if (!canUseSklandSavedCredentials()) await handleSklandVaultUnlock();
+            if (!canUseSklandSavedCredentials()) return;
             try { await refreshSavedSklandAccounts(); }
             catch (_error) { showPrtsToast('森空岛刷新未完成', 'error', '无法保存刷新状态，请检查脚本存储后重试。'); }
         } });
@@ -122,31 +187,15 @@
 
         toggle.onchange = async () => {
             const enabled = toggle.checked;
-            toggle.checked = isSklandSyncEnabled();
+            const mode = section.querySelector('.prts-skland-sync-mode:checked').value;
+            refreshSklandSyncControls();
             if (enabled) {
-                const confirmed = await showPrtsConfirm({
-                    title: '保存森空岛登录凭据的风险',
-                    message: [
-                        '登录凭据（cred，常称 token）可用于访问你的森空岛账号。泄露后，他人可能读取账号和游戏资料，或执行该凭据权限内的其他操作。',
-                        '凭据使用独立口令加密后保存在油猴脚本存储中，口令和解密密钥不落盘，不进入本项目配置备份或上传至本项目服务器。每次打开页面需解锁一次；旧版明文凭据会在设置口令后加密迁移。加密不能保护正在解锁的页面、被入侵的设备或恶意扩展，弱口令也可能被破解。请勿在共用或不可信设备上开启。',
-                        '脚本使用保存的凭据向森空岛官方接口读取角色、干员和练度。开启本功能后默认启用自动刷新，可单独关闭。每个账号最多每 24 小时自动刷新一次，仅在当前页面已解锁且 PRTS Plus 页面可见时运行；也可随时手动刷新。非官方接入可能因接口或平台规则变化而失效，并存在访问限制或账号异常的风险。',
-                        '关闭此功能会清除脚本保存的全部凭据并停止后续刷新，已导入的干员数据会保留。清除本地凭据不等于撤销登录；如怀疑泄露，请通过森空岛官方渠道处理账号安全。'
-                    ].join('\n\n'),
-                    acknowledgement: '我已阅读并理解上述风险，同意在此浏览器保存登录凭据。',
-                    confirmText: '同意风险并开启', cancelText: '暂不开启', tone: 'danger'
-                });
-                if (!confirmed) return;
+                await handleSklandStorageMode(mode);
+                return;
             }
-            try {
-                if (enabled) requireSklandWebCrypto();
-                const passphrase = enabled ? await requestSklandVaultPassphrase(true) : null;
-                if (enabled && passphrase === null) return;
-                await setSklandSyncEnabled(enabled, passphrase);
-                refreshSklandSyncControls();
-            } catch (_error) {
-                showPrtsToast('设置未保存', 'error', '无法启用加密或写入脚本存储，请检查浏览器支持及扩展权限后重试。');
-                refreshSklandSyncControls();
-            }
+            try { await setSklandSyncEnabled(false); }
+            catch (_error) { showPrtsToast('设置未保存', 'error', '无法写入脚本存储，请重试。'); }
+            refreshSklandSyncControls();
         };
         auto.onchange = () => {
             try {
@@ -169,13 +218,21 @@
         document.querySelectorAll('.prts-skland-sync').forEach(section => {
             const toggle = section.querySelector('.prts-skland-sync-enabled');
             toggle.checked = enabled;
+            section.querySelectorAll('.prts-skland-sync-mode').forEach(radio => {
+                radio.checked = radio.value === store.mode;
+                radio.disabled = sklandSyncRunning;
+            });
+            section.querySelector('.prts-skland-sync-auto-hint').textContent = store.mode === 'plaintext'
+                ? '仅在 PRTS Plus 页面可见时检查，无需解锁；到期才刷新，失败后至少间隔 1 小时重试。'
+                : '仅在当前页面已解锁且 PRTS Plus 页面可见时检查，到期才刷新；失败后至少间隔 1 小时重试。';
             const vaultStatus = section.querySelector('.prts-skland-vault-status');
             vaultStatus.textContent = store.consentVersion === 1
-                ? '旧版凭据尚未加密，已暂停刷新。请开启并设置加密口令以迁移，或移除旧凭据。'
-                : enabled ? unlocked ? '凭据已加密 · 当前页面已解锁' : '凭据已加密 · 已锁定，自动刷新暂停'
-                    : '口令和解密密钥不会保存到浏览器。';
+                ? '旧版凭据已暂停刷新。请阅读风险告示并选择保存方式以继续，或移除旧凭据。'
+                : enabled ? store.mode === 'plaintext' ? '凭据以明文保存 · 无需解锁，风险较高'
+                    : unlocked ? '凭据已加密 · 当前页面已解锁' : '凭据已加密 · 已锁定，自动刷新暂停'
+                    : '默认使用口令加密。免口令模式会明文保存凭据，风险更高，需另外阅读告示并同意。';
             const vaultAction = section.querySelector('.prts-skland-vault-action');
-            vaultAction.hidden = !enabled;
+            vaultAction.hidden = !enabled || store.mode === 'plaintext';
             vaultAction.querySelector('.bp4-button-text').textContent = unlocked ? '立即锁定' : '解锁凭据';
             const auto = section.querySelector('.prts-skland-sync-auto');
             auto.checked = store.autoRefresh;

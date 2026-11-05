@@ -942,7 +942,7 @@ test('unified settings migrate legacy values, validate types and prefer saved in
 
 function createTestElement(tagName = 'div', text = '') {
   const node = {
-    nodeType: 1, tagName: tagName.toUpperCase(), children: [], dataset: {}, style: {}, className: '',
+    nodeType: 1, tagName: tagName.toUpperCase(), children: [], dataset: {}, style: { setProperty(key, value) { this[key] = value; } }, className: '',
     attributes: new Map(), parentElement: null,
     get parentNode() { return this.parentElement; },
     get firstChild() { return this.children[0] || null; },
@@ -1532,6 +1532,13 @@ test('settings categories preserve controls and state while switching and collap
     assert.strictEqual(actions.at(-1), expected);
   }
   assert.strictEqual(all(categoryPanels[2]).filter(node => node.className === 'prts-acc-btn').length, 3);
+  const syncPanel = document.getElementById('prts-skland-sync-panel');
+  const syncEntry = document.getElementById('prts-settings-skland-sync-button');
+  assert.strictEqual(syncEntry.parentElement, categoryPanels[2].lastChild);
+  assert.strictEqual(syncPanel.parentElement, ball.parentElement);
+  assert.strictEqual(syncPanel.dataset.parentPanelId, categoryPanels[2].id);
+  assert.strictEqual(syncPanel.style['--prts-submenu-depth'], 2);
+  assert(syncPanel.inert);
   assert(!main.textContent.includes('脚本更新'));
   assert(!main.textContent.includes('检查脚本更新'));
   assert(about.textContent.includes('7.8.9-beta.1'));
@@ -1589,6 +1596,34 @@ test('settings categories preserve controls and state while switching and collap
     assert.strictEqual(button.attributes.get('aria-expanded'), 'true');
     assert(categoryPanels.filter((_, i) => i !== index).every(node => node.inert));
   }
+  categoryButtons[2]._prtsClickHandler();
+  categoryPanels[2].lastChild.scrollTop = 73;
+  syncEntry._prtsClickHandler();
+  const syncClose = all(syncPanel).find(node => node.attributes.get('aria-label') === '收起森空岛快捷刷新');
+  assert(!syncPanel.inert && !categoryPanels[2].inert);
+  assert.strictEqual(document.activeElement, syncClose);
+  assert.strictEqual(syncEntry.attributes.get('aria-expanded'), 'true');
+  escape();
+  assert(syncPanel.inert && !categoryPanels[2].inert);
+  assert.strictEqual(document.activeElement, syncEntry);
+  assert.strictEqual(categoryPanels[2].lastChild.scrollTop, 73);
+  syncEntry._prtsClickHandler();
+  syncClose._prtsClickHandler();
+  assert(syncPanel.inert && !categoryPanels[2].inert);
+  assert.strictEqual(document.activeElement, syncEntry);
+  syncEntry._prtsClickHandler();
+  categoryPanels[2].onclick({ target: body, stopPropagation() {} });
+  assert(syncPanel.inert && !categoryPanels[2].inert, 'using the accounts parent closes its child');
+  syncEntry._prtsClickHandler();
+  entry._prtsClickHandler();
+  assert(syncPanel.inert && categoryPanels[2].inert && !about.inert, 'switching categories closes the whole previous branch');
+  categoryButtons[2]._prtsClickHandler();
+  syncEntry._prtsClickHandler();
+  listeners.get('click')({ target: body });
+  assert(syncPanel.inert && categoryPanels[2].inert);
+  ball.onclick({ stopPropagation() {}, detail: 0 });
+  assert(syncPanel.inert && categoryPanels[2].inert);
+  categoryButtons[4]._prtsClickHandler();
   const heading = all(body).find(node => node.className === 'prts-settings-heading');
   heading.events.get('click')({ shiftKey: true, preventDefault() {}, stopPropagation() {} });
   assert.strictEqual(categoryButtons[4].hidden, false);
@@ -2257,20 +2292,30 @@ test('floating layout cascades both edges and keeps parent and child within the 
     get offsetHeight() { return Math.min(560, parseFloat(this.style['--prts-panel-max-height'])); }
   };
   const about = {
+    classList: createTestElement().classList,
     dataset: { triggerId: 'prts-settings-about-button' },
     style: { setProperty(key, value) { this[key] = value; } },
     get offsetWidth() { return Math.min(340, parseFloat(this.style['--prts-submenu-width'])); },
     get offsetHeight() { return Math.min(600, parseFloat(this.style.maxHeight)); }
   };
-  container.querySelectorAll = () => [about];
-  const entry = { getBoundingClientRect: () => ({ top: parseFloat(container.style.top) + parseFloat(panel.style.top) + panel.offsetHeight - 60 }) };
+  const syncPanel = {
+    ...about, classList: createTestElement().classList,
+    dataset: { triggerId: 'prts-settings-skland-sync-button', parentPanelId: 'prts-about-panel' },
+    style: { setProperty(key, value) { this[key] = value; } },
+    get offsetWidth() { return Math.min(340, parseFloat(this.style['--prts-submenu-width'])); },
+    get offsetHeight() { return Math.min(600, parseFloat(this.style.maxHeight)); }
+  };
+  container.querySelectorAll = () => [about, syncPanel];
+  const entry = { classList: createTestElement().classList, getBoundingClientRect: () => ({ top: parseFloat(container.style.top) + parseFloat(panel.style.top) + panel.offsetHeight - 60 }) };
+  const syncEntry = { classList: createTestElement().classList, getBoundingClientRect: () => ({ top: parseFloat(container.style.top) + parseFloat(about.style.top) + about.offsetHeight - 60 }) };
   page.document = { getElementById: id => ({
     'prts-float-container': container, 'prts-settings-panel': panel,
-    'prts-about-panel': about, 'prts-settings-about-button': entry
+    'prts-about-panel': about, 'prts-settings-about-button': entry,
+    'prts-settings-skland-sync-button': syncEntry
   })[id] };
   for (const [width, height, offsetLeft, offsetTop] of [
     [320, 568, 0, 0], [375, 667, 0, 0], [414, 896, 0, 0],
-    [768, 1024, 0, 0], [667, 375, 0, 0], [192, 340, 80, 120], [160, 284, 0, 0], [333, 187, 0, 0]
+    [768, 1024, 0, 0], [1440, 1000, 0, 0], [667, 375, 0, 0], [192, 340, 80, 120], [160, 284, 0, 0], [333, 187, 0, 0]
   ]) {
     page.window.innerWidth = 1280;
     page.window.innerHeight = 900;
@@ -2299,6 +2344,16 @@ test('floating layout cascades both edges and keeps parent and child within the 
         } else {
           assert.strictEqual(about.offsetWidth, panel.offsetWidth - 24);
           assert.strictEqual(isRight ? panelLeft + panel.offsetWidth - aboutLeft - about.offsetWidth : aboutLeft - panelLeft, 24);
+        }
+        const syncLeft = ballLeft + parseFloat(syncPanel.style.left);
+        const syncTop = ballTop + parseFloat(syncPanel.style.top);
+        assert(syncLeft >= offsetLeft + 12 && syncLeft + syncPanel.offsetWidth <= offsetLeft + width - 12);
+        assert(syncTop >= offsetTop + 12 && syncTop + syncPanel.offsetHeight <= offsetTop + height - 12);
+        if (width >= 1440) {
+          assert(isRight ? syncLeft + syncPanel.offsetWidth + 8 <= aboutLeft : syncLeft >= aboutLeft + about.offsetWidth + 8);
+        } else if (width < 768) {
+          assert.strictEqual(syncPanel.offsetWidth, about.offsetWidth - 24);
+          assert.strictEqual(isRight ? aboutLeft + about.offsetWidth - syncLeft - syncPanel.offsetWidth : syncLeft - aboutLeft, 24);
         }
         assert.strictEqual(container.classList.contains('prts-submenu-left'), isRight);
         assert.strictEqual(parseFloat(panel.style['--prts-panel-width']), width - 24);

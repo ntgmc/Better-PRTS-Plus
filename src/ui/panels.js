@@ -36,9 +36,11 @@
 
         container.classList.toggle('prts-submenu-left', savedPos.isRight);
         container.querySelectorAll('.prts-submenu-panel').forEach(submenu => {
-            const roomLeft = panelLeft - left - 12;
-            const roomRight = left + width - 12 - panelLeft - panel.offsetWidth;
-            let opensLeft = savedPos.isRight;
+            const parent = document.getElementById(submenu.dataset.parentPanelId) || panel;
+            const parentLeft = ballLeft + parseFloat(parent.style.left);
+            const roomLeft = parentLeft - left - 12;
+            const roomRight = left + width - 12 - parentLeft - parent.offsetWidth;
+            let opensLeft = parent === panel ? savedPos.isRight : parent.classList.contains('prts-submenu-left');
             submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, width - 48)}px`);
             submenu.style.maxHeight = `${Math.max(0, height - 24)}px`;
             const fitsLeft = roomLeft >= submenu.offsetWidth + 8;
@@ -46,17 +48,18 @@
             if (opensLeft ? !fitsLeft && fitsRight : !fitsRight && fitsLeft) opensLeft = !opensLeft;
             let submenuLeft;
             if (fitsLeft || fitsRight) {
-                submenuLeft = opensLeft ? panelLeft - submenu.offsetWidth - 8 : panelLeft + panel.offsetWidth + 8;
+                submenuLeft = opensLeft ? parentLeft - submenu.offsetWidth - 8 : parentLeft + parent.offsetWidth + 8;
             } else {
                 // 窄屏保留上一级的 24px 边缘，仍按同一方向逐层展开。
-                submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, panel.offsetWidth - 24)}px`);
-                submenuLeft = opensLeft ? panelLeft + panel.offsetWidth - submenu.offsetWidth - 24 : panelLeft + 24;
+                submenu.style.setProperty('--prts-submenu-width', `${Math.max(0, parent.offsetWidth - 24)}px`);
+                submenuLeft = opensLeft ? parentLeft + parent.offsetWidth - submenu.offsetWidth - 24 : parentLeft + 24;
             }
             const entryTop = document.getElementById(submenu.dataset.triggerId).getBoundingClientRect().top;
             const submenuTop = Math.max(top + 12, Math.min(entryTop, top + height - submenu.offsetHeight - 12));
             submenu.style.left = `${submenuLeft - ballLeft}px`;
             submenu.style.top = `${submenuTop - ballTop}px`;
-            container.classList.toggle('prts-submenu-left', opensLeft);
+            submenu.classList.toggle('prts-submenu-left', opensLeft);
+            document.getElementById(submenu.dataset.triggerId).classList.toggle('prts-submenu-left', opensLeft);
         });
     }
 
@@ -145,26 +148,28 @@
         let activeSubmenu = null;
         const setSubmenuOpen = (next, restoreFocus = true) => {
             const previous = activeSubmenu;
-            if (previous) {
-                previous.panel.classList.remove('is-open');
-                previous.panel.inert = true;
-                previous.panel.setAttribute('aria-hidden', 'true');
-                previous.button.setAttribute('aria-expanded', 'false');
-            }
+            const path = [];
+            for (let submenu = next; submenu; submenu = submenu.parent) path.push(submenu);
+            submenus.forEach(submenu => {
+                const open = path.includes(submenu);
+                submenu.panel.classList.toggle('is-open', open);
+                submenu.panel.inert = !open;
+                submenu.panel.setAttribute('aria-hidden', String(!open));
+                submenu.button.setAttribute('aria-expanded', String(open));
+            });
             activeSubmenu = next;
-            if (next) {
-                next.panel.inert = false;
-                next.panel.setAttribute('aria-hidden', 'false');
-                next.button.setAttribute('aria-expanded', 'true');
-                updateFloatingLayout();
-                next.panel.classList.add('is-open');
-                next.close.focus({ preventScroll: true });
-            } else if (restoreFocus && previous) previous.button.focus({ preventScroll: true });
+            if (next) updateFloatingLayout();
+            if (restoreFocus) {
+                const focus = previous?.parent === next ? previous.button : next?.close || previous?.button;
+                focus?.focus({ preventScroll: true });
+            }
         };
-        const createSubmenu = (id, label, icon) => {
+        const createSubmenu = (id, label, icon, parent = null) => {
             const submenuPanel = document.createElement('div');
             submenuPanel.id = `prts-${id}-panel`;
             submenuPanel.className = 'prts-submenu-panel';
+            submenuPanel.dataset.parentPanelId = parent ? parent.panel.id : panel.id;
+            submenuPanel.style.setProperty('--prts-submenu-depth', parent ? 2 : 1);
             submenuPanel.inert = true;
             submenuPanel.setAttribute('aria-hidden', 'true');
             submenuPanel.setAttribute('role', 'region');
@@ -178,7 +183,7 @@
             head.appendChild(heading);
             const close = createPrtsButton({
                 className: 'prts-btn prts-submenu-close', icon: 'collapsePanel', ariaLabel: `收起${label}`,
-                onClick: () => setSubmenuOpen(null)
+                onClick: () => setSubmenuOpen(parent)
             });
             head.appendChild(close);
             submenuPanel.appendChild(head);
@@ -188,15 +193,18 @@
             const button = createPrtsButton({
                 id: `prts-settings-${id}-button`, className: 'prts-btn prts-submenu-button',
                 icon, text: label, ariaControls: submenuPanel.id, expanded: false,
-                onClick: () => setSubmenuOpen(activeSubmenu === submenu ? null : submenu)
+                onClick: () => setSubmenuOpen(submenuPanel.classList.contains('is-open') ? parent : submenu)
             });
             const arrow = createPrtsIcon('expandSubmenu');
             arrow.classList.add('prts-submenu-arrow');
             button.appendChild(arrow);
-            content.appendChild(button);
+            (parent ? parent.body : content).appendChild(button);
             submenuPanel.dataset.triggerId = button.id;
-            submenuPanel.onclick = event => event.stopPropagation();
-            const submenu = { panel: submenuPanel, body, button, close };
+            submenuPanel.onclick = event => {
+                event.stopPropagation();
+                if (!event.target.closest?.('.prts-submenu-button') && activeSubmenu?.parent === submenu) setSubmenuOpen(submenu, false);
+            };
+            const submenu = { panel: submenuPanel, body, button, close, parent };
             submenus.push(submenu);
             return submenu;
         };
@@ -372,7 +380,8 @@
 
         const sklandBtn = createPrtsButton({ className: 'prts-btn prts-account-import', icon: 'skland', text: '森空岛导入', onClick: handleOpenSklandImport });
         accounts.body.appendChild(sklandBtn);
-        accounts.body.appendChild(createSklandSyncControls());
+        const sklandSync = createSubmenu('skland-sync', '森空岛快捷刷新', 'reload', accounts);
+        sklandSync.body.appendChild(createSklandSyncControls({ showHeading: false }));
 
         const backupActions = document.createElement('div');
         backupActions.className = 'prts-panel-actions';
@@ -397,7 +406,10 @@
         window.visualViewport?.addEventListener('scroll', updateFloatingLayout);
         const panelObserver = new ResizeObserver(updateFloatingLayout);
         panelObserver.observe(panel);
-        submenus.forEach(submenu => panelObserver.observe(submenu.panel));
+        submenus.forEach(submenu => {
+            panelObserver.observe(submenu.panel);
+            submenu.body.addEventListener('scroll', updateFloatingLayout);
+        });
         content.addEventListener('scroll', updateFloatingLayout);
 
         let isDragging = false;
@@ -497,7 +509,7 @@
             if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
                 document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) return;
             event.preventDefault();
-            if (activeSubmenu) setSubmenuOpen(null);
+            if (activeSubmenu) setSubmenuOpen(activeSubmenu.parent);
             else {
                 setFloatOpen(false);
                 btn.focus({ preventScroll: true });
