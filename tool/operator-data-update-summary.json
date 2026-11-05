@@ -1,31 +1,39 @@
 {
-    "source":  "https://raw.githubusercontent.com/ZOOT-Plus/zoot-plus-frontend/refs/heads/dev/src/models/generated/operators.json",
-    "sourceKind":  "url",
-    "generatedAtUtc":  "2026-10-11T15:13:50.7604680Z",
-    "previousCount":  429,
-    "newCount":  432,
-    "delta":  3,
-    "addedCount":  3,
-    "removedCount":  0,
-    "renamedCount":  0,
-    "added":  [
-                  {
-                      "id":  "char_393_toledo",
-                      "name":  "德·托莱多"
-                  },
-                  {
-                      "id":  "char_4231_clemnt",
-                      "name":  "克莱门莎"
-                  },
-                  {
-                      "id":  "char_4232_hbound",
-                      "name":  "旅骨"
-                  }
-              ],
-    "removed":  [
-
-                ],
-    "renamed":  [
-
-                ]
+  "source": "https://raw.githubusercontent.com/ZOOT-Plus/zoot-plus-frontend/c3fa617ff7852f08aa258706c1bca3ba76dfa602/src/models/generated/operators.json",
+  "sourceKind": "url",
+  "generatedAtUtc": "2026-11-05T10:44:26.0025685Z",
+  "previousCount": 432,
+  "newCount": 438,
+  "delta": 6,
+  "addedCount": 6,
+  "removedCount": 0,
+  "renamedCount": 0,
+  "added": [
+    {
+      "id": "char_4169_caledo",
+      "name": "镜匠"
+    },
+    {
+      "id": "char_4170_hdbell",
+      "name": "行铃"
+    },
+    {
+      "id": "char_4244_tocka",
+      "name": "冻河"
+    },
+    {
+      "id": "char_4245_alga",
+      "name": "奥尔佳"
+    },
+    {
+      "id": "char_4246_dminon",
+      "name": "国度"
+    },
+    {
+      "id": "char_4247_oxi",
+      "name": "塔露拉"
+    }
+  ],
+  "removed": [],
+  "renamed": []
 }
