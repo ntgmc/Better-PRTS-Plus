@@ -1228,6 +1228,54 @@
     .prts-sidebar-hidden-layout > div:nth-child(2) {
         display: none !important;
     }
+    .prts-sidebar-hidden-layout.prts-profile-compact-layout {
+        flex-direction: column !important;
+        gap: 16px;
+    }
+    .prts-profile-compact-layout > div:first-child {
+        order: 2 !important;
+        min-width: 0;
+    }
+    .prts-sidebar-hidden-layout.prts-profile-compact-layout > div:nth-child(2) {
+        display: block !important;
+        order: 1 !important;
+        width: 100% !important;
+        min-width: 0;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div {
+        position: static !important;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div > :is(.bp4-card, .bp6-card) {
+        min-width: 0;
+        margin: 0 !important;
+        padding: 12px 16px !important;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div > :first-child {
+        flex: 1 1 260px;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px 16px;
+        overflow-wrap: anywhere;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div > :first-child > * {
+        min-width: 0;
+        margin: 0 !important;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div > :first-child > :is(.bp4-fill, .bp6-fill) {
+        width: auto;
+        flex: 0 0 auto;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div > :first-child :is(.bp4-heading, .bp6-heading) {
+        margin: 0;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div > :nth-child(2) {
+        flex: 0 1 320px;
+    }
 `;
 
     const accountSelectStyles = `

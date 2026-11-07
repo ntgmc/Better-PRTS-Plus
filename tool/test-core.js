@@ -1733,6 +1733,67 @@ test('site redesign defaults off, persists and restores immediately without touc
   assert.strictEqual(body.className, 'dark bp6-dark');
 });
 
+test('sidebar collapse preserves profile nodes, follows routes and restores from saved preferences and backups', () => {
+  const saved = new Map();
+  const layout = createTestElement();
+  layout.className = 'flex flex-col md:flex-row';
+  const content = layout.appendChild(createTestElement());
+  const sidebar = layout.appendChild(createTestElement());
+  const createPage = () => {
+    const page = vm.createContext({
+      ...context,
+      document: { querySelector: () => ({ firstElementChild: layout }) },
+      window: { ...context.window, BetterPRTSPlusDebug: {}, location: { ...context.window.location, pathname: '/profile/7661' } },
+      GM_getValue: (key, fallback) => saved.has(key) ? saved.get(key) : fallback,
+      GM_setValue: (key, value) => saved.set(key, value)
+    });
+    page.globalThis = page;
+    vm.runInContext(source + fs.readFileSync(path.join(repoRoot, 'src/ui/filter-controls.js'), 'utf8'), page);
+    return page;
+  };
+  const page = createPage();
+  const config = page.__testExports.CONFIG;
+  assert.strictEqual(config.hideSidebar, false);
+  page.applySidebarCollapse();
+  assert.strictEqual(layout.className, 'flex flex-col md:flex-row');
+  config.hideSidebar = true;
+  page.saveConfig();
+  const backup = page.buildAccountsBackup();
+  for (const pathname of ['/profile/7661', '/profile/7661/']) {
+    page.window.location.pathname = pathname;
+    page.applySidebarCollapse();
+    assert(layout.classList.contains('prts-sidebar-hidden-layout'));
+    assert(layout.classList.contains('prts-profile-compact-layout'));
+    assert.deepStrictEqual(layout.children, [content, sidebar], 'the original controls remain in their React parent');
+  }
+  for (const pathname of ['/', '/profile/7661/edit', '/set/1']) {
+    page.window.location.pathname = pathname;
+    page.applySidebarCollapse();
+    assert(layout.classList.contains('prts-sidebar-hidden-layout'));
+    assert(!layout.classList.contains('prts-profile-compact-layout'));
+  }
+  for (const pathname of ['/create', '/editor']) {
+    page.window.location.pathname = pathname;
+    page.applySidebarCollapse();
+    assert.strictEqual(layout.className, 'flex flex-col md:flex-row');
+  }
+  const reopened = createPage();
+  reopened.applySidebarCollapse();
+  assert(layout.classList.contains('prts-profile-compact-layout'));
+  config.hideSidebar = false;
+  page.saveConfig();
+  page.applySidebarCollapse();
+  assert.strictEqual(layout.className, 'flex flex-col md:flex-row');
+  assert.strictEqual(createPage().__testExports.CONFIG.hideSidebar, false);
+  const restored = createPage();
+  restored.document = { querySelector: () => ({ firstElementChild: layout }), querySelectorAll: () => [] };
+  restored.refreshAccountStateUi = () => {};
+  restored.refreshSklandSyncControls = () => {};
+  restored.syncPageScaffold = restored.applySidebarCollapse;
+  restored.applyAccountsBackup(backup);
+  assert(layout.classList.contains('prts-profile-compact-layout'));
+});
+
 test('both host branches inject icon, toast layout, state and reduced-motion styles', () => {
   for (const skland of [false, true]) {
     let css = '';

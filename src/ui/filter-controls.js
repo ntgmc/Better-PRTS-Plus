@@ -28,16 +28,13 @@
     }
 
     function applySidebarCollapse() {
-        if (isFilterDisabledPage()) return;
         const wrapper = document.querySelector('.docs-content-wrapper');
         if (!wrapper) return;
         const layoutContainer = wrapper.firstElementChild;
         if (layoutContainer && layoutContainer.classList.contains('flex')) {
-            if (CONFIG.hideSidebar) {
-                layoutContainer.classList.add('prts-sidebar-hidden-layout');
-            } else {
-                layoutContainer.classList.remove('prts-sidebar-hidden-layout');
-            }
+            const collapsed = CONFIG.hideSidebar && !isFilterDisabledPage();
+            layoutContainer.classList.toggle('prts-sidebar-hidden-layout', collapsed);
+            layoutContainer.classList.toggle('prts-profile-compact-layout', collapsed && /^\/profile\/\d+\/?$/.test(window.location.pathname));
         }
     }
 

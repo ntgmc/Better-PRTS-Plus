@@ -31,8 +31,8 @@ async function main() {
           prts_plus_settings: JSON.stringify({ siteRedesign: true, activityShortcuts: false }),
           prts_plus_resources_v1: JSON.stringify({ checkedAt: Date.now(), data: resources }),
         };
-        window.GM_getValue = (key, fallback) => store[key] ?? fallback;
-        window.GM_setValue = (key, value) => { store[key] = value; };
+        window.GM_getValue = (key, fallback) => sessionStorage.getItem(key) ?? store[key] ?? fallback;
+        window.GM_setValue = (key, value) => { sessionStorage.setItem(key, value); };
         window.GM_addStyle = css => {
           const style = document.createElement('style');
           style.textContent = css;
@@ -54,6 +54,11 @@ async function main() {
         return (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !publicSetQuery) || /googletagmanager|google-analytics/.test(request.url())
           ? route.abort() : route.continue();
       });
+      if (process.env.PRTS_REVIEW_SCOPE === 'sidebar') {
+        await checkProfileSidebar(page, theme);
+        await context.close();
+        continue;
+      }
       console.log(`${theme}: index and original visual styles`);
       await page.goto('https://prts.plus/', { waitUntil: 'domcontentloaded' });
       await page.waitForSelector('ul.grid > li .bp6-card');
@@ -106,6 +111,7 @@ async function main() {
       await page.keyboard.press('Escape');
       await page.keyboard.press('Escape');
       report.interactions.push(`${theme}: search, tabs, import cancellation, settings, accounts and immediate layout toggle`);
+      await checkProfileSidebar(page, theme);
       await context.close();
     }
     assert.deepEqual(report.errors, [], 'no browser runtime errors');
@@ -118,6 +124,126 @@ async function main() {
     await browser.close();
     console.log(`Layout review: ${report.layouts.length} layouts, ${report.visuals.length} visual comparisons. Evidence: ${output}`);
   }
+}
+
+async function checkProfileSidebar(page, theme) {
+  console.log(`${theme}: compact profile and original follow controls`);
+  const profileUrl = 'https://prts.plus/profile/7661';
+  const layoutSelector = '.docs-content-wrapper > .flex';
+  const sidebarSelector = `${layoutSelector} > div:nth-child(2)`;
+  const infoResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/user/info');
+  await page.goto(profileUrl, { waitUntil: 'domcontentloaded' });
+  const { data: user } = await (await infoResponse).json();
+  await page.waitForSelector(`${sidebarSelector} .bp6-card`);
+  await page.evaluate(script);
+  await page.waitForSelector('.prts-float-btn');
+  const sidebar = page.locator(sidebarSelector);
+  const originalWidth = (await sidebar.boundingBox()).width;
+  await sidebar.evaluate(e => { window.reviewProfileNodes = [e, ...e.querySelectorAll('button')]; });
+  const toggleSidebar = async (name = '折叠侧边栏') => {
+    await page.locator('.prts-float-btn').click();
+    await page.getByRole('button', { name: '页面增强', exact: true }).click();
+    const toggle = page.getByRole('checkbox', { name, exact: true });
+    await toggle.focus();
+    await page.keyboard.press('Space');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.locator('#prts-settings-panel').waitFor({ state: 'hidden' });
+  };
+  await toggleSidebar();
+  await page.waitForSelector('.prts-profile-compact-layout');
+  assert(await sidebar.isVisible(), 'anonymous profile retains its login prompt and statistics');
+  assert(await sidebar.evaluate(e => window.reviewProfileNodes.every(node => node === e || e.contains(node))));
+  assert.equal(await page.evaluate(() => JSON.parse(GM_getValue('prts_plus_settings')).hideSidebar), true);
+  await toggleSidebar();
+  assert.equal((await sidebar.boundingBox()).width, originalWidth, 'disabling restores the original sidebar width');
+  await toggleSidebar();
+
+  let following = false, followWrites = 0, ownProfile = false;
+  await page.route('https://prts.maa.plus/**', route => {
+    const request = route.request(), url = new URL(request.url());
+    if (url.pathname === '/user/info') return route.fulfill({ json: { status_code: 200, data: {
+      ...user, fans_count: user.fans_count + Number(following), relation: following ? 'FOLLOWING' : 'NONE'
+    } } });
+    if (url.pathname === '/user/me') return route.fulfill({ json: { status_code: 200, data: {
+      id: ownProfile ? user.id : '999999999', user_name: '验证账号', activated: true
+    } } });
+    if (request.method() === 'POST' && [`/follow/follow/${user.id}`, `/follow/unfollow/${user.id}`].includes(url.pathname)) {
+      following = url.pathname.includes('/follow/follow/');
+      followWrites++;
+      return route.fulfill({ json: { status_code: 200, data: null } });
+    }
+    if (url.pathname.startsWith('/follow/')) return route.fulfill({ json: { status_code: 200, data: { has_next: false, total: 0, page: 1, data: [] } } });
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && url.pathname !== '/set/query') return route.abort();
+    const headers = { ...request.headers() };
+    delete headers.authorization;
+    return route.continue({ headers });
+  });
+  await page.addInitScript(userId => {
+    localStorage.setItem('zoot-plus-auth', JSON.stringify({ token: 'browser-review-fixture', validBefore: '2099-01-01T00:00:00Z',
+      userId: sessionStorage.getItem('reviewOwnProfile') ? userId : '999999999', username: '验证账号', activated: true }));
+  }, user.id);
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector(`${sidebarSelector} button.bp6-fill`);
+  await page.evaluate(script);
+  await page.waitForSelector('.prts-profile-compact-layout');
+  const follow = sidebar.getByRole('button', { name: '关注', exact: true });
+  await follow.focus();
+  await page.keyboard.press('Enter');
+  await sidebar.getByRole('button', { name: '已关注', exact: true }).waitFor();
+  assert.equal(followWrites, 1, 'the original follow action is still wired');
+  assert((await sidebar.textContent()).includes(String(user.fans_count + 1)), 'original statistics update after following');
+  await sidebar.getByRole('button', { name: '已关注', exact: true }).click();
+  await follow.waitFor();
+  assert.equal(followWrites, 2, 'the original unfollow action is still wired');
+  for (const width of [1440, 768, 375, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const boxes = await page.locator(`${sidebarSelector}, ${sidebarSelector} .bp6-card, ${sidebarSelector} button`).evaluateAll(es => es.map(e => {
+      const r = e.getBoundingClientRect();
+      return { left: r.left, right: r.right, top: r.top, bottom: r.bottom };
+    }));
+    assert(boxes.every(r => r.left >= 0 && r.right <= width + 1), 'profile information fits the viewport');
+    const listBox = await page.locator(`${layoutSelector} > div:first-child`).boundingBox();
+    assert(boxes[0].bottom <= listBox.y, 'profile information sits above the full-width list');
+    assert.equal(Math.round(boxes[0].right - boxes[0].left), Math.round(listBox.width));
+    if (width === 1440) assert(boxes[0].bottom - boxes[0].top < 90, 'the desktop header stays compact');
+    report.layouts.push({ theme, name: 'profile-sidebar', width, boxes });
+    await page.screenshot({ path: path.join(output, `${theme}-profile-${width}.png`) });
+  }
+  await page.setViewportSize({ width: 320, height: 1000 });
+  await toggleSidebar('全站样式优化');
+  assert.equal(await page.locator('body.prts-site-redesign').count(), 0);
+  assert(await sidebar.evaluate(e => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }), 'compact profile works independently of site redesign');
+  await page.screenshot({ path: path.join(output, `${theme}-profile-original-style-320.png`) });
+  await toggleSidebar('全站样式优化');
+  const heading = sidebar.locator('h4').first();
+  await heading.evaluate(e => { e.textContent = '验证很长的用户名称LongUserNameWithoutSpaces'.repeat(3); });
+  assert(await heading.evaluate(e => e.scrollWidth <= e.clientWidth + 1), 'long user names wrap');
+  await page.screenshot({ path: path.join(output, `${theme}-profile-long-name-320.png`) });
+  ownProfile = true;
+  await page.evaluate(() => sessionStorage.setItem('reviewOwnProfile', 'true'));
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector(`${sidebarSelector} .bp6-card`);
+  await page.evaluate(script);
+  await page.waitForSelector('.prts-profile-compact-layout');
+  assert.equal(await sidebar.locator('button.bp6-fill').count(), 0, 'own profile retains its original controls');
+  const fans = sidebar.getByRole('button', { name: /粉丝/ });
+  assert(await fans.isEnabled(), 'own follow lists remain available');
+  await fans.click();
+  await page.waitForSelector('.bp6-dialog');
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.bp6-dialog', { state: 'hidden' });
+  await page.screenshot({ path: path.join(output, `${theme}-profile-own-320.png`) });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole('button', { name: '首页', exact: true }).click();
+  await page.waitForSelector('.prts-sidebar-hidden-layout');
+  assert.equal(await page.locator('.prts-profile-compact-layout').count(), 0);
+  assert.equal(await sidebar.isVisible(), false, 'ordinary pages still collapse the sidebar');
+  await page.goBack({ waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('.prts-profile-compact-layout');
+  await toggleSidebar();
+  assert.equal(await page.locator('.prts-profile-compact-layout').count(), 0);
+  report.interactions.push(`${theme}: anonymous and own profiles, keyboard toggle, original nodes, save and reopen, follow/unfollow and live statistics, own fan list, independent site redesign toggle, long names, home/profile navigation and restoration`);
 }
 
 async function checkAutoLoadMore(page, theme, name, selector) {
