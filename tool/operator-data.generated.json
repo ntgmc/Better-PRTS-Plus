@@ -1320,8 +1320,16 @@
     "name": "摆渡人"
   },
   {
+    "id": "char_4169_caledo",
+    "name": "镜匠"
+  },
+  {
     "id": "char_416_zumama",
     "name": "森蚺"
+  },
+  {
+    "id": "char_4170_hdbell",
+    "name": "行铃"
   },
   {
     "id": "char_4171_wulfen",
@@ -1538,6 +1546,22 @@
   {
     "id": "char_423_blemsh",
     "name": "瑕光"
+  },
+  {
+    "id": "char_4244_tocka",
+    "name": "冻河"
+  },
+  {
+    "id": "char_4245_alga",
+    "name": "奥尔佳"
+  },
+  {
+    "id": "char_4246_dminon",
+    "name": "国度"
+  },
+  {
+    "id": "char_4247_oxi",
+    "name": "塔露拉"
   },
   {
     "id": "char_426_billro",
