@@ -4,7 +4,7 @@
             trainingCheck: CONFIG.trainingCheck,
             displayMode: CONFIG.displayMode,
             config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
-                .filter(([, definition]) => definition.group)
+                .filter(([, definition]) => definition.group || definition.backup)
                 .map(([key]) => [key, CONFIG[key]])),
             floatingPosition: parseFloatingPosition(CONFIG.floatingPosition)
         };
@@ -75,7 +75,7 @@
             trainingCheck: config.trainingCheck,
             displayMode: config.displayMode,
             config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
-                .filter(([, definition]) => definition.group)
+                .filter(([, definition]) => definition.group || definition.backup)
                 .map(([key]) => [key, config[key]])),
             floatingPosition: config.floatingPosition
         };
@@ -100,7 +100,7 @@
 
     function formatAccountsBackupSummary(backup) {
         const lines = [
-            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称和脚本设置，并清除当前保存的森空岛凭据。`,
+            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称、脚本设置和黑名单，并清除当前保存的森空岛凭据。`,
             `导入后将切换到：${backup.accountMeta[backup.activeAccountId].label}`,
             ''
         ];

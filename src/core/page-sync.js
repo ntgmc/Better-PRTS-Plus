@@ -110,6 +110,7 @@
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        syncBlockedAuthors();
         syncActivityShortcuts(restoreActivityExpansion);
         updateActivitySchedule();
         syncOperationTypeButtons();
@@ -217,7 +218,7 @@
 
     function isScriptOwnedNode(node) {
         const element = node?.nodeType === 1 ? node : node?.parentElement;
-        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-followed-badge, .prts-popover-grid'));
+        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-followed-badge, .prts-block-user, .prts-blocked-detail-notice, #prts-profile-block-controls, .prts-popover-grid'));
     }
 
     function collectPageMutations(mutations) {
@@ -260,6 +261,7 @@
         const observer = new MutationObserver(mutations => {
             const { dirtyCards, portals, scaffoldChanged } = collectPageMutations(mutations);
             portals.forEach(portal => { if (portal.isConnected) enhancePopover(portal); });
+            if (portals.size) syncBlockedOperationDetails();
             if (handleRouteChange()) return;
             if (scaffoldChanged) syncPageScaffold();
             if (scaffoldChanged || dirtyCards.size) scheduleFilterUpdate(80, { forceFull: false, dirtyCards });

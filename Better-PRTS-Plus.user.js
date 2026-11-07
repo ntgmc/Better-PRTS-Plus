@@ -126,6 +126,8 @@
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'hideSidebar', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
         hideOperatorMatchingSettings: { group: '页面增强', label: '隐藏原站干员匹配设置', icon: 'hideOperatorMatchingSettings', default: true },
         announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'announcementTags', default: true, reloadOnDisable: true },
+        blockUsers: { group: '黑名单', label: '启用用户黑名单', icon: 'blockUsers', default: false },
+        blockedUsers: { default: [], normalize: normalizeBlockedUsers, backup: true },
         importantUpdatesOnly: { group: '脚本更新', label: '仅重要更新提示（含紧急更新）', icon: 'importantUpdatesOnly', default: false },
         compatDebug: { group: '诊断', label: '兼容诊断', icon: 'compatDebug', default: false, legacyKey: 'prts_cfg_compat_debug' },
         filterMode: { default: 'NONE', options: ['NONE', 'PERFECT', 'SUPPORT'], legacyKey: 'prts_plus_filter_mode' },
@@ -139,7 +141,8 @@
         const raw = isPlainRecord(parsed) ? parsed : {};
         return Object.fromEntries(Object.entries(CONFIG_DEFINITIONS).map(([key, definition]) => {
             const candidate = raw[key] ?? (definition.alias ? raw[definition.alias] : undefined);
-            const normalized = key === 'floatingPosition' ? parseFloatingPosition(candidate)
+            const normalized = definition.normalize ? definition.normalize(candidate)
+                : key === 'floatingPosition' ? parseFloatingPosition(candidate)
                 : definition.options ? (definition.options.includes(candidate) ? candidate : definition.default)
                 : typeof candidate === 'boolean' ? candidate : definition.default;
             return [key, normalized];
@@ -2023,7 +2026,7 @@ Object.entries({
     function getCardSignature(card) {
         if (!card) return '';
 
-        const ignoredSelector = '.prts-status-label, .prts-followed-badge, .prts-video-box, #prts-filter-bar, #prts-float-container';
+        const ignoredSelector = '.prts-status-label, .prts-followed-badge, .prts-block-user, .prts-video-box, #prts-filter-bar, #prts-float-container';
         const parts = [];
         const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
@@ -2220,6 +2223,193 @@ Object.entries({
             badge.textContent = '已关注';
             author.after(badge);
         }
+    }
+    function normalizeBlockedUsers(value) {
+        if (!Array.isArray(value)) return [];
+        const users = new Map();
+        for (const user of value) {
+            if (!isPlainRecord(user) || !['string', 'number'].includes(typeof user.id)) continue;
+            const id = String(user.id);
+            if (!/^[1-9]\d*$/.test(id) || (typeof user.id === 'number' && !Number.isSafeInteger(user.id))) continue;
+            const name = typeof user.name === 'string' ? user.name.trim().slice(0, 100) : '';
+            users.set(id, { id, name: name || `用户 ${id}` });
+        }
+        return [...users.values()];
+    }
+
+    function isBlockedAuthorHidden(id) {
+        if (!CONFIG.blockUsers || !CONFIG.blockedUsers.some(user => user.id === String(id))) return false;
+        const profileId = window.location.pathname.match(/^\/profile\/([1-9]\d*)\/?$/)?.[1];
+        return !(profileId === String(id) && new URLSearchParams(window.location.search).get('prts_blacklist') === profileId);
+    }
+
+    function setAuthorBlocked(id, name, blocked) {
+        const fromCard = document.activeElement?.classList.contains('prts-block-user');
+        const drawer = fromCard ? document.activeElement.closest('.bp4-drawer, .bp6-drawer') : null;
+        const fromProfile = document.activeElement?.closest('#prts-profile-block-controls');
+        const previous = CONFIG.blockedUsers;
+        CONFIG.blockedUsers = normalizeBlockedUsers([
+            ...previous.filter(user => user.id !== String(id)), ...(blocked ? [{ id, name }] : [])
+        ]);
+        try {
+            saveConfig();
+        } catch {
+            CONFIG.blockedUsers = previous;
+            showPrtsToast('黑名单保存失败', 'error', '请重试，当前名单未更改。');
+            return;
+        }
+        syncBlockedAuthors();
+        if (fromCard) (drawer || document.querySelector('.prts-float-btn'))?.focus({ preventScroll: true });
+        else if (fromProfile) document.querySelector('#prts-profile-block-controls button')?.focus({ preventScroll: true });
+        requestFilterUpdate();
+        showPrtsToast(blocked ? '已拉黑该用户' : '已解除拉黑', 'success');
+    }
+
+    function syncBlockedAuthorCard(cardInner, operation) {
+        const author = cardInner.querySelector('.bp4-icon-user, .bp6-icon-user')?.parentElement
+            ?.querySelector('a[href^="/profile/"]');
+        const id = operation?.uploaderId ?? author?.getAttribute('href')?.match(/^\/profile\/([1-9]\d*)\/?$/)?.[1];
+        const hidden = isBlockedAuthorHidden(id);
+        const container = cardInner.parentElement?.tagName === 'LI' ? cardInner.parentElement : cardInner;
+        container.classList.toggle('prts-blocked-content', hidden);
+        let button = cardInner.querySelector('.prts-block-user');
+        if (!CONFIG.blockUsers || !author || !id) {
+            button?.remove();
+            return hidden;
+        }
+        const blocked = CONFIG.blockedUsers.some(user => user.id === String(id));
+        const text = blocked ? '解除拉黑' : '拉黑';
+        if (button?.dataset.authorId === String(id) && button.dataset.blocked === String(blocked)) return hidden;
+        button?.remove();
+        button = createPrtsButton({
+            className: 'prts-btn prts-block-user', text,
+            ariaLabel: `${text} ${author.textContent.trim()}`,
+            onClick: event => {
+                event.preventDefault();
+                event.stopPropagation();
+                setAuthorBlocked(id, author.textContent, !blocked);
+            }
+        });
+        button.onkeydown = event => {
+            if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
+        };
+        button.dataset.authorId = String(id);
+        button.dataset.blocked = String(blocked);
+        author.parentElement.appendChild(button);
+        return hidden;
+    }
+
+    function renderBlockedUsers() {
+        const list = document.getElementById('prts-blacklist-list');
+        if (!list) return;
+        const signature = JSON.stringify(CONFIG.blockedUsers);
+        if (list.dataset.users === signature) return;
+        const hadFocus = list.contains(document.activeElement);
+        list.replaceChildren();
+        if (!CONFIG.blockedUsers.length) {
+            const empty = document.createElement('p');
+            empty.className = 'prts-about-description';
+            empty.textContent = '黑名单为空。开启后，可在作业作者旁或个人主页拉黑用户。';
+            list.appendChild(empty);
+        }
+        for (const user of CONFIG.blockedUsers) {
+            const row = document.createElement('div');
+            row.className = 'prts-blacklist-row';
+            const link = document.createElement('a');
+            link.className = 'prts-blacklist-user';
+            link.href = `/profile/${user.id}?prts_blacklist=${user.id}`;
+            link.textContent = user.name;
+            link.title = `查看 ${user.name} 的主页（ID ${user.id}）`;
+            const id = document.createElement('span');
+            id.className = 'prts-blacklist-id';
+            id.textContent = `ID ${user.id}`;
+            link.appendChild(id);
+            row.appendChild(link);
+            row.appendChild(createPrtsButton({
+                text: '解除拉黑', ariaLabel: `解除拉黑 ${user.name}`,
+                onClick: () => setAuthorBlocked(user.id, user.name, false)
+            }));
+            list.appendChild(row);
+        }
+        list.dataset.users = signature;
+        if (hadFocus) (list.querySelector('button') || document.getElementById('prts-blacklist-close')).focus();
+    }
+
+    function syncBlockedProfileControls() {
+        const profileId = window.location.pathname.match(/^\/profile\/([1-9]\d*)\/?$/)?.[1];
+        const layout = document.querySelector('.docs-content-wrapper > .flex');
+        const main = layout?.firstElementChild;
+        const heading = layout?.children[1]?.querySelector(BP_SELECTORS.heading);
+        let controls = document.getElementById('prts-profile-block-controls');
+        if (!CONFIG.blockUsers || !profileId || !main || !heading) {
+            controls?.remove();
+            return;
+        }
+        if (!controls) {
+            controls = document.createElement('div');
+            controls.id = 'prts-profile-block-controls';
+            main.prepend(controls);
+        }
+        const blocked = CONFIG.blockedUsers.some(user => user.id === profileId);
+        const hidden = isBlockedAuthorHidden(profileId);
+        const name = heading.textContent.trim();
+        const signature = JSON.stringify([profileId, name, blocked, hidden]);
+        if (controls.dataset.user === signature) return;
+        controls.replaceChildren();
+        if (blocked) {
+            const notice = document.createElement('span');
+            notice.textContent = hidden ? '已拉黑该用户。请从悬浮球 → 黑名单进入主页查看作业。' : '正在查看黑名单用户的作业。';
+            controls.appendChild(notice);
+        }
+        controls.appendChild(createPrtsButton({
+            text: blocked ? '解除拉黑' : '拉黑此用户',
+            onClick: () => setAuthorBlocked(profileId, name, !blocked)
+        }));
+        controls.dataset.user = signature;
+    }
+
+    function syncBlockedOperationDetails() {
+        document.querySelectorAll('.bp4-drawer, .bp6-drawer').forEach(drawer => {
+            const author = Array.from(drawer.querySelectorAll('a[href^="/profile/"]'))
+                .find(link => !link.closest(BP_SELECTORS.card));
+            const id = author?.getAttribute('href')?.match(/^\/profile\/([1-9]\d*)\/?$/)?.[1];
+            const hidden = !isFilterDisabledPage() && isBlockedAuthorHidden(id);
+            drawer.classList.toggle('prts-blocked-detail', hidden);
+            let notice = drawer.querySelector('.prts-blocked-detail-notice');
+            if (!hidden) {
+                notice?.remove();
+            } else if (!notice) {
+                notice = document.createElement('p');
+                notice.className = 'prts-blocked-detail-notice';
+                notice.setAttribute('role', 'status');
+                notice.textContent = '此作业的作者已被拉黑。请从悬浮球 → 黑名单进入该用户主页查看作业。';
+                const query = new URLSearchParams(window.location.search);
+                query.delete('op');
+                query.delete('opset');
+                const back = document.createElement('a');
+                back.className = 'prts-btn';
+                back.href = `${window.location.pathname}${query.size ? `?${query}` : ''}`;
+                back.textContent = '返回列表';
+                notice.appendChild(back);
+                drawer.appendChild(notice);
+            }
+        });
+    }
+
+    function syncBlockedAuthors() {
+        renderBlockedUsers();
+        syncBlockedOperationDetails();
+        if (!CONFIG.blockUsers || isFilterDisabledPage()) {
+            document.querySelectorAll('.prts-blocked-content').forEach(node => node.classList.remove('prts-blocked-content'));
+            document.querySelectorAll('.prts-block-user, #prts-profile-block-controls').forEach(node => node.remove());
+            return;
+        }
+        document.querySelectorAll('.bp4-icon-user + a[href^="/profile/"], .bp6-icon-user + a[href^="/profile/"]')
+            .forEach(author => {
+                const card = author.closest(BP_SELECTORS.card);
+                if (card) syncBlockedAuthorCard(card);
+            });
+        syncBlockedProfileControls();
     }
     const sklandImportStyles = `
     #prts-skland-import-panel { position: fixed; left: 16px; top: 96px; z-index: 2147483646; width: 292px; box-sizing: border-box; border: 1px solid rgba(15, 23, 42, 0.12); border-radius: 8px; background: #ffffff; color: #1f2937; box-shadow: 0 14px 38px rgba(15, 23, 42, 0.18); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif; overflow: hidden; }
@@ -3598,6 +3788,25 @@ Object.entries({
     .prts-about-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--prts-space-2); margin: var(--prts-space-3) 0; }
     .prts-about-links .prts-btn { min-width: 0; min-height: 44px !important; margin: 0 !important; text-decoration: none; }
     #prts-float-container .prts-submenu-panel .prts-btn, #prts-float-container .prts-submenu-button { min-height: 44px !important; color: var(--prts-color-text-muted) !important; }
+    .prts-blocked-content, .prts-blocked-detail > :not(.prts-blocked-detail-notice) { display: none !important; }
+    .prts-blocked-detail-notice { margin: 0; padding: var(--prts-space-5); color: var(--prts-color-text-muted); line-height: 1.6; }
+    .prts-blocked-detail-notice .prts-btn { display: flex; width: fit-content; min-height: 44px !important; margin: var(--prts-space-3) 0 0 !important; }
+    .prts-block-user.prts-btn { min-height: 24px !important; margin: 0 !important; padding: 2px 6px !important; font-size: 12px !important; line-height: 20px !important; }
+    :is(.bp4-card, .bp6-card) div:has(> .prts-block-user) { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; max-width: 100%; }
+    :is(.bp4-card, .bp6-card) div:has(> .prts-block-user) > a { min-width: 0; overflow-wrap: anywhere; }
+    :is(.bp4-card, .bp6-card) div.flex:has(> div > .prts-block-user) { flex-wrap: wrap; gap: 4px 12px; }
+    @media (max-width: 480px) {
+        ul.grid:has(.prts-block-user) { grid-template-columns: minmax(0, 1fr) !important; }
+    }
+    .prts-blacklist-row { display: flex; align-items: center; gap: var(--prts-space-2); padding: var(--prts-space-2) 0; border-bottom: 1px solid var(--prts-color-border-soft); }
+    .prts-blacklist-row:last-child { border-bottom: 0; }
+    .prts-blacklist-user { flex: 1; min-width: 0; padding-block: var(--prts-space-1); color: var(--prts-color-primary-hover); overflow-wrap: anywhere; line-height: 1.5; }
+    .prts-blacklist-id { display: block; color: var(--prts-color-text-muted); font-size: 12px; }
+    .prts-blacklist-row .prts-btn { flex-shrink: 0; margin: 0 !important; white-space: nowrap; }
+    .prts-blacklist-user:focus-visible { outline: 2px solid var(--prts-color-primary); outline-offset: 2px; border-radius: var(--prts-radius-sm); }
+    #prts-profile-block-controls { display: flex; align-items: center; flex-wrap: wrap; gap: var(--prts-space-2); margin-bottom: var(--prts-space-3); color: var(--prts-color-text-muted); font-size: 13px; }
+    #prts-profile-block-controls > span { flex: 1 1 180px; min-width: 0; }
+    #prts-profile-block-controls .prts-btn { min-height: 36px !important; margin: 0 !important; }
     .prts-about-update { width: 100%; min-height: 44px !important; margin: var(--prts-space-2) 0 !important; }
     .prts-submenu-content .prts-panel-actions { flex-wrap: wrap; }
     .prts-submenu-content .prts-panel-actions .prts-btn { flex: 1 1 118px !important; min-width: 0; }
@@ -3866,6 +4075,7 @@ Object.entries({
         support: 'M9 4.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM1 14v-1c0-2.5 2-4 5-4 .8 0 1.6.1 2.3.4A5 5 0 0 0 7 13v1ZM11 8h1.5v2.75h2.75v1.5H12.5V15H11v-2.75H8.25v-1.5H11Z',
         trainingCheck: 'M5 1h6v2h3v12H2V3h3Zm1.5 1.5v2h3v-2ZM3.5 4.5v9h9v-9H11V6H5V4.5ZM5 9l1.1-1.1L8 9.8l2.9-2.9L12 8l-4 4Z',
         grayMode: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5v11a5.5 5.5 0 0 0 0-11Z',
+        blockUsers: 'M8 1a7 7 0 1 1 0 14A7 7 0 0 1 8 1Zm0 1.5c-1.2 0-2.3.4-3.2 1L12.5 11A5.5 5.5 0 0 0 8 2.5ZM3.5 5a5.5 5.5 0 0 0 7.5 7.5Z',
         hideMode: 'M1.6.5 15.5 14.4l-1.1 1.1L.5 1.6ZM8 3c3.3 0 5.7 2.5 7.5 5a15 15 0 0 1-2.7 3l-1.1-1.1a12 12 0 0 0 2-1.9C12.2 6.1 10.3 4.5 8 4.5h-.6L6 3.1ZM3.2 4.9 4.3 6a13 13 0 0 0-2 2c1.5 1.9 3.4 3.5 5.7 3.5h.6l1.4 1.4L8 13C4.7 13 2.3 10.5.5 8a15 15 0 0 1 2.7-3.1Z',
         showAll: 'M8 3c3.3 0 5.7 2.5 7.5 5-1.8 2.5-4.2 5-7.5 5S2.3 10.5.5 8C2.3 5.5 4.7 3 8 3Zm0 1.5C5.7 4.5 3.8 6.1 2.3 8c1.5 1.9 3.4 3.5 5.7 3.5s4.2-1.6 5.7-3.5C12.2 6.1 10.3 4.5 8 4.5ZM10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0Z',
         importOperators: 'M12 4a3 3 0 1 1-6 0 3 3 0 0 1 6 0ZM8 9h1c3.6 0 6 2 6 5v1H8v-2h5c-.5-1.4-1.9-2-4-2H8ZM1 9h3V7l4 4-4 4v-2H1Z',
@@ -5142,7 +5352,7 @@ Object.entries({
             trainingCheck: CONFIG.trainingCheck,
             displayMode: CONFIG.displayMode,
             config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
-                .filter(([, definition]) => definition.group)
+                .filter(([, definition]) => definition.group || definition.backup)
                 .map(([key]) => [key, CONFIG[key]])),
             floatingPosition: parseFloatingPosition(CONFIG.floatingPosition)
         };
@@ -5213,7 +5423,7 @@ Object.entries({
             trainingCheck: config.trainingCheck,
             displayMode: config.displayMode,
             config: Object.fromEntries(Object.entries(CONFIG_DEFINITIONS)
-                .filter(([, definition]) => definition.group)
+                .filter(([, definition]) => definition.group || definition.backup)
                 .map(([key]) => [key, config[key]])),
             floatingPosition: config.floatingPosition
         };
@@ -5238,7 +5448,7 @@ Object.entries({
 
     function formatAccountsBackupSummary(backup) {
         const lines = [
-            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称和脚本设置，并清除当前保存的森空岛凭据。`,
+            `将用备份中的 ${getAccountIds(backup.accountsData).length} 个账号覆盖当前全部账号、账号昵称、脚本设置和黑名单，并清除当前保存的森空岛凭据。`,
             `导入后将切换到：${backup.accountMeta[backup.activeAccountId].label}`,
             ''
         ];
@@ -5727,11 +5937,14 @@ Object.entries({
             } else if (stats.totalCards) {
                 summaryText += ownedOpsSet.size ? '，未开启筛选' : '，请先导入干员数据后筛选';
             }
+            if (stats.hiddenBlockedCards) summaryText += `，已隐藏黑名单用户作业 ${stats.hiddenBlockedCards} 份`;
             if (stats.hiddenVideoCards) summaryText += `，已隐藏视频作业 ${stats.hiddenVideoCards} 份`;
             summaryText += '。';
 
             if (!stats.totalCards) {
                 messageText = list ? '本作业集暂无作业。' : '当前页面暂无作业。正在加载时请稍候，也可调整搜索条件或翻页。';
+            } else if (stats.hiddenBlockedCards && stats.hiddenBlockedCards + stats.hiddenVideoCards === stats.totalCards) {
+                messageText = `${scope}作业已被黑名单或视频设置隐藏。可在悬浮球中调整设置，或从黑名单进入用户主页查看。`;
             } else if (stats.hiddenVideoCards === stats.totalCards) {
                 messageText = `${scope}全部是视频作业，已隐藏。可在悬浮球 → 作业卡片中关闭“隐藏视频作业”${list ? '' : '，或查看其他页'}。`;
             } else if (filtering && !stats.availableCards && !stats.supportCards) {
@@ -7172,8 +7385,9 @@ ${formatSklandImportSummary(summary)}`, 'success');
             cardDiagnosticsCache.set(card, diagnostics);
             const cardInner = card.querySelector(BP_SELECTORS.card);
             const hiddenVideo = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation);
-            diagnostics.filterStatus = hiddenVideo ? 'hiddenVideo' : 'pending';
-            diagnostics.visible = !hiddenVideo;
+            const hiddenBlocked = cardInner ? syncBlockedAuthorCard(cardInner, operation) : false;
+            diagnostics.filterStatus = hiddenBlocked ? 'hiddenBlocked' : hiddenVideo ? 'hiddenVideo' : 'pending';
+            diagnostics.visible = !hiddenBlocked && !hiddenVideo;
             card.style.display = hiddenVideo ? 'none' : '';
             card.classList.remove('prts-card-gray');
             if (cardInner) {
@@ -7211,6 +7425,13 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const diagnostics = hasEffectiveOperationData(operation)
             ? createCardDiagnostics(resolution.source)
             : createCardDiagnostics('none');
+
+        if (syncBlockedAuthorCard(cardInner, operation)) {
+            diagnostics.filterStatus = 'hiddenBlocked';
+            diagnostics.visible = false;
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
 
         if (CONFIG.hideVideo && isVideoOperationCard(cardInner, operation)) {
             diagnostics.filterStatus = 'hiddenVideo';
@@ -7317,6 +7538,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
             pendingCards: 0,
             unavailableCards: 0,
             hiddenVideoCards: 0,
+            hiddenBlockedCards: 0,
             visibleCards: 0
         };
 
@@ -7465,6 +7687,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         optimizeDialogContent();
         createFloatingBall();
         injectFilterControls();
+        syncBlockedAuthors();
         syncActivityShortcuts(restoreActivityExpansion);
         updateActivitySchedule();
         syncOperationTypeButtons();
@@ -7572,7 +7795,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
     function isScriptOwnedNode(node) {
         const element = node?.nodeType === 1 ? node : node?.parentElement;
-        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-followed-badge, .prts-popover-grid'));
+        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-followed-badge, .prts-block-user, .prts-blocked-detail-notice, #prts-profile-block-controls, .prts-popover-grid'));
     }
 
     function collectPageMutations(mutations) {
@@ -7615,6 +7838,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
         const observer = new MutationObserver(mutations => {
             const { dirtyCards, portals, scaffoldChanged } = collectPageMutations(mutations);
             portals.forEach(portal => { if (portal.isConnected) enhancePopover(portal); });
+            if (portals.size) syncBlockedOperationDetails();
             if (handleRouteChange()) return;
             if (scaffoldChanged) syncPageScaffold();
             if (scaffoldChanged || dirtyCards.size) scheduleFilterUpdate(80, { forceFull: false, dirtyCards });
@@ -7850,6 +8074,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         };
         const cards = createSubmenu('cards', '作业卡片', 'cards');
         const pageEnhancements = createSubmenu('page', '页面增强', 'pageEnhancements');
+        const blacklist = createSubmenu('blacklist', '黑名单', 'blockUsers');
+        blacklist.close.id = 'prts-blacklist-close';
         const accounts = createSubmenu('accounts', '账号与数据', 'accounts');
         const about = createSubmenu('about', '关于', 'about');
         const diagnostics = createSubmenu('diagnostics', '诊断', 'compatDebug');
@@ -7918,7 +8144,7 @@ ${formatSklandImportSummary(summary)}`, 'success');
 
         const groupContents = {
             '作业卡片': cards.body, '页面增强': pageEnhancements.body,
-            '脚本更新': aboutContent, '诊断': diagnostics.body
+            '黑名单': blacklist.body, '脚本更新': aboutContent, '诊断': diagnostics.body
         };
         Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
             if (!definition.group) return;
@@ -7967,6 +8193,13 @@ ${formatSklandImportSummary(summary)}`, 'success');
                 }));
             }
         });
+        const blacklistHint = document.createElement('p');
+        blacklistHint.className = 'prts-about-description';
+        blacklistHint.textContent = '点击名单中的用户名，可进入主页查看其作业。名单保存在本地，关闭功能会保留名单。';
+        blacklist.body.appendChild(blacklistHint);
+        const blacklistList = document.createElement('div');
+        blacklistList.id = 'prts-blacklist-list';
+        blacklist.body.appendChild(blacklistList);
         const updatePreviewLabel = document.createElement('div');
         updatePreviewLabel.className = 'prts-panel-item-label';
         updatePreviewLabel.textContent = '更新弹窗预览';
@@ -8038,6 +8271,8 @@ ${formatSklandImportSummary(summary)}`, 'success');
         submenus.forEach(submenu => container.appendChild(submenu.panel));
         container.appendChild(btn);
         document.body.appendChild(container);
+        // 设置位于原站抽屉外，避免键盘操作同时触发其快捷键。
+        container.addEventListener('keydown', event => event.stopPropagation());
         refreshAccountControls();
         refreshSklandSyncControls();
         updateFloatingLayout();
@@ -8149,12 +8384,13 @@ ${formatSklandImportSummary(summary)}`, 'success');
             if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
                 document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) return;
             event.preventDefault();
+            event.stopPropagation();
             if (activeSubmenu) setSubmenuOpen(activeSubmenu.parent);
             else {
                 setFloatOpen(false);
                 btn.focus({ preventScroll: true });
             }
-        });
+        }, { capture: true });
     }
     function init() {
         if (!isSklandHost() && !isPrtsHost()) return;

@@ -112,11 +112,14 @@
             } else if (stats.totalCards) {
                 summaryText += ownedOpsSet.size ? '，未开启筛选' : '，请先导入干员数据后筛选';
             }
+            if (stats.hiddenBlockedCards) summaryText += `，已隐藏黑名单用户作业 ${stats.hiddenBlockedCards} 份`;
             if (stats.hiddenVideoCards) summaryText += `，已隐藏视频作业 ${stats.hiddenVideoCards} 份`;
             summaryText += '。';
 
             if (!stats.totalCards) {
                 messageText = list ? '本作业集暂无作业。' : '当前页面暂无作业。正在加载时请稍候，也可调整搜索条件或翻页。';
+            } else if (stats.hiddenBlockedCards && stats.hiddenBlockedCards + stats.hiddenVideoCards === stats.totalCards) {
+                messageText = `${scope}作业已被黑名单或视频设置隐藏。可在悬浮球中调整设置，或从黑名单进入用户主页查看。`;
             } else if (stats.hiddenVideoCards === stats.totalCards) {
                 messageText = `${scope}全部是视频作业，已隐藏。可在悬浮球 → 作业卡片中关闭“隐藏视频作业”${list ? '' : '，或查看其他页'}。`;
             } else if (filtering && !stats.availableCards && !stats.supportCards) {

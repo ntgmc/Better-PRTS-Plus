@@ -95,6 +95,7 @@ const context = {
   },
   setTimeout,
   clearTimeout,
+  URLSearchParams,
   TextEncoder,
   TextDecoder,
   crypto: require('node:crypto').webcrypto,
@@ -1469,12 +1470,13 @@ test('script icons cover semantic uses with distinct paths and accessible 16px S
 test('settings categories preserve controls and state while switching and collapsing submenus', () => {
   const body = createTestElement('body');
   const listeners = new Map();
+  const listenerOptions = new Map();
   const all = node => [node, ...node.children.flatMap(all)];
   const document = {
     body, activeElement: null,
     getElementById: id => all(body).find(node => node.id === id),
     querySelectorAll: () => [],
-    addEventListener: (event, listener) => listeners.set(event, listener)
+    addEventListener: (event, listener, options) => { listeners.set(event, listener); listenerOptions.set(event, options); }
   };
   document.createElement = tag => {
     const element = createTestElement(tag);
@@ -1514,7 +1516,7 @@ test('settings categories preserve controls and state while switching and collap
   assert.strictEqual(about.tagName, 'DIV');
   assert.strictEqual(about.parentElement, ball.parentElement);
   assert.strictEqual(about.inert, true);
-  const categoryIds = ['cards', 'page', 'accounts', 'about', 'diagnostics'];
+  const categoryIds = ['cards', 'page', 'accounts', 'about', 'diagnostics', 'blacklist'];
   const categoryPanels = categoryIds.map(id => document.getElementById(`prts-${id}-panel`));
   const categoryButtons = categoryIds.map(id => document.getElementById(`prts-settings-${id}-button`));
   assert.strictEqual(main.children.length, categoryIds.length);
@@ -1522,7 +1524,7 @@ test('settings categories preserve controls and state while switching and collap
   assert.strictEqual(categoryButtons[4].hidden, true);
   Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
     if (!definition.group) return;
-    const target = { '作业卡片': 0, '页面增强': 1, '脚本更新': 3, '诊断': 4 }[definition.group];
+    const target = { '作业卡片': 0, '页面增强': 1, '脚本更新': 3, '诊断': 4, '黑名单': 5 }[definition.group];
     const controls = all(categoryPanels[target]).filter(node => node.dataset.prtsConfigKey === key);
     assert.strictEqual(controls.length, definition.options?.length || 1, key);
     assert(!all(main).some(node => node.dataset.prtsConfigKey === key));
@@ -1563,7 +1565,11 @@ test('settings categories preserve controls and state while switching and collap
   assert.strictEqual(saves, 1);
   all(about).find(node => node.tagName === 'BUTTON' && node.textContent === '检查脚本更新')._prtsClickHandler();
   assert.strictEqual(checks, 1);
-  const escape = () => listeners.get('keydown')({ key: 'Escape', target: body, preventDefault() {} });
+  assert.strictEqual(listenerOptions.get('keydown').capture, true, 'settings handle Escape before the underlying site drawer');
+  let intercepted = 0;
+  body.firstChild.events.get('keydown')({ stopPropagation() { intercepted++; } });
+  assert.strictEqual(intercepted, 1, 'settings keys do not reach site shortcuts');
+  const escape = () => listeners.get('keydown')({ key: 'Escape', target: body, preventDefault() {}, stopPropagation() {} });
   const modal = createTestElement();
   modal.id = 'prts-modal';
   body.appendChild(modal);
@@ -4827,7 +4833,11 @@ function createFollowedAuthorsHarness() {
   page.document.querySelectorAll = selector => selector === '.prts-followed-card'
     ? authorCards.map(item => item.inner).filter(inner => inner.classList.contains('prts-followed-card'))
     : selector === '.prts-followed-badge' ? authorCards.flatMap(item => item.inner.children.filter(child => child.className === 'prts-followed-badge'))
-    : selector.startsWith('.bp4-icon-user + a') ? authorCards.map(item => item.author) : cards;
+    : selector.startsWith('.bp4-icon-user + a') ? authorCards.map(item => item.author)
+    : selector === '.bp4-drawer, .bp6-drawer' ? []
+    : selector === '.prts-blocked-content' ? [...cards, ...authorCards.map(item => item.inner)].filter(node => node.classList.contains('prts-blocked-content'))
+    : selector === '.prts-block-user, #prts-profile-block-controls' ? authorCards.flatMap(item => item.inner.children.filter(child => child.classList.contains('prts-block-user')))
+    : cards;
   return {
     ...h, requests, responses,
     setOnlyFollowing: value => { onlyFollowing = value; },
@@ -5022,6 +5032,7 @@ test('invalid follow responses and disabling during a request cannot publish par
   assert.strictEqual(inner.querySelector('.prts-followed-badge'), null);
 });
 
+require('./test-blocked-authors')({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage, createFollowedAuthorsHarness, hostObject });
 require('./test-skland-sync')({ assert, test, createAccountState, serializeAccountState, createAccountPage, hostObject, hostArray });
 
 (async () => {

@@ -37,6 +37,8 @@
         hideSidebar: { group: '页面增强', label: '折叠侧边栏', icon: 'hideSidebar', default: false, legacyKey: 'prts_cfg_hide_sidebar' },
         hideOperatorMatchingSettings: { group: '页面增强', label: '隐藏原站干员匹配设置', icon: 'hideOperatorMatchingSettings', default: true },
         announcementTags: { group: '页面增强', label: '公告分类标签', icon: 'announcementTags', default: true, reloadOnDisable: true },
+        blockUsers: { group: '黑名单', label: '启用用户黑名单', icon: 'blockUsers', default: false },
+        blockedUsers: { default: [], normalize: normalizeBlockedUsers, backup: true },
         importantUpdatesOnly: { group: '脚本更新', label: '仅重要更新提示（含紧急更新）', icon: 'importantUpdatesOnly', default: false },
         compatDebug: { group: '诊断', label: '兼容诊断', icon: 'compatDebug', default: false, legacyKey: 'prts_cfg_compat_debug' },
         filterMode: { default: 'NONE', options: ['NONE', 'PERFECT', 'SUPPORT'], legacyKey: 'prts_plus_filter_mode' },
@@ -50,7 +52,8 @@
         const raw = isPlainRecord(parsed) ? parsed : {};
         return Object.fromEntries(Object.entries(CONFIG_DEFINITIONS).map(([key, definition]) => {
             const candidate = raw[key] ?? (definition.alias ? raw[definition.alias] : undefined);
-            const normalized = key === 'floatingPosition' ? parseFloatingPosition(candidate)
+            const normalized = definition.normalize ? definition.normalize(candidate)
+                : key === 'floatingPosition' ? parseFloatingPosition(candidate)
                 : definition.options ? (definition.options.includes(candidate) ? candidate : definition.default)
                 : typeof candidate === 'boolean' ? candidate : definition.default;
             return [key, normalized];

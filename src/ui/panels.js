@@ -210,6 +210,8 @@
         };
         const cards = createSubmenu('cards', '作业卡片', 'cards');
         const pageEnhancements = createSubmenu('page', '页面增强', 'pageEnhancements');
+        const blacklist = createSubmenu('blacklist', '黑名单', 'blockUsers');
+        blacklist.close.id = 'prts-blacklist-close';
         const accounts = createSubmenu('accounts', '账号与数据', 'accounts');
         const about = createSubmenu('about', '关于', 'about');
         const diagnostics = createSubmenu('diagnostics', '诊断', 'compatDebug');
@@ -278,7 +280,7 @@
 
         const groupContents = {
             '作业卡片': cards.body, '页面增强': pageEnhancements.body,
-            '脚本更新': aboutContent, '诊断': diagnostics.body
+            '黑名单': blacklist.body, '脚本更新': aboutContent, '诊断': diagnostics.body
         };
         Object.entries(CONFIG_DEFINITIONS).forEach(([key, definition]) => {
             if (!definition.group) return;
@@ -327,6 +329,13 @@
                 }));
             }
         });
+        const blacklistHint = document.createElement('p');
+        blacklistHint.className = 'prts-about-description';
+        blacklistHint.textContent = '点击名单中的用户名，可进入主页查看其作业。名单保存在本地，关闭功能会保留名单。';
+        blacklist.body.appendChild(blacklistHint);
+        const blacklistList = document.createElement('div');
+        blacklistList.id = 'prts-blacklist-list';
+        blacklist.body.appendChild(blacklistList);
         const updatePreviewLabel = document.createElement('div');
         updatePreviewLabel.className = 'prts-panel-item-label';
         updatePreviewLabel.textContent = '更新弹窗预览';
@@ -398,6 +407,8 @@
         submenus.forEach(submenu => container.appendChild(submenu.panel));
         container.appendChild(btn);
         document.body.appendChild(container);
+        // 设置位于原站抽屉外，避免键盘操作同时触发其快捷键。
+        container.addEventListener('keydown', event => event.stopPropagation());
         refreshAccountControls();
         refreshSklandSyncControls();
         updateFloatingLayout();
@@ -509,10 +520,11 @@
             if (event.key !== 'Escape' || !container.classList.contains('prts-float-open') ||
                 document.getElementById('prts-modal') || document.getElementById('prts-import-dialog')) return;
             event.preventDefault();
+            event.stopPropagation();
             if (activeSubmenu) setSubmenuOpen(activeSubmenu.parent);
             else {
                 setFloatOpen(false);
                 btn.focus({ preventScroll: true });
             }
-        });
+        }, { capture: true });
     }

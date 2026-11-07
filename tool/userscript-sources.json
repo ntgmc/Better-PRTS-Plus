@@ -17,6 +17,7 @@
   "src/import/skland-sync.js",
   "src/dom/card-resolution.js",
   "src/dom/followed-authors.js",
+  "src/dom/blocked-authors.js",
   "src/styles/skland.js",
   "src/styles/site-redesign.js",
   "src/styles/styles.js",

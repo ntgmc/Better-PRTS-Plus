@@ -131,8 +131,9 @@
             cardDiagnosticsCache.set(card, diagnostics);
             const cardInner = card.querySelector(BP_SELECTORS.card);
             const hiddenVideo = CONFIG.hideVideo && cardInner && isVideoOperationCard(cardInner, operation);
-            diagnostics.filterStatus = hiddenVideo ? 'hiddenVideo' : 'pending';
-            diagnostics.visible = !hiddenVideo;
+            const hiddenBlocked = cardInner ? syncBlockedAuthorCard(cardInner, operation) : false;
+            diagnostics.filterStatus = hiddenBlocked ? 'hiddenBlocked' : hiddenVideo ? 'hiddenVideo' : 'pending';
+            diagnostics.visible = !hiddenBlocked && !hiddenVideo;
             card.style.display = hiddenVideo ? 'none' : '';
             card.classList.remove('prts-card-gray');
             if (cardInner) {
@@ -170,6 +171,13 @@
         const diagnostics = hasEffectiveOperationData(operation)
             ? createCardDiagnostics(resolution.source)
             : createCardDiagnostics('none');
+
+        if (syncBlockedAuthorCard(cardInner, operation)) {
+            diagnostics.filterStatus = 'hiddenBlocked';
+            diagnostics.visible = false;
+            cardDiagnosticsCache.set(card, diagnostics);
+            return diagnostics;
+        }
 
         if (CONFIG.hideVideo && isVideoOperationCard(cardInner, operation)) {
             diagnostics.filterStatus = 'hiddenVideo';
@@ -276,6 +284,7 @@
             pendingCards: 0,
             unavailableCards: 0,
             hiddenVideoCards: 0,
+            hiddenBlockedCards: 0,
             visibleCards: 0
         };
 
