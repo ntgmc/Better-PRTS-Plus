@@ -4806,6 +4806,29 @@ test('followed author markers use all follow pages and author IDs, and skip only
   assert.strictEqual(h.requests.length, 2, 'routine scaffold sync reuses the follow list');
 });
 
+test('followed author markers clear on the matching profile and return in ordinary lists', async () => {
+  const h = createFollowedAuthorsHarness();
+  const followed = h.addAuthor('7661'), other = h.addAuthor('33');
+  h.respond(['7661', '33']);
+  await h.page.syncFollowedAuthors();
+  h.page.applyFilterLogic();
+  assert(followed.inner.querySelector('.prts-followed-badge'));
+  for (const pathname of ['/profile/7661', '/profile/7661/']) {
+    h.page.window.location.pathname = pathname;
+    h.page.processOperationCard(followed.card);
+    h.page.processOperationCard(other.card);
+    assert.strictEqual(followed.inner.classList.contains('prts-followed-card'), false);
+    assert.strictEqual(followed.inner.querySelector('.prts-followed-badge'), null);
+    assert(other.inner.querySelector('.prts-followed-badge'), 'other authors still have their markers');
+  }
+  for (const pathname of ['/', '/profile/76610']) {
+    h.page.window.location.pathname = pathname;
+    h.page.processOperationCard(followed.card);
+    assert.strictEqual(followed.inner.classList.contains('prts-followed-card'), true);
+    assert(followed.inner.querySelector('.prts-followed-badge'));
+  }
+});
+
 test('followed author preference defaults on, persists, restores from backup and disables immediately', async () => {
   assert.strictEqual(normalizeConfig({}).markFollowedAuthors, true);
   assert.strictEqual(normalizeConfig({ markFollowedAuthors: false }).markFollowedAuthors, false);

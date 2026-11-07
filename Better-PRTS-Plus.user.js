@@ -2206,8 +2206,9 @@ Object.entries({
         const author = cardInner.querySelector('.bp4-icon-user, .bp6-icon-user')?.parentElement
             ?.querySelector('a[href^="/profile/"]');
         const authorId = operation?.uploaderId ?? author?.getAttribute('href')?.match(/^\/profile\/(\d+)\/?$/)?.[1];
+        const isAuthorProfile = window.location.pathname.match(/^\/profile\/(\d+)\/?$/)?.[1] === String(authorId);
         const followed = CONFIG.markFollowedAuthors && Boolean(author) && !isFollowingOnlyList(card) &&
-            followedAuthorIds.has(String(authorId));
+            !isAuthorProfile && followedAuthorIds.has(String(authorId));
         cardInner.classList.toggle('prts-followed-card', followed);
         const existing = cardInner.querySelector('.prts-followed-badge');
         if (!followed) {
