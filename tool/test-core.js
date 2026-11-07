@@ -4741,7 +4741,11 @@ test('immediate filtering keeps the pending frame, absorbs delays and avoids red
 function createFollowedAuthorsHarness() {
   const h = createFilterPage('GRAY');
   const { page, cards } = h;
-  const responses = [], requests = [];
+  const responses = [], requests = [], authorCards = [];
+  let onlyFollowing = false;
+  const querySelector = page.document.querySelector;
+  page.document.querySelector = selector => selector.includes('icon-following')
+    ? onlyFollowing ? createTestElement('button') : null : querySelector(selector);
   let auth = { token: 'test-site-token', validBefore: '2099-01-01T00:00:00Z' };
   page.localStorage = { getItem: () => JSON.stringify(auth) };
   page.AbortController = AbortController;
@@ -4760,15 +4764,20 @@ function createFollowedAuthorsHarness() {
     return element;
   };
   page.document.querySelectorAll = selector => selector === '.prts-followed-card'
-    ? cards.map(card => card.children[0]).filter(inner => inner.classList.contains('prts-followed-card'))
-    : selector === '.prts-followed-badge' ? cards.flatMap(card => card.children[0].children.filter(child => child.className === 'prts-followed-badge')) : cards;
+    ? authorCards.map(item => item.inner).filter(inner => inner.classList.contains('prts-followed-card'))
+    : selector === '.prts-followed-badge' ? authorCards.flatMap(item => item.inner.children.filter(child => child.className === 'prts-followed-badge'))
+    : selector.startsWith('.bp4-icon-user + a') ? authorCards.map(item => item.author) : cards;
   return {
     ...h, requests, responses,
+    setOnlyFollowing: value => { onlyFollowing = value; },
     setAuth: value => { auth = value; },
     respond: (ids, hasNext = false) => responses.push({ status_code: 200, data: { has_next: hasNext, data: ids.map(id => ({ id })) } }),
-    addAuthor(id) {
-      const item = h.addCard({ uploaderId: id, opers: [{ name: '阿米娅' }] });
+    addAuthor(id, isSet = false) {
+      const inner = createTestElement('div');
+      const item = isSet ? { card: inner, inner } : h.addCard({ uploaderId: id, opers: [{ name: '阿米娅' }] });
       const author = createTestElement('a', '同名作者');
+      authorCards.push({ ...item, author });
+      author.closest = () => item.inner;
       author.getAttribute = () => `/profile/${id}`;
       author.after = badge => item.inner.appendChild(badge);
       item.inner.appendChild(author);
@@ -4796,14 +4805,60 @@ test('followed author markers use all follow pages and author IDs, and skip only
   const badge = followed.inner.querySelector('.prts-followed-badge');
   h.page.processOperationCard(followed.card);
   assert.strictEqual(followed.inner.querySelector('.prts-followed-badge'), badge);
-  followed.card.__reactFiber$test = { memoizedProps: {}, return: { memoizedProps: { onlyFollowing: true } } };
+  h.setOnlyFollowing(true);
   h.page.processOperationCard(followed.card);
   assert.strictEqual(followed.inner.querySelector('.prts-followed-badge'), null);
-  followed.card.__reactFiber$test.return.memoizedProps.onlyFollowing = false;
+  h.setOnlyFollowing(false);
   h.page.processOperationCard(followed.card);
   assert(followed.inner.querySelector('.prts-followed-badge'));
   await h.page.syncFollowedAuthors();
   assert.strictEqual(h.requests.length, 2, 'routine scaffold sync reuses the follow list');
+});
+
+test('followed author markers include sets, loaded set contents and appended cards without filtering sets', async () => {
+  const h = createFollowedAuthorsHarness();
+  const followedSet = h.addAuthor('22', true), ordinarySet = h.addAuthor('44', true);
+  const followedJob = h.addAuthor('7661'), ordinaryJob = h.addAuthor('44');
+  h.respond(['22', '7661']);
+  await h.page.syncFollowedAuthors();
+  for (const item of [followedSet, followedJob]) {
+    assert.strictEqual(item.inner.classList.contains('prts-followed-card'), true);
+    assert.strictEqual(item.inner.querySelector('.prts-followed-badge').textContent, '已关注');
+  }
+  for (const item of [ordinarySet, ordinaryJob]) assert.strictEqual(item.inner.querySelector('.prts-followed-badge'), null);
+  assert.strictEqual(h.page.getOperationCards().length, 2, 'sets remain outside operator filtering and statistics');
+  const appended = h.addAuthor('22', true);
+  await h.page.syncFollowedAuthors();
+  assert(appended.inner.querySelector('.prts-followed-badge'));
+  assert.strictEqual(h.requests.length, 1, 'appended sets reuse the cached follow list');
+  h.page.__testExports.CONFIG.markFollowedAuthors = false;
+  await h.page.syncFollowedAuthors();
+  for (const item of [followedSet, followedJob, appended]) {
+    assert.strictEqual(item.inner.classList.contains('prts-followed-card'), false);
+    assert.strictEqual(item.inner.querySelector('.prts-followed-badge'), null);
+  }
+});
+
+test('set markers follow only-following and profile exclusions without suppressing other authors', async () => {
+  const h = createFollowedAuthorsHarness();
+  const set = h.addAuthor('22', true), member = h.addAuthor('7661');
+  member.inner.closest = selector => selector.includes('drawer') ? createTestElement('div') : null;
+  h.setOnlyFollowing(true);
+  h.respond(['22', '7661']);
+  await h.page.syncFollowedAuthors();
+  assert.strictEqual(set.inner.querySelector('.prts-followed-badge'), null);
+  assert(member.inner.querySelector('.prts-followed-badge'), 'members use their own list and author');
+  h.setOnlyFollowing(false);
+  await h.page.syncFollowedAuthors();
+  assert(set.inner.querySelector('.prts-followed-badge'));
+  h.page.window.location.pathname = '/profile/22';
+  await h.page.syncFollowedAuthors();
+  assert.strictEqual(set.inner.classList.contains('prts-followed-card'), false);
+  assert.strictEqual(set.inner.querySelector('.prts-followed-badge'), null);
+  assert(member.inner.querySelector('.prts-followed-badge'));
+  h.page.window.location.pathname = '/';
+  await h.page.syncFollowedAuthors();
+  assert(set.inner.querySelector('.prts-followed-badge'));
 });
 
 test('followed author markers clear on the matching profile and return in ordinary lists', async () => {

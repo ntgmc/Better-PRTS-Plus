@@ -2,7 +2,6 @@
     let followedAuthorsToken = '';
     let followedAuthorsRequest = null;
     let followedAuthorsCheckedAt = 0;
-    let followedAuthorsOnly = false;
 
     function getPrtsFollowToken() {
         try {
@@ -15,13 +14,8 @@
     }
 
     function isFollowingOnlyList(card) {
-        let fiber = getFiberNode(card);
-        for (let depth = 0; fiber && depth < 30; depth++, fiber = fiber.return) {
-            if (fiber.memoizedProps && 'onlyFollowing' in fiber.memoizedProps) {
-                return fiber.memoizedProps.onlyFollowing === true;
-            }
-        }
-        return false;
+        if (card.closest('.bp4-drawer, .bp6-drawer')) return false;
+        return Boolean(document.querySelector('button.bp4-active:has(.bp4-icon-following), button.bp6-active:has(.bp6-icon-following)'));
     }
 
     function clearFollowedAuthors() {
@@ -34,12 +28,18 @@
         document.querySelectorAll('.prts-followed-badge').forEach(badge => badge.remove());
     }
 
+    function syncFollowedAuthorCards() {
+        document.querySelectorAll('.bp4-icon-user + a[href^="/profile/"], .bp6-icon-user + a[href^="/profile/"]')
+            .forEach(author => {
+                const card = author.closest(BP_SELECTORS.card);
+                if (card) syncFollowedAuthorBadge(card, card);
+            });
+    }
+
     async function syncFollowedAuthors(forceRefresh = false) {
-        const onlyFollowing = isFollowingOnlyList(getOperationCards()[0]);
-        if (onlyFollowing !== followedAuthorsOnly) requestFilterUpdate();
-        followedAuthorsOnly = onlyFollowing;
         const token = CONFIG.markFollowedAuthors && !isFilterDisabledPage() ? getPrtsFollowToken() : '';
         if (token !== followedAuthorsToken) clearFollowedAuthors();
+        syncFollowedAuthorCards();
         if (!token || document.hidden) return;
         followedAuthorsToken = token;
         if (followedAuthorsRequest || (!forceRefresh && Date.now() - followedAuthorsCheckedAt < 60000)) return;
@@ -67,7 +67,7 @@
             }
             if (controller.signal.aborted || getPrtsFollowToken() !== token || !CONFIG.markFollowedAuthors) return;
             followedAuthorIds = ids;
-            requestFilterUpdate();
+            syncFollowedAuthorCards();
         } catch {
             if (!controller.signal.aborted) console.warn('[Better PRTS] 关注列表读取失败，稍后重试');
         } finally {
