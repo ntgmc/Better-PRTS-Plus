@@ -3924,13 +3924,21 @@ Object.entries({
         flex-direction: row;
         flex-wrap: wrap;
         align-items: center;
-        justify-content: space-between;
+        justify-content: flex-end;
         gap: 8px 16px;
         overflow-wrap: anywhere;
     }
     .prts-profile-compact-layout > div:nth-child(2) > div > :first-child > * {
         min-width: 0;
         margin: 0 !important;
+    }
+    .prts-profile-compact-layout > div:nth-child(2) > div > :first-child > :first-child {
+        margin-right: auto !important;
+    }
+    @media (max-width: 480px) {
+        .prts-profile-compact-layout > div:nth-child(2) > div > :first-child:has(> #prts-profile-block-controls) > :first-child { flex-basis: 100%; }
+        .prts-profile-compact-layout > div:nth-child(2) > div > :first-child:has(> #prts-profile-block-controls) > :is(.bp4-fill, .bp6-fill),
+        .prts-profile-compact-layout #prts-profile-block-controls > button { padding-inline: 8px !important; }
     }
     .prts-profile-compact-layout > div:nth-child(2) > div > :first-child > :is(.bp4-fill, .bp6-fill) {
         width: auto;

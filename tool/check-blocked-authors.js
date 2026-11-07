@@ -333,6 +333,12 @@ async function checkProfileLayout(page, theme, openCategory, closeSettings) {
       assert(await page.locator('#prts-profile-block-controls').evaluate(e => e.parentElement.classList.contains('bp6-card')), 'profile action lives inside original user card');
       const boxes = await card.locator('button').evaluateAll(es => es.map(e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }));
       assert(boxes.every(r => r.left >= 0 && r.right <= width + 1), `${theme}: all profile actions fit ${width}px`);
+      if (collapsed && boxes.length === 2) {
+        assert(Math.abs(boxes[1].left - boxes[0].right - 16) <= 1, `follow and block buttons stay adjacent at ${width}px: ${JSON.stringify(boxes)}`);
+        assert(Math.abs((boxes[0].top + boxes[0].bottom) - (boxes[1].top + boxes[1].bottom)) <= 2, 'follow and block buttons share a row');
+        const cardBox = await card.boundingBox();
+        assert(Math.abs(cardBox.x + cardBox.width - boxes[1].right - 17) <= 1, 'profile actions align with the right card padding');
+      }
       if (collapsed && width === 1440) assert((await card.boundingBox()).height < 90, 'desktop user card remains compact');
       await capture(page, theme, `profile-${collapsed ? 'compact' : 'regular'}-${width}`, width, `${sidebarSelector} .bp6-card:first-child`);
     }
