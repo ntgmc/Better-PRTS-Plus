@@ -10,6 +10,7 @@ const script = fs.readFileSync(path.join(root, 'Better-PRTS-Plus.user.js'), 'utf
 const resources = JSON.parse(fs.readFileSync(path.join(root, 'resources/data.json'), 'utf8'));
 const version = script.match(/^\/\/\s*@version\s+(\S+)/m)[1];
 const report = { screenshots: [], checks: [], errors: [] };
+const sidebarSelector = '.docs-content-wrapper > .flex > div:nth-child(2)';
 
 async function main() {
   fs.mkdirSync(output, { recursive: true });
@@ -91,12 +92,59 @@ async function main() {
       const first = page.locator(operation).first();
       const id = (await first.locator(authorLink).getAttribute('href')).split('/').pop();
       const name = await first.locator(authorLink).textContent();
-      await first.locator('.prts-block-user').focus();
+      assert.equal(await page.locator('.prts-block-user').count(), 0, 'enabled feature adds no card shortcuts');
+      const profileResponse = page.waitForResponse(response => new URL(response.url()).pathname === '/user/info');
+      await first.locator(authorLink).click();
+      const { data: user } = await (await profileResponse).json();
+      await page.waitForSelector('#prts-profile-block-controls button');
+      await checkProfileLayout(page, theme, openCategory, closeSettings);
+      let following = false, followWrites = 0;
+      await page.route('https://prts.maa.plus/**', async route => {
+        const request = route.request(), url = new URL(request.url());
+        if (url.pathname === '/user/info') {
+          const response = await route.fetch({ headers: { ...request.headers(), authorization: '' } });
+          const result = await response.json();
+          if (String(result.data?.id) === id) result.data = { ...result.data, relation: following ? 'FOLLOWING' : 'NONE', fans_count: user.fans_count + Number(following) };
+          return route.fulfill({ json: result });
+        }
+        if (url.pathname === '/user/me') return route.fulfill({ json: { status_code: 200, data: { id: '999999999', user_name: '验证账号', activated: true } } });
+        if (request.method() === 'POST' && [`/follow/follow/${id}`, `/follow/unfollow/${id}`].includes(url.pathname)) {
+          following = url.pathname.includes('/follow/follow/');
+          followWrites++;
+          return route.fulfill({ json: { status_code: 200, data: null } });
+        }
+        const publicSetQuery = request.method() === 'POST' && url.pathname === '/set/query';
+        if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method()) && !publicSetQuery) return route.abort();
+        const headers = { ...request.headers() };
+        delete headers.authorization;
+        return route.continue({ headers });
+      });
+      await page.evaluate(() => sessionStorage.setItem('reviewFollowControls', 'true'));
+      await page.addInitScript(() => {
+        if (sessionStorage.getItem('reviewFollowControls')) localStorage.setItem('zoot-plus-auth', JSON.stringify({ token: 'browser-review-fixture', validBefore: '2099-01-01T00:00:00Z', userId: '999999999', username: '验证账号', activated: true }));
+        else localStorage.removeItem('zoot-plus-auth');
+      });
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#prts-profile-block-controls button');
+      const userCard = page.locator('#prts-profile-block-controls').locator('..');
+      await userCard.getByRole('button', { name: '关注', exact: true }).click();
+      await userCard.getByRole('button', { name: '已关注', exact: true }).waitFor();
+      await checkProfileLayout(page, `${theme}-following`, openCategory, closeSettings);
+      await userCard.getByRole('button', { name: '已关注', exact: true }).focus();
+      await page.keyboard.press('Enter');
+      await userCard.getByRole('button', { name: '关注', exact: true }).waitFor();
+      assert.equal(followWrites, 2, 'original follow and unfollow controls still work');
+      await page.locator('#prts-profile-block-controls button').focus();
       await page.keyboard.press('Enter');
       await assertAuthorHidden(id, true);
-      assert.equal(await page.locator('.bp6-drawer').count(), 0, 'keyboard blocking does not open the operation');
-      assert.equal(await page.locator('.prts-float-btn').evaluate(e => e === document.activeElement), true, 'hidden action restores focus to settings');
+      assert.equal(await page.locator('#prts-profile-block-controls button').evaluate(e => e === document.activeElement), true, 'profile action preserves keyboard focus');
       assert.equal((await savedUsers())[0].id, id);
+      await capture(page, theme, 'profile-blocked-compact-320', 320, `${sidebarSelector} .bp6-card:first-child`);
+      await page.setViewportSize({ width: 1440, height: 1000 });
+      await page.evaluate(() => { sessionStorage.removeItem('reviewFollowControls'); localStorage.removeItem('zoot-plus-auth'); });
+      await page.goto('https://prts.plus/', { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: '最新', exact: true }).click();
+      await assertAuthorHidden(id, true);
       assert(await page.locator(`${operation}:visible`).count(), 'other authors remain visible');
       await page.locator('#btn-setting').click();
       await assertAuthorHidden(id, true);
@@ -124,7 +172,7 @@ async function main() {
       await page.reload({ waitUntil: 'domcontentloaded' });
       await page.waitForSelector('#prts-profile-block-controls');
       await assertAuthorHidden(id, false);
-      await capture(page, theme, 'profile-320', 320, '#prts-profile-block-controls');
+      await capture(page, theme, 'profile-320', 320, `${sidebarSelector} .bp6-card:first-child`);
       await page.locator(`${operation}:visible`).first().click();
       await page.waitForSelector(`.bp6-drawer a[href="/profile/${id}"]`);
       assert.equal(await page.locator('.prts-blocked-detail-notice').count(), 0, 'blacklist profile can open the operation');
@@ -136,13 +184,11 @@ async function main() {
       assert.equal(await page.locator('.bp6-drawer > section').isVisible(), false, 'direct operation links hide blocked content and download controls');
       await capture(page, theme, 'direct-detail-hidden-320', 320, '.bp6-drawer');
       await openBlacklist();
-      await toggle.focus();
-      await page.keyboard.press('Space');
+      await toggle.locator('..').click();
       await page.locator('.prts-blocked-detail-notice').waitFor({ state: 'hidden' });
       assert(await page.locator('.bp6-drawer > section').isVisible(), 'disabling restores the original operation');
-      await toggle.focus();
-      await page.keyboard.press('Space');
-      assert(await toggle.isChecked(), 'keyboard reenabling inside the operation drawer persists');
+      await toggle.locator('..').click();
+      assert(await toggle.isChecked(), 'reenabling inside the operation drawer persists');
       await page.locator('.prts-blocked-detail-notice').waitFor();
       await closeSettings();
       await page.getByRole('link', { name: '返回列表', exact: true }).click();
@@ -150,7 +196,7 @@ async function main() {
       await page.waitForSelector('.bp6-drawer', { state: 'hidden' });
       await page.waitForSelector('#prts-profile-block-controls');
       await assertAuthorHidden(id, true);
-      await capture(page, theme, 'profile-hidden-320', 320, '#prts-profile-block-controls');
+      await capture(page, theme, 'profile-hidden-320', 320, `${sidebarSelector} .bp6-card:first-child`);
       await page.locator('#prts-profile-block-controls button').click();
       await assertAuthorHidden(id, false);
       assert.equal((await savedUsers()).length, 0);
@@ -187,10 +233,11 @@ async function main() {
       await assertAuthorHidden(id, true);
       await openBlacklist();
       assert.equal((await savedUsers())[0].id, id);
-      report.checks.push(`${theme}: default off, keyboard enable, author ID blocking, appended cards, both display modes, immediate disable/enable, profile entry and reload, matching profile details, direct detail links hidden, disabling restores details, ordinary profile hidden, profile unblock/block, export/import, save failure and focus recovery`);
+      report.checks.push(`${theme}: profile user card and original follow controls, sidebar collapse/restore, no card shortcuts, keyboard blocking, author IDs, appended cards, both display modes, immediate disable/enable, profile entry and reload, matching profile details, direct detail links hidden, ordinary profile hidden, export/import, save failure and focus recovery`);
 
       console.log(`${theme}: set members and narrow layouts`);
       await closeSettings();
+      await page.setViewportSize({ width: 1440, height: 1000 });
       await page.goto('https://prts.plus/', { waitUntil: 'domcontentloaded' });
       await page.getByRole('tab', { name: '作业集', exact: true }).click();
       const setSelector = '.bp6-card.bp6-interactive:has(.bp6-icon-document):has(.bp6-icon-user + a)';
@@ -199,16 +246,29 @@ async function main() {
       const member = '.bp6-drawer ul > li > .bp6-card';
       await page.waitForSelector(`${member}:visible`);
       const memberId = (await page.locator(`${member}:visible ${authorLink}`).first().getAttribute('href')).split('/').pop();
-      await page.locator(`${member}:visible .prts-block-user`).first().focus();
-      await page.keyboard.press('Space');
-      await page.waitForFunction(({ member, memberId }) => [...document.querySelectorAll(member)].filter(card => card.querySelector('.bp6-icon-user + a')?.getAttribute('href') === `/profile/${memberId}`).every(card => getComputedStyle(card.parentElement).display === 'none'), { member, memberId });
-      assert(await page.locator('.bp6-drawer').isVisible(), 'blocking a member keeps its set open');
-      assert(await page.locator('.bp6-drawer').evaluate(e => e === document.activeElement), 'hidden member action restores drawer focus');
+      const setUrl = page.url();
+      assert.equal(await page.locator('.prts-block-user').count(), 0, 'set members have no block shortcuts');
+      await page.goto(`https://prts.plus/profile/${memberId}`, { waitUntil: 'domcontentloaded' });
+      await page.locator('#prts-profile-block-controls button').click();
+      await page.goto(setUrl, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('.bp6-drawer');
+      await page.waitForFunction(({ member, memberId }) => {
+        const cards = [...document.querySelectorAll(member)].filter(card => card.querySelector('.bp6-icon-user + a')?.getAttribute('href') === `/profile/${memberId}`);
+        return cards.length && cards.every(card => getComputedStyle(card.parentElement).display === 'none');
+      }, { member, memberId });
+      await page.locator('.bp6-drawer').focus();
       await page.keyboard.press('Escape');
       await page.waitForSelector('.bp6-drawer', { state: 'hidden' });
-      const set = page.locator(`${setSelector}:visible`).first();
+      await page.getByRole('tab', { name: '作业集', exact: true }).click();
+      await page.locator(setSelector).first().waitFor({ state: 'attached' });
+      const set = page.locator(setSelector).first();
       const creatorId = (await set.locator(authorLink).getAttribute('href')).split('/').pop();
-      await set.locator('.prts-block-user').click();
+      await page.goto(`https://prts.plus/profile/${creatorId}`, { waitUntil: 'domcontentloaded' });
+      await page.waitForSelector('#prts-profile-block-controls button');
+      const creatorBlock = page.locator('#prts-profile-block-controls button');
+      if ((await creatorBlock.textContent()).includes('拉黑此用户')) await creatorBlock.click();
+      await page.goto('https://prts.plus/', { waitUntil: 'domcontentloaded' });
+      await page.getByRole('tab', { name: '作业集', exact: true }).click();
       await page.waitForFunction(({ setSelector, creatorId }) => [...document.querySelectorAll(setSelector)].filter(card => card.querySelector('.bp6-icon-user + a')?.getAttribute('href') === `/profile/${creatorId}`).every(card => getComputedStyle(card).display === 'none'), { setSelector, creatorId });
       await page.locator('button:has(.bp6-icon-list)').click();
       await page.waitForFunction(({ setSelector, creatorId }) => {
@@ -220,7 +280,7 @@ async function main() {
       await closeSettings();
       await page.goto('https://prts.plus/create', { waitUntil: 'domcontentloaded' });
       assert.equal(await page.locator('.prts-block-user, #prts-profile-block-controls, .prts-blocked-content').count(), 0);
-      report.checks.push(`${theme}: set creator and own member author IDs, drawer remains open when blocking, set grid and list cleanup, narrow blacklist, create page exclusion`);
+      report.checks.push(`${theme}: profile-only blocking hides set creators and their own member author IDs, set grid/list cleanup, narrow blacklist, create page exclusion`);
       // A long saved name tests the same backup input boundary used by users.
       backup.preferences.config.blockedUsers[0].name = '验证很长的用户名LongNameWithoutSpaces'.repeat(4);
       const longBackup = path.join(output, `${theme}-long-backup.json`);
@@ -256,6 +316,37 @@ async function main() {
   }
 }
 
+async function checkProfileLayout(page, theme, openCategory, closeSettings) {
+  const card = page.locator(`${sidebarSelector} .bp6-card`).first();
+  await card.evaluate(e => { window.originalProfileNodes = [...e.children].filter(node => node.id !== 'prts-profile-block-controls'); });
+  for (const collapsed of [false, true]) {
+    await openCategory('page');
+    const toggle = page.getByRole('checkbox', { name: '折叠侧边栏', exact: true });
+    if (await toggle.isChecked() !== collapsed) {
+      await toggle.focus();
+      await page.keyboard.press('Space');
+    }
+    await closeSettings();
+    for (const width of theme.endsWith('-following') ? [1440, 768, 375, 320] : [1440, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      assert(await card.evaluate(e => window.originalProfileNodes.every(node => node.parentElement === e)), 'original profile and follow nodes remain mounted');
+      assert(await page.locator('#prts-profile-block-controls').evaluate(e => e.parentElement.classList.contains('bp6-card')), 'profile action lives inside original user card');
+      const boxes = await card.locator('button').evaluateAll(es => es.map(e => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; }));
+      assert(boxes.every(r => r.left >= 0 && r.right <= width + 1), `${theme}: all profile actions fit ${width}px`);
+      if (collapsed && width === 1440) assert((await card.boundingBox()).height < 90, 'desktop user card remains compact');
+      await capture(page, theme, `profile-${collapsed ? 'compact' : 'regular'}-${width}`, width, `${sidebarSelector} .bp6-card:first-child`);
+    }
+  }
+  if (theme.endsWith('-following')) {
+    const heading = card.locator('h4').first();
+    await heading.evaluate(e => { window.originalHeadingNodes = [...e.childNodes]; e.textContent = '很长的用户名LongNameWithoutSpaces'.repeat(4); });
+    assert(await heading.evaluate(e => e.scrollWidth <= e.clientWidth + 1), 'long profile names wrap beside the actions');
+    await capture(page, theme, 'profile-long-name-320', 320, `${sidebarSelector} .bp6-card:first-child`);
+    await heading.evaluate(e => e.replaceChildren(...window.originalHeadingNodes));
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+}
+
 async function capture(page, theme, name, width, selector) {
   await page.setViewportSize({ width, height: 1000 });
   const target = page.locator(selector);
@@ -263,10 +354,6 @@ async function capture(page, theme, name, width, selector) {
   await page.waitForTimeout(250);
   assert(await target.evaluate(e => { const r = e.getBoundingClientRect(); return r.left >= -1 && r.right <= innerWidth + 1; }), `${name}: component fits viewport`);
   if (selector.includes('blacklist')) assert(await target.evaluate(e => e.scrollWidth <= e.clientWidth + 1), `${name}: no internal horizontal overflow`);
-  if (name === 'profile-320') {
-    const button = page.locator('.prts-block-user:visible').first();
-    assert(await button.evaluate(e => { const r = e.getBoundingClientRect(); return r.left >= 0 && r.right <= innerWidth; }), 'profile author action fits viewport');
-  }
   const filename = `${theme}-${name}.png`;
   await page.screenshot({ path: path.join(output, filename) });
   report.screenshots.push(filename);

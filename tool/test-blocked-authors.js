@@ -1,4 +1,4 @@
-module.exports = ({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage, createFollowedAuthorsHarness, hostObject }) => {
+module.exports = ({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage, createFollowedAuthorsHarness, createTestElement, hostObject }) => {
   const setup = () => {
     const h = createFollowedAuthorsHarness();
     h.page.__testExports.CONFIG.blockUsers = true;
@@ -25,12 +25,10 @@ module.exports = ({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage
     const h = setup(), { page } = h;
     const blocked = h.addAuthor('22'), ordinary = h.addAuthor('33'), set = h.addAuthor('22', true);
     page.syncBlockedAuthors();
-    let stopped = 0;
-    blocked.inner.querySelector('.prts-btn prts-block-user')._prtsClickHandler({ preventDefault() { stopped++; }, stopPropagation() { stopped++; } });
-    assert.strictEqual(stopped, 2, 'blocking does not open the operation or navigate');
-    const button = blocked.inner.querySelector('.prts-btn prts-block-user');
-    for (const key of ['Enter', ' ']) button.onkeydown({ key, stopPropagation() { stopped++; } });
-    assert.strictEqual(stopped, 4, 'keyboard activation does not reach the interactive card');
+    page.setAuthorBlocked('22', '同名作者', true);
+    for (const item of [blocked, ordinary, set]) {
+      assert.strictEqual(item.inner.children.length, 1, 'author rows retain only their original content');
+    }
     page.applyFilterLogic();
     assert(blocked.card.classList.contains('prts-blocked-content'));
     assert(!ordinary.card.classList.contains('prts-blocked-content'), 'same name does not hide another ID');
@@ -49,7 +47,6 @@ module.exports = ({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage
     page.syncBlockedAuthors();
     page.applyFilterLogic();
     for (const node of [blocked.card, added.card, set.inner]) assert(!node.classList.contains('prts-blocked-content'));
-    assert.strictEqual(blocked.inner.querySelector('.prts-btn prts-block-user'), null);
     assert.strictEqual(page.__testExports.CONFIG.blockedUsers.length, 1, 'turning off preserves the list');
     page.__testExports.CONFIG.blockUsers = true;
     page.syncBlockedAuthors();
@@ -57,6 +54,60 @@ module.exports = ({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage
     page.setAuthorBlocked('22', '', false);
     page.applyFilterLogic();
     for (const node of [blocked.card, added.card, set.inner]) assert(!node.classList.contains('prts-blocked-content'));
+  });
+
+  test('profile controls stay inside the original user card, preserve follow controls and clean up immediately', () => {
+    for (const blueprint of ['bp4', 'bp6']) {
+      const h = setup(), { page } = h;
+      const layout = createTestElement();
+      const main = createTestElement(), sidebar = createTestElement();
+      const profileCard = createTestElement();
+      profileCard.className = `${blueprint}-card`;
+      const heading = createTestElement('h4', '作者');
+      const follow = createTestElement('button', '已关注');
+      heading.closest = () => profileCard;
+      profileCard.appendChild(heading);
+      profileCard.appendChild(follow);
+      sidebar.appendChild(profileCard);
+      layout.appendChild(main);
+      layout.appendChild(sidebar);
+      h.body.appendChild(layout);
+      sidebar.querySelector = () => heading;
+      const query = page.document.querySelector;
+      page.document.querySelector = selector => selector === '.docs-content-wrapper > .flex' ? layout
+        : selector === '#prts-profile-block-controls button' ? page.document.getElementById('prts-profile-block-controls')?.querySelector('button') : query(selector);
+      page.window.location.pathname = '/profile/22';
+      page.syncBlockedProfileControls();
+      const controls = page.document.getElementById('prts-profile-block-controls');
+      assert.strictEqual(controls.parentElement, profileCard);
+      assert.strictEqual(main.children.length, 0, 'no separate row above the operation list');
+      const button = controls.querySelector('button');
+      assert.strictEqual(button.className, `${blueprint}-button ${blueprint}-fill ${blueprint}-minimal`);
+      assert(button.textContent.includes('拉黑此用户'));
+      page.syncBlockedProfileControls();
+      assert.strictEqual(controls.querySelector('button'), button, 'routine sync preserves keyboard focus');
+      button.closest = () => controls;
+      button.focus();
+      button._prtsClickHandler();
+      assert.strictEqual(page.isBlockedAuthorHidden('22'), true);
+      assert.strictEqual(page.document.activeElement, controls.querySelector('button'));
+      assert(controls.textContent.includes('解除拉黑'));
+      assert(controls.textContent.includes('已拉黑该用户'));
+      assert.deepStrictEqual(profileCard.children.slice(0, 2), [heading, follow], 'original follow nodes remain mounted');
+      page.window.location.search = '?prts_blacklist=22';
+      page.syncBlockedProfileControls();
+      assert(controls.textContent.includes('正在查看'));
+      page.__testExports.CONFIG.blockUsers = false;
+      page.syncBlockedAuthors();
+      assert.strictEqual(page.document.getElementById('prts-profile-block-controls'), null);
+      assert.deepStrictEqual(profileCard.children, [heading, follow]);
+      page.__testExports.CONFIG.blockUsers = true;
+      page.syncBlockedAuthors();
+      assert.strictEqual(page.document.getElementById('prts-profile-block-controls').parentElement, profileCard);
+      page.window.location.pathname = '/';
+      page.syncBlockedProfileControls();
+      assert.strictEqual(page.document.getElementById('prts-profile-block-controls'), null);
+    }
   });
 
   test('only the matching blacklist profile link reveals a blocked author and leaving restores hiding', () => {
@@ -115,7 +166,6 @@ module.exports = ({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage
     page.isFilterDisabledPage = () => true;
     page.syncBlockedAuthors();
     assert(!author.card.classList.contains('prts-blocked-content'));
-    assert.strictEqual(author.inner.querySelector('.prts-btn prts-block-user'), null);
   });
 
   test('blacklist persists across pages and backups, handles old backups and preserves state on write failure', () => {

@@ -4836,7 +4836,6 @@ function createFollowedAuthorsHarness() {
     : selector.startsWith('.bp4-icon-user + a') ? authorCards.map(item => item.author)
     : selector === '.bp4-drawer, .bp6-drawer' ? []
     : selector === '.prts-blocked-content' ? [...cards, ...authorCards.map(item => item.inner)].filter(node => node.classList.contains('prts-blocked-content'))
-    : selector === '.prts-block-user, #prts-profile-block-controls' ? authorCards.flatMap(item => item.inner.children.filter(child => child.classList.contains('prts-block-user')))
     : cards;
   return {
     ...h, requests, responses,
@@ -5032,7 +5031,7 @@ test('invalid follow responses and disabling during a request cannot publish par
   assert.strictEqual(inner.querySelector('.prts-followed-badge'), null);
 });
 
-require('./test-blocked-authors')({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage, createFollowedAuthorsHarness, hostObject });
+require('./test-blocked-authors')({ assert, test, normalizeConfig, CONFIG_KEY, createAccountPage, createFollowedAuthorsHarness, createTestElement, hostObject });
 require('./test-skland-sync')({ assert, test, createAccountState, serializeAccountState, createAccountPage, hostObject, hostArray });
 
 (async () => {

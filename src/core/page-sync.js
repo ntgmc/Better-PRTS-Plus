@@ -218,7 +218,7 @@
 
     function isScriptOwnedNode(node) {
         const element = node?.nodeType === 1 ? node : node?.parentElement;
-        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-followed-badge, .prts-block-user, .prts-blocked-detail-notice, #prts-profile-block-controls, .prts-popover-grid'));
+        return Boolean(element?.closest?.('#prts-filter-bar, #prts-filter-results, #prts-float-container, #prts-activity-shortcuts, #prts-toast-container, #prts-import-dialog, #prts-import-dialog-backdrop, #prts-modal, #prts-modal-backdrop, #prts-compat-debug-panel, .prts-import-status, .prts-status-label, .prts-followed-badge, .prts-blocked-detail-notice, #prts-profile-block-controls, .prts-popover-grid'));
     }
 
     function collectPageMutations(mutations) {

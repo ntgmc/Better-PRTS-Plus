@@ -18,8 +18,6 @@
     }
 
     function setAuthorBlocked(id, name, blocked) {
-        const fromCard = document.activeElement?.classList.contains('prts-block-user');
-        const drawer = fromCard ? document.activeElement.closest('.bp4-drawer, .bp6-drawer') : null;
         const fromProfile = document.activeElement?.closest('#prts-profile-block-controls');
         const previous = CONFIG.blockedUsers;
         CONFIG.blockedUsers = normalizeBlockedUsers([
@@ -33,8 +31,7 @@
             return;
         }
         syncBlockedAuthors();
-        if (fromCard) (drawer || document.querySelector('.prts-float-btn'))?.focus({ preventScroll: true });
-        else if (fromProfile) document.querySelector('#prts-profile-block-controls button')?.focus({ preventScroll: true });
+        if (fromProfile) document.querySelector('#prts-profile-block-controls button')?.focus({ preventScroll: true });
         requestFilterUpdate();
         showPrtsToast(blocked ? '已拉黑该用户' : '已解除拉黑', 'success');
     }
@@ -46,30 +43,6 @@
         const hidden = isBlockedAuthorHidden(id);
         const container = cardInner.parentElement?.tagName === 'LI' ? cardInner.parentElement : cardInner;
         container.classList.toggle('prts-blocked-content', hidden);
-        let button = cardInner.querySelector('.prts-block-user');
-        if (!CONFIG.blockUsers || !author || !id) {
-            button?.remove();
-            return hidden;
-        }
-        const blocked = CONFIG.blockedUsers.some(user => user.id === String(id));
-        const text = blocked ? '解除拉黑' : '拉黑';
-        if (button?.dataset.authorId === String(id) && button.dataset.blocked === String(blocked)) return hidden;
-        button?.remove();
-        button = createPrtsButton({
-            className: 'prts-btn prts-block-user', text,
-            ariaLabel: `${text} ${author.textContent.trim()}`,
-            onClick: event => {
-                event.preventDefault();
-                event.stopPropagation();
-                setAuthorBlocked(id, author.textContent, !blocked);
-            }
-        });
-        button.onkeydown = event => {
-            if (event.key === 'Enter' || event.key === ' ') event.stopPropagation();
-        };
-        button.dataset.authorId = String(id);
-        button.dataset.blocked = String(blocked);
-        author.parentElement.appendChild(button);
         return hidden;
     }
 
@@ -83,7 +56,7 @@
         if (!CONFIG.blockedUsers.length) {
             const empty = document.createElement('p');
             empty.className = 'prts-about-description';
-            empty.textContent = '黑名单为空。开启后，可在作业作者旁或个人主页拉黑用户。';
+            empty.textContent = '黑名单为空。开启后，可在用户个人主页拉黑。';
             list.appendChild(empty);
         }
         for (const user of CONFIG.blockedUsers) {
@@ -112,33 +85,35 @@
     function syncBlockedProfileControls() {
         const profileId = window.location.pathname.match(/^\/profile\/([1-9]\d*)\/?$/)?.[1];
         const layout = document.querySelector('.docs-content-wrapper > .flex');
-        const main = layout?.firstElementChild;
         const heading = layout?.children[1]?.querySelector(BP_SELECTORS.heading);
+        const profileCard = heading?.closest(BP_SELECTORS.card);
         let controls = document.getElementById('prts-profile-block-controls');
-        if (!CONFIG.blockUsers || !profileId || !main || !heading) {
+        if (!CONFIG.blockUsers || !profileId || !profileCard) {
             controls?.remove();
             return;
         }
         if (!controls) {
             controls = document.createElement('div');
             controls.id = 'prts-profile-block-controls';
-            main.prepend(controls);
         }
+        if (controls.parentElement !== profileCard) profileCard.appendChild(controls);
         const blocked = CONFIG.blockedUsers.some(user => user.id === profileId);
         const hidden = isBlockedAuthorHidden(profileId);
         const name = heading.textContent.trim();
         const signature = JSON.stringify([profileId, name, blocked, hidden]);
         if (controls.dataset.user === signature) return;
         controls.replaceChildren();
+        const blueprint = profileCard.classList.contains('bp6-card') ? 'bp6' : 'bp4';
+        controls.appendChild(createPrtsButton({
+            className: `${blueprint}-button ${blueprint}-fill ${blueprint}-minimal`,
+            icon: 'blockUsers', text: blocked ? '解除拉黑' : '拉黑此用户',
+            onClick: () => setAuthorBlocked(profileId, name, !blocked)
+        }));
         if (blocked) {
             const notice = document.createElement('span');
             notice.textContent = hidden ? '已拉黑该用户。请从悬浮球 → 黑名单进入主页查看作业。' : '正在查看黑名单用户的作业。';
             controls.appendChild(notice);
         }
-        controls.appendChild(createPrtsButton({
-            text: blocked ? '解除拉黑' : '拉黑此用户',
-            onClick: () => setAuthorBlocked(profileId, name, !blocked)
-        }));
         controls.dataset.user = signature;
     }
 
@@ -175,7 +150,7 @@
         syncBlockedOperationDetails();
         if (!CONFIG.blockUsers || isFilterDisabledPage()) {
             document.querySelectorAll('.prts-blocked-content').forEach(node => node.classList.remove('prts-blocked-content'));
-            document.querySelectorAll('.prts-block-user, #prts-profile-block-controls').forEach(node => node.remove());
+            document.getElementById('prts-profile-block-controls')?.remove();
             return;
         }
         document.querySelectorAll('.bp4-icon-user + a[href^="/profile/"], .bp6-icon-user + a[href^="/profile/"]')
