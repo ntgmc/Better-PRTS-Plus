@@ -25,6 +25,7 @@
         stageBadge: { group: '作业卡片', label: '显示关卡代号', icon: 'stageBadge', default: true, legacyKey: 'prts_cfg_visuals', alias: 'visuals', reloadOnDisable: true },
         clickStageFilter: { group: '作业卡片', label: '点击关卡筛选', icon: 'clickStageFilter', default: false },
         showExactTime: { group: '作业卡片', label: '显示完整上传时间', icon: 'exactTime', default: false, legacyKey: 'prts_cfg_exact_time' },
+        markFollowedAuthors: { group: '作业卡片', label: '标记关注用户作业', icon: 'accounts', default: true },
         cleanLink: { group: '作业卡片', label: '视频链接按钮', icon: 'videoLink', default: true, legacyKey: 'prts_cfg_link', reloadOnDisable: true },
         hideVideo: { group: '作业卡片', label: '隐藏视频作业', icon: 'hideVideo', default: false, legacyKey: 'prts_cfg_hide_video' },
         hidePrtsBadge: { group: '作业卡片', label: '隐藏 PRTS 类型标签', icon: 'hidePrtsBadge', default: true, reloadOnDisable: true },

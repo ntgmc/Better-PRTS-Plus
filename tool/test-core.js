@@ -4738,6 +4738,151 @@ test('immediate filtering keeps the pending frame, absorbs delays and avoids red
   assert.strictEqual(work.cards.length, 0);
 });
 
+function createFollowedAuthorsHarness() {
+  const h = createFilterPage('GRAY');
+  const { page, cards } = h;
+  const responses = [], requests = [];
+  let auth = { token: 'test-site-token', validBefore: '2099-01-01T00:00:00Z' };
+  page.localStorage = { getItem: () => JSON.stringify(auth) };
+  page.AbortController = AbortController;
+  page.fetch = async (url, options) => {
+    requests.push({ url, ...options });
+    const result = responses.shift();
+    if (result instanceof Error) throw result;
+    return { ok: true, json: async () => result };
+  };
+  const createElement = page.document.createElement;
+  page.document.createElement = tag => {
+    const element = createElement(tag);
+    Object.defineProperty(element, 'previousElementSibling', { get() {
+      return this.parentElement?.children[this.parentElement.children.indexOf(this) - 1] || null;
+    } });
+    return element;
+  };
+  page.document.querySelectorAll = selector => selector === '.prts-followed-card'
+    ? cards.map(card => card.children[0]).filter(inner => inner.classList.contains('prts-followed-card'))
+    : selector === '.prts-followed-badge' ? cards.flatMap(card => card.children[0].children.filter(child => child.className === 'prts-followed-badge')) : cards;
+  return {
+    ...h, requests, responses,
+    setAuth: value => { auth = value; },
+    respond: (ids, hasNext = false) => responses.push({ status_code: 200, data: { has_next: hasNext, data: ids.map(id => ({ id })) } }),
+    addAuthor(id) {
+      const item = h.addCard({ uploaderId: id, opers: [{ name: '阿米娅' }] });
+      const author = createTestElement('a', '同名作者');
+      author.getAttribute = () => `/profile/${id}`;
+      author.after = badge => item.inner.appendChild(badge);
+      item.inner.appendChild(author);
+      const query = item.inner.querySelector.bind(item.inner);
+      item.inner.querySelector = selector => selector === '.bp4-icon-user, .bp6-icon-user'
+        ? { parentElement: { querySelector: () => author } } : query(selector);
+      return item;
+    }
+  };
+}
+
+test('followed author markers use all follow pages and author IDs, and skip only-following lists', async () => {
+  const h = createFollowedAuthorsHarness();
+  const followed = h.addAuthor('7661'), normal = h.addAuthor('22'), mutual = h.addAuthor('33');
+  h.respond([7661], true);
+  h.respond(['33']);
+  await h.page.syncFollowedAuthors();
+  h.page.applyFilterLogic();
+  assert.strictEqual(h.requests.length, 2);
+  assert(h.requests[1].url.includes('page=2'));
+  assert.strictEqual(h.requests[0].credentials, 'omit');
+  assert.strictEqual(followed.inner.classList.contains('prts-followed-card'), true);
+  assert.strictEqual(mutual.inner.querySelector('.prts-followed-badge').textContent, '已关注');
+  assert.strictEqual(normal.inner.querySelector('.prts-followed-badge'), null, 'same display name is not a match');
+  const badge = followed.inner.querySelector('.prts-followed-badge');
+  h.page.processOperationCard(followed.card);
+  assert.strictEqual(followed.inner.querySelector('.prts-followed-badge'), badge);
+  followed.card.__reactFiber$test = { memoizedProps: {}, return: { memoizedProps: { onlyFollowing: true } } };
+  h.page.processOperationCard(followed.card);
+  assert.strictEqual(followed.inner.querySelector('.prts-followed-badge'), null);
+  followed.card.__reactFiber$test.return.memoizedProps.onlyFollowing = false;
+  h.page.processOperationCard(followed.card);
+  assert(followed.inner.querySelector('.prts-followed-badge'));
+  await h.page.syncFollowedAuthors();
+  assert.strictEqual(h.requests.length, 2, 'routine scaffold sync reuses the follow list');
+});
+
+test('followed author preference defaults on, persists, restores from backup and disables immediately', async () => {
+  assert.strictEqual(normalizeConfig({}).markFollowedAuthors, true);
+  assert.strictEqual(normalizeConfig({ markFollowedAuthors: false }).markFollowedAuthors, false);
+  const h = createFollowedAuthorsHarness();
+  const { inner } = h.addAuthor('7661');
+  h.respond(['7661']);
+  await h.page.syncFollowedAuthors();
+  h.page.applyFilterLogic();
+  h.page.__testExports.CONFIG.markFollowedAuthors = false;
+  await h.page.syncFollowedAuthors();
+  assert.strictEqual(inner.querySelector('.prts-followed-badge'), null);
+  assert.strictEqual(inner.classList.contains('prts-followed-card'), false);
+  h.page.saveConfig();
+  assert.strictEqual(CONFIG_DEFINITIONS.markFollowedAuthors.reloadOnDisable, undefined);
+  const backup = h.page.buildAccountsBackup();
+  const restored = h.page.parseAccountsBackup(backup).preferences.config;
+  assert.strictEqual(restored.markFollowedAuthors, false);
+  const reopened = createAccountPage(new Map([[CONFIG_KEY, JSON.stringify(restored)]]), 'prts.plus');
+  assert.strictEqual(reopened.__testExports.CONFIG.markFollowedAuthors, false);
+  h.page.__testExports.CONFIG.markFollowedAuthors = true;
+  h.respond(['7661']);
+  await h.page.syncFollowedAuthors();
+  h.page.applyFilterLogic();
+  assert(inner.querySelector('.prts-followed-badge'));
+});
+
+test('followed author refresh handles failures atomically and clears markers on logout or account change', async () => {
+  const h = createFollowedAuthorsHarness();
+  const { inner } = h.addAuthor('7661');
+  h.respond(['7661']);
+  await h.page.syncFollowedAuthors();
+  h.page.applyFilterLogic();
+  h.respond(['22'], true);
+  h.responses.push(new Error('offline'));
+  await h.page.syncFollowedAuthors(true);
+  h.page.applyFilterLogic();
+  assert(inner.querySelector('.prts-followed-badge'), 'failed pagination preserves the previous complete list');
+  h.setAuth({ token: 'other-site-token', validBefore: '2099-01-01T00:00:00Z' });
+  h.respond([]);
+  await h.page.syncFollowedAuthors();
+  h.page.applyFilterLogic();
+  assert.strictEqual(inner.querySelector('.prts-followed-badge'), null);
+  h.respond(['7661']);
+  await h.page.syncFollowedAuthors(true);
+  h.page.applyFilterLogic();
+  h.setAuth({});
+  await h.page.syncFollowedAuthors();
+  assert.strictEqual(inner.querySelector('.prts-followed-badge'), null);
+  assert.strictEqual(inner.classList.contains('prts-followed-card'), false);
+});
+
+test('invalid follow responses and disabling during a request cannot publish partial or late markers', async () => {
+  for (const data of [{ has_next: true, data: [] }, { has_next: false, data: [{ id: null }] }, { data: [] }]) {
+    const h = createFollowedAuthorsHarness();
+    const { inner } = h.addAuthor('7661');
+    h.responses.push({ status_code: 200, data });
+    await h.page.syncFollowedAuthors();
+    h.page.applyFilterLogic();
+    assert.strictEqual(inner.querySelector('.prts-followed-badge'), null);
+  }
+  const h = createFollowedAuthorsHarness();
+  const { inner } = h.addAuthor('7661');
+  let resolve;
+  h.page.fetch = (_url, options) => {
+    h.requests.push(options);
+    return new Promise(done => { resolve = done; });
+  };
+  const pending = h.page.syncFollowedAuthors();
+  h.page.__testExports.CONFIG.markFollowedAuthors = false;
+  await h.page.syncFollowedAuthors();
+  assert(h.requests[0].signal.aborted);
+  resolve({ ok: true, json: async () => ({ status_code: 200, data: { has_next: false, data: [{ id: '7661' }] } }) });
+  await pending;
+  h.page.applyFilterLogic();
+  assert.strictEqual(inner.querySelector('.prts-followed-badge'), null);
+});
+
 require('./test-skland-sync')({ assert, test, createAccountState, serializeAccountState, createAccountPage, hostObject, hostArray });
 
 (async () => {

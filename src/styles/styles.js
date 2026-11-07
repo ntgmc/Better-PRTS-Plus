@@ -824,6 +824,13 @@
         outline-offset: 2px;
         border-radius: var(--prts-radius-sm);
     }
+    .prts-followed-card { border-inline-start: 3px solid var(--prts-color-primary); }
+    .prts-followed-badge {
+        display: inline-block; margin-inline-start: 6px; padding: 1px 6px;
+        border-radius: var(--prts-radius-sm); background: var(--prts-color-primary-soft);
+        color: var(--prts-color-primary-hover); font: 600 11px/18px var(--prts-font-sans);
+        white-space: nowrap; vertical-align: middle;
+    }
     .prts-op-grid { gap: var(--prts-space-2) !important; }
     .prts-op-item, .prts-op-text, .prts-popover-item {
         border-radius: var(--prts-radius-md) !important;

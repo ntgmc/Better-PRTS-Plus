@@ -166,6 +166,7 @@
 
         const resolution = getOperationResolutionForCard(card, cardInner);
         const operation = resolution.operation;
+        syncFollowedAuthorBadge(card, cardInner, operation);
         const diagnostics = hasEffectiveOperationData(operation)
             ? createCardDiagnostics(resolution.source)
             : createCardDiagnostics('none');

@@ -11,6 +11,7 @@ tool/*
 !tool/test-skland-sync.js
 !tool/check-skland-sync.js
 !tool/check-site-redesign.js
+!tool/check-followed-authors.js
 !tool/operator-data-update-summary.json
 !tool/upload-release.ps1
 !tool/publish-release.ps1

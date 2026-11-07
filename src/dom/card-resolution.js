@@ -20,7 +20,7 @@
     function getCardSignature(card) {
         if (!card) return '';
 
-        const ignoredSelector = '.prts-status-label, .prts-video-box, #prts-filter-bar, #prts-float-container';
+        const ignoredSelector = '.prts-status-label, .prts-followed-badge, .prts-video-box, #prts-filter-bar, #prts-float-container';
         const parts = [];
         const walker = document.createTreeWalker(card, NodeFilter.SHOW_TEXT, {
             acceptNode(node) {
