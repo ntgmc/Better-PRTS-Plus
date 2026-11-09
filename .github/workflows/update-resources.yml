@@ -40,7 +40,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: .cache/resource-upstream
-          key: resource-upstream-v1-${{ hashFiles('tool/resource-upstream.js', 'tool/update-operator-data.ps1', 'tool/update-activity-data.js', '.github/workflows/update-resources.yml') }}-${{ steps.upstream.outputs.game_sha }}-${{ steps.upstream.outputs.operators_sha }}
+          key: resource-upstream-v1-${{ hashFiles('tool/resource-upstream.js', 'tool/update-operator-data.ps1', 'tool/update-activity-data.js', '.github/workflows/update-resources.yml') }}-${{ steps.upstream.outputs.game_sha }}-${{ steps.upstream.outputs.operators_sha }}-${{ steps.upstream.outputs.activity_sha }}
 
       - name: Update operator and module resources
         if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
@@ -53,7 +53,7 @@ jobs:
       - name: Update activity schedules
         if: github.event_name != 'schedule' || steps.upstream-cache.outputs.cache-hit != 'true'
         env:
-          GAME_DATA_REF: ${{ steps.upstream.outputs.game_sha }}
+          ACTIVITY_DATA_REF: ${{ steps.upstream.outputs.activity_sha }}
         run: node tool/update-activity-data.js
 
       - name: Run project checks

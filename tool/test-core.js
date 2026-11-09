@@ -997,17 +997,19 @@ function createTestElement(tagName = 'div', text = '') {
   return node;
 }
 
-test('resource upstream checks resolve both source branches to immutable GitHub commits', async () => {
+test('resource upstream checks resolve all source branches to independent immutable GitHub commits', async () => {
   const { getResourceUpstream } = require('./resource-upstream');
   const requests = [];
   const refs = await getResourceUpstream(async (url, options) => {
     requests.push({ url, options });
-    return { ok: true, json: async () => ({ sha: (url.includes('ArknightsGameData') ? 'a' : 'b').repeat(40) }) };
+    const sha = (url.includes('Kengxxiao/') ? 'a' : url.includes('ZOOT-Plus/') ? 'b' : 'c').repeat(40);
+    return { ok: true, json: async () => ({ sha }) };
   });
-  assert.deepStrictEqual(refs, { game_sha: 'a'.repeat(40), operators_sha: 'b'.repeat(40) });
+  assert.deepStrictEqual(refs, { game_sha: 'a'.repeat(40), operators_sha: 'b'.repeat(40), activity_sha: 'c'.repeat(40) });
   assert.deepStrictEqual(requests.map(request => request.url), [
     'https://api.github.com/repos/Kengxxiao/ArknightsGameData/commits/master',
-    'https://api.github.com/repos/ZOOT-Plus/zoot-plus-frontend/commits/dev'
+    'https://api.github.com/repos/ZOOT-Plus/zoot-plus-frontend/commits/dev',
+    'https://api.github.com/repos/closure-studio/ArknightsGamedataPure/commits/main'
   ]);
   assert(requests.every(request => request.options.signal instanceof AbortSignal));
 });
@@ -1019,12 +1021,12 @@ test('resource upstream failures and invalid commit IDs reject the sync instead 
   for (const sha of [undefined, 'master', 'a'.repeat(39), 'a'.repeat(40) + '\n']) {
     await assert.rejects(getResourceUpstream(async () => ({ ok: true, json: async () => ({ sha }) })), /Invalid upstream commit/);
   }
+  await assert.rejects(getResourceUpstream(async url => url.includes('closure-studio/')
+    ? { ok: false, status: 503 }
+    : { ok: true, json: async () => ({ sha: 'a'.repeat(40) }) }), /closure-studio\/ArknightsGamedataPure.*HTTP 503/);
 });
 
-test('activity downloads pin every table and fallback mirror to the resolved upstream commit', async () => {
-  const urls = [];
-  const writes = [];
-  const sha = 'c'.repeat(40);
+test('activity downloads use the temporary source with the same ref for every table and fallback mirror', async () => {
   const tables = {
     activity: { basicInfo: { event: { name: '新活动', hasStage: true, startTime: 1000, endTime: 4000 } },
       zoneToActivity: { normal: 'event' } },
@@ -1032,25 +1034,32 @@ test('activity downloads pin every table and fallback mirror to the resolved ups
     stage: { stageValidInfo: {}, stages: { stage: { stageId: 'stage', code: 'AA-1', zoneId: 'normal',
       difficulty: 'NORMAL', name: '第一关', levelId: 'activities/level_stage' } } }
   };
-  const sandbox = { module: { exports: {} }, __dirname, process: { argv: ['node', 'update-activity-data.js'], env: { GAME_DATA_REF: sha } },
-    console: { log() {} }, AbortSignal,
-    require: name => name === 'node:fs' ? { writeFileSync: (file, text) => writes.push({ file, text }) } : require(name),
-    fetch: async url => {
-      urls.push(url);
-      if (url.includes('raw.githubusercontent.com')) return { ok: false, status: 503 };
-      const name = url.match(/\/(activity|zone|stage)_table\.json$/)[1];
-      return { ok: true, json: async () => tables[name] };
-    }
-  };
-  vm.createContext(sandbox);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, 'update-activity-data.js'), 'utf8'), sandbox);
-  await sandbox.main();
-  assert.strictEqual(urls.length, 6);
-  assert(urls.every(url => url.includes(`/${sha}/`) || url.includes(`@${sha}/`)));
-  assert.strictEqual(writes.length, 1);
-  const schedule = JSON.parse(writes[0].text);
-  assert.strictEqual(schedule.activities[0].name, '新活动');
-  assert.strictEqual(schedule.activities[0].groups[0].stages[0].id, 'stage');
+  for (const ref of ['c'.repeat(40), undefined]) {
+    const urls = [];
+    const writes = [];
+    const sandbox = { module: { exports: {} }, __dirname, process: { argv: ['node', 'update-activity-data.js'], env: ref ? { ACTIVITY_DATA_REF: ref } : {} },
+      console: { log() {} }, AbortSignal,
+      require: name => name === 'node:fs' ? { writeFileSync: (file, text) => writes.push({ file, text }) } : require(name),
+      fetch: async url => {
+        urls.push(url);
+        if (url.includes('raw.githubusercontent.com')) return { ok: false, status: 503 };
+        const name = url.match(/\/(activity|zone|stage)_table\.json$/)[1];
+        return { ok: true, json: async () => tables[name] };
+      }
+    };
+    vm.createContext(sandbox);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, 'update-activity-data.js'), 'utf8'), sandbox);
+    await sandbox.main();
+    const expected = ['activity', 'zone', 'stage'].flatMap(name => [
+      `https://raw.githubusercontent.com/closure-studio/ArknightsGamedataPure/${ref || 'main'}/excel/${name}_table.json`,
+      `https://cdn.jsdelivr.net/gh/closure-studio/ArknightsGamedataPure@${ref || 'main'}/excel/${name}_table.json`
+    ]);
+    assert.deepStrictEqual(urls.sort(), expected.sort());
+    assert.strictEqual(writes.length, 1);
+    const schedule = JSON.parse(writes[0].text);
+    assert.strictEqual(schedule.activities[0].name, '新活动');
+    assert.strictEqual(schedule.activities[0].groups[0].stages[0].id, 'stage');
+  }
 });
 
 function activityFixture() {

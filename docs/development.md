@@ -78,7 +78,7 @@ PRTS 页面使用一个 DOM 观察器收集受影响的卡片、页面结构和�
 
 ## 活动关卡快捷浮窗
 
-`tool/update-activity-data.js` 从国服游戏数据的 `activity_table.json`、`zone_table.json`、`stage_table.json` 生成 `resources/activities.json`。运行 `node tool/update-activity-data.js` 更新；也可传入包含这三份文件的目录进行离线生成。环境变量 `GAME_DATA_REF` 可指定游戏数据提交，默认使用 `master`。自动更新见下文“跟随上游更新资源”。
+`tool/update-activity-data.js` 从国服游戏数据的 `activity_table.json`、`zone_table.json`、`stage_table.json` 生成 `resources/activities.json`。活动数据暂时使用 [closure-studio/ArknightsGamedataPure](https://github.com/closure-studio/ArknightsGamedataPure) 的 `excel/` 目录，补齐原来源尚未收录的活动关卡。运行 `node tool/update-activity-data.js` 更新；也可传入包含这三份文件的目录进行离线生成。环境变量 `ACTIVITY_DATA_REF` 可指定活动源提交，默认使用 `main`。自动更新见下文“跟随上游更新资源”。
 
 活动使用 `startTime` / `endTime`，不使用 `rewardEndTime`；分区使用 `zoneValidInfo`，并与活动和 `stageValidInfo` 的时间取交集。按关卡代号区分普通、EX、S 和其他关卡，同一类别开放时间不同时分别显示。复刻通过 `zoneToActivity` 关联当前活动，保留原始关卡 ID 和地图路径。仅收录有战斗地图、代号且难度为 NORMAL 的关卡，避免剧情节点和突袭重复按钮。
 
@@ -90,7 +90,7 @@ PRTS 页面先从油猴缓存显示日程，页面启动时立即检查更新，
 
 ## 跟随上游更新资源
 
-`Update resources` 工作流同时追踪 `Kengxxiao/ArknightsGameData` 的 `master`（模组及活动）和 `ZOOT-Plus/zoot-plus-frontend` 的 `dev`（干员）。`tool/resource-upstream.js` 通过 GitHub API 读取两个分支的提交号。每 15 分钟检查一次；同一组提交已同步成功时，跳过下载、生成和项目检查。GitHub 定时任务可能延迟，这不是实时推送。
+`Update resources` 工作流分别追踪 `Kengxxiao/ArknightsGameData` 的 `master`（模组）、`ZOOT-Plus/zoot-plus-frontend` 的 `dev`（干员）和临时活动源 `closure-studio/ArknightsGamedataPure` 的 `main`（活动）。`tool/resource-upstream.js` 通过 GitHub API 读取三个分支的提交号。每 15 分钟检查一次；同一组提交已同步成功时，跳过下载、生成和项目检查。活动源独立变化也会触发同步。GitHub 定时任务可能延迟，这不是实时推送。
 
 工作流也接收 `repository_dispatch` 事件 `upstream-resources-updated`，可由上游或已有 webhook 服务触发：
 
@@ -101,7 +101,9 @@ gh api --method POST repos/ntgmc/Better-PRTS-Plus/dispatches \
 
 发送方需要对本仓库有内容写入权限的 GitHub App 或访问令牌。第三方仓库的 push 不会自动触发本仓库的 Actions；需要在上游配置通知或通过现有服务转发。本项目不额外部署 webhook 服务，也不新增访问令牌。尚未配置发送方时，定时检查仍会自动跟进更新。
 
-每次更新将两个提交号固定到下载地址，游戏活动的三张表及镜像回退使用同一个游戏数据提交。资源提交后调用 jsDelivr purge 接口刷新 `data.json` 和 `activities.json`，并下载镜像文件与仓库文件逐字节比对，避免客户端读取分支镜像的旧缓存。生成、项目检查、资源提交和镜像刷新全部成功后，才通过 Actions 缓存记录这一组提交；失败不会标记成功，下次检查继续尝试。缓存键包含生成脚本及工作流内容，修改同步逻辑也会触发重新生成。缓存被清理时会重新运行完整同步。
+每次更新将各来源的提交号固定到下载地址，活动的三张表及镜像回退使用同一个活动源提交。资源提交后调用 jsDelivr purge 接口刷新 `data.json` 和 `activities.json`，并下载镜像文件与仓库文件逐字节比对，避免客户端读取分支镜像的旧缓存。生成、项目检查、资源提交和镜像刷新全部成功后，才通过 Actions 缓存记录这一组提交；失败不会标记成功，下次检查继续尝试。缓存键包含三个来源的提交号、生成脚本及工作流内容，修改同步逻辑也会触发重新生成。缓存被清理时会重新运行完整同步。
+
+原活动来源恢复后，需核对活动完整性，再一起调整 `tool/resource-upstream.js` 的 `activity_sha` 来源及 `tool/update-activity-data.js` 的下载仓库、目录和默认分支；工作流继续通过 `ACTIVITY_DATA_REF` 固定活动源提交。
 
 手动运行工作流和事件通知都会强制执行完整同步，可用于修正资源或重试，不受成功缓存限制。资源日程直接发布到 `main`，不需要发布新的用户脚本版本；客户端页面启动时检查活动日程，之后按每小时检查下载。
 

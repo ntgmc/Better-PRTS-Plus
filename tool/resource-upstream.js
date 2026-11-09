@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 async function getResourceUpstream(fetchImpl = fetch) {
   const sources = {
     game_sha: 'Kengxxiao/ArknightsGameData/commits/master',
-    operators_sha: 'ZOOT-Plus/zoot-plus-frontend/commits/dev'
+    operators_sha: 'ZOOT-Plus/zoot-plus-frontend/commits/dev',
+    activity_sha: 'closure-studio/ArknightsGamedataPure/commits/main'
   };
   const headers = { Accept: 'application/vnd.github+json' };
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
